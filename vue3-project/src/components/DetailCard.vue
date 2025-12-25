@@ -27,7 +27,7 @@
           <button class="tiktok-back-btn" @click="closeModal">
             <SvgIcon name="leftArrow" width="24" height="24" />
           </button>
-          <button class="tiktok-search-btn" @click="handleTagClick(postData.tags?.[0] || '')">
+          <button class="tiktok-search-btn" @click="handleSearchClick">
             <SvgIcon name="search" width="24" height="24" />
           </button>
         </div>
@@ -1482,6 +1482,12 @@ const handleTagClick = (tag) => {
 
   // 在新标签页打开搜索页面
   window.open(searchUrl, '_blank')
+}
+
+// 处理搜索按钮点击（抖音风格界面）
+const handleSearchClick = () => {
+  // 导航到搜索页面
+  router.push('/search_result')
 }
 
 // 显示消息提示
