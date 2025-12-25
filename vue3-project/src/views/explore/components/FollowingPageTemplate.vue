@@ -278,15 +278,6 @@ onUnmounted(() => {
                     :type="isImgOnly ? 1 : null"
                     :preloaded-posts="posts"
                 />
-
-                <!-- 加载更多指示器 -->
-                <div v-if="loadingMore" class="loading-more">
-                    <SimpleSpinner size="24" />
-                    <span class="loading-text">加载中...</span>
-                </div>
-                <div v-else-if="!hasMore && posts.length > 0" class="no-more">
-                    <span class="no-more-text">没有更多内容了</span>
-                </div>
             </div>
         </div>
 
@@ -517,47 +508,6 @@ onUnmounted(() => {
 
 .sort-tab:hover:not(.active) {
     background: var(--bg-color-tertiary);
-}
-
-/* 加载更多样式 */
-.loading-more {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 20px;
-}
-
-.no-more {
-    display: flex;
-    justify-content: center;
-    padding: 20px;
-}
-
-.no-more-text {
-    color: var(--text-color-tertiary);
-    font-size: 12px;
-    position: relative;
-}
-
-.no-more-text::before,
-.no-more-text::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    width: 40px;
-    height: 1px;
-    background: var(--border-color-secondary);
-}
-
-.no-more-text::before {
-    right: 100%;
-    margin-right: 10px;
-}
-
-.no-more-text::after {
-    left: 100%;
-    margin-left: 10px;
 }
 
 /* 响应式设计 */
