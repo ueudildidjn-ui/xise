@@ -25,7 +25,7 @@
 
     <!-- 自定义控制栏 -->
     <div 
-      v-if="showControls && !error" 
+      v-if="effectiveShowControls && !error" 
       class="controls-overlay"
       :class="{ visible: controlsVisible }"
       @mouseenter="showControlsBar"
@@ -116,6 +116,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import SvgIcon from './SvgIcon.vue'
+import { usePlayerConfig } from '@/composables/usePlayerConfig.js'
+
+// 获取播放器配置
+const { config: playerConfig, loadConfig, getShakaConfig } = usePlayerConfig()
 
 const props = defineProps({
   // 视频源URL（支持DASH MPD、HLS、普通MP4）
@@ -128,22 +132,27 @@ const props = defineProps({
     type: String,
     default: ''
   },
-  // 是否自动播放
+  // 是否自动播放（优先使用props，否则使用后端配置）
   autoplay: {
     type: Boolean,
-    default: false
+    default: null
   },
-  // 是否循环
+  // 是否循环（优先使用props，否则使用后端配置）
   loop: {
     type: Boolean,
-    default: false
+    default: null
   },
-  // 是否显示控制栏
+  // 是否显示控制栏（优先使用props，否则使用后端配置）
   showControls: {
     type: Boolean,
-    default: true
+    default: null
   }
 })
+
+// 计算实际使用的配置（props优先，否则使用后端配置）
+const effectiveAutoplay = computed(() => props.autoplay !== null ? props.autoplay : playerConfig.autoplay)
+const effectiveLoop = computed(() => props.loop !== null ? props.loop : playerConfig.loop)
+const effectiveShowControls = computed(() => props.showControls !== null ? props.showControls : playerConfig.show_controls)
 
 const emit = defineEmits(['play', 'pause', 'ended', 'error', 'timeupdate', 'qualitychange'])
 
@@ -162,7 +171,8 @@ const error = ref(null)
 const currentTime = ref(0)
 const duration = ref(0)
 const buffered = ref(0)
-const volume = ref(1)
+// 初始使用默认值，加载配置后会更新
+const volume = ref(0.5)
 const isMuted = ref(false)
 const isFullscreen = ref(false)
 
@@ -241,6 +251,9 @@ async function initPlayer() {
     isLoading.value = true
     error.value = null
 
+    // 加载后端播放器配置
+    await loadConfig()
+
     // 加载Shaka Player
     await loadShakaPlayer()
 
@@ -259,18 +272,16 @@ async function initPlayer() {
     player = new shaka.Player()
     await player.attach(videoRef.value)
 
-    // 配置播放器
-    player.configure({
-      streaming: {
-        bufferingGoal: 30,
-        rebufferingGoal: 2,
-        bufferBehind: 30
-      },
-      abr: {
-        enabled: true,
-        defaultBandwidthEstimate: 1000000
-      }
-    })
+    // 使用后端配置播放器
+    player.configure(getShakaConfig())
+
+    // 设置初始音量和静音状态
+    if (videoRef.value) {
+      videoRef.value.volume = playerConfig.default_volume
+      videoRef.value.muted = playerConfig.muted
+      volume.value = playerConfig.default_volume
+      isMuted.value = playerConfig.muted
+    }
 
     // 监听事件
     player.addEventListener('error', onPlayerError)
@@ -304,7 +315,7 @@ async function loadSource(src) {
 
     isLoading.value = false
 
-    if (props.autoplay) {
+    if (effectiveAutoplay.value) {
       try {
         await videoRef.value.play()
       } catch (e) {
@@ -348,7 +359,7 @@ function setupVideoEvents() {
 
   video.addEventListener('ended', () => {
     isPlaying.value = false
-    if (props.loop) {
+    if (effectiveLoop.value) {
       video.currentTime = 0
       video.play()
     }

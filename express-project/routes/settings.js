@@ -444,4 +444,62 @@ router.delete('/:key', adminAuth, async (req, res) => {
   }
 });
 
+/**
+ * 获取播放器设置（公开接口，无需认证）
+ * GET /api/settings/player/config
+ */
+router.get('/player/config', async (req, res) => {
+  try {
+    // 获取播放器相关设置
+    const [rows] = await pool.execute(
+      'SELECT setting_key, setting_value FROM system_settings WHERE setting_group = ?',
+      ['player']
+    );
+    
+    // 转换为配置对象
+    const playerConfig = {};
+    rows.forEach(row => {
+      const key = row.setting_key.replace('player_', '');
+      let value = row.setting_value;
+      
+      // 类型转换
+      if (value === 'true') value = true;
+      else if (value === 'false') value = false;
+      else if (!isNaN(Number(value)) && value !== '') value = Number(value);
+      
+      playerConfig[key] = value;
+    });
+    
+    // 设置默认值（如果数据库中没有）
+    const defaultConfig = {
+      autoplay: false,
+      loop: false,
+      muted: false,
+      default_volume: 0.5,
+      show_controls: true,
+      buffering_goal: 30,
+      rebuffering_goal: 2,
+      buffer_behind: 30,
+      abr_enabled: true,
+      abr_default_bandwidth: 1000000,
+      prefer_mpd: true
+    };
+    
+    // 合并默认配置和数据库配置
+    const finalConfig = { ...defaultConfig, ...playerConfig };
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: '获取播放器配置成功',
+      data: finalConfig
+    });
+  } catch (error) {
+    console.error('获取播放器配置失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      code: RESPONSE_CODES.ERROR,
+      message: '获取播放器配置失败'
+    });
+  }
+});
+
 module.exports = router;

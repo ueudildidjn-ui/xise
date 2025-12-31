@@ -51,6 +51,14 @@ export const settingsApi = {
   },
 
   /**
+   * 获取播放器配置（公开接口）
+   * @returns {Promise} 播放器配置
+   */
+  async getPlayerConfig() {
+    return await request.get('/settings/player/config')
+  },
+
+  /**
    * 创建新设置
    * @param {Object} data - 设置数据 { key, value, group, description }
    * @returns {Promise} 创建结果
