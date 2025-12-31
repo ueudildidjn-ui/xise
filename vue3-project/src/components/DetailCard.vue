@@ -489,10 +489,14 @@ import { commentApi, userApi, postApi, imageUploadApi } from '@/api/index.js'
 import { getPostDetail } from '@/api/posts.js'
 import { videoApi } from '@/api/video.js'
 import { useScrollLock } from '@/composables/useScrollLock'
+import { usePlayerConfig } from '@/composables/usePlayerConfig.js'
 import { formatTime } from '@/utils/timeFormat'
 import defaultAvatar from '@/assets/imgs/avatar.png'
 
 const router = useRouter()
+
+// 获取播放器配置
+const { config: playerConfig, loadConfig } = usePlayerConfig()
 
 const props = defineProps({
   disableAutoFetch: {
@@ -635,9 +639,10 @@ const transcodeStatus = ref(props.item.transcode_status || 'none')
 const mpdPath = ref(props.item.mpd_path || null)
 let transcodeStatusPollTimer = null
 
-// 有效的视频URL（优先使用MPD，否则使用原始视频）
+// 有效的视频URL（根据后端配置决定是否优先使用MPD）
 const effectiveVideoUrl = computed(() => {
-  if (mpdPath.value && transcodeStatus.value === 'completed') {
+  // 检查后端配置是否启用优先使用MPD
+  if (playerConfig.prefer_mpd && mpdPath.value && transcodeStatus.value === 'completed') {
     return mpdPath.value
   }
   return props.item.video_url
@@ -816,14 +821,19 @@ watch(() => props.item?.video_url, () => {
 })
 
 // 首次默认音量 0.5（若未存过）
-onMounted(() => {
+onMounted(async () => {
+  // 加载播放器配置
+  await loadConfig()
+  
   const url = props.item?.video_url || ''
   try {
     const { volumeKey } = getStorageKeys(url)
     const savedVolume = localStorage.getItem(volumeKey)
     if (savedVolume === null) {
-      if (videoPlayer.value) videoPlayer.value.volume = 0.5
-      if (mobileVideoPlayer.value) mobileVideoPlayer.value.volume = 0.5
+      // 使用后端配置的默认音量
+      const defaultVolume = playerConfig.default_volume ?? 0.5
+      if (videoPlayer.value) videoPlayer.value.volume = defaultVolume
+      if (mobileVideoPlayer.value) mobileVideoPlayer.value.volume = defaultVolume
     }
   } catch (_) {}
   

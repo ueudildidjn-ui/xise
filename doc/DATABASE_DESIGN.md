@@ -100,6 +100,9 @@
 | post_id | BIGINT | 笔记ID | 外键关联posts |
 | cover_url | VARCHAR(500) | 视频封面URL | 视频封面图片，可为空 |
 | video_url | VARCHAR(500) | 视频URL | 视频文件地址 |
+| mpd_path | VARCHAR(500) | DASH MPD文件路径 | 转码后的MPD文件路径，可为空 |
+| transcode_status | ENUM | 转码状态 | pending/processing/completed/failed/none，默认none |
+| transcode_task_id | VARCHAR(100) | 转码任务ID | 用于追踪转码任务进度，可为空 |
 
 ### 5. 标签表 (tags)
 

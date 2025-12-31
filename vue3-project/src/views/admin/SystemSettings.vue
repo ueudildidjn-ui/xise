@@ -231,6 +231,227 @@
         </div>
       </div>
 
+      <!-- 播放器设置卡片 -->
+      <div class="settings-card">
+        <div class="card-header">
+          <div class="card-title">
+            <SvgIcon name="play" class="title-icon" />
+            <span>视频播放器设置</span>
+          </div>
+          <div class="player-status available">
+            <SvgIcon name="tick" class="status-icon" />
+            <span>Shaka Player</span>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <!-- 自动播放 -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">自动播放</div>
+              <div class="setting-description">
+                视频加载完成后是否自动开始播放
+              </div>
+            </div>
+            <div class="setting-control">
+              <label class="switch">
+                <input 
+                  type="checkbox" 
+                  v-model="settings.player_autoplay"
+                  @change="handleSettingChange('player_autoplay', settings.player_autoplay)"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 循环播放 -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">循环播放</div>
+              <div class="setting-description">
+                视频播放结束后是否自动重新播放
+              </div>
+            </div>
+            <div class="setting-control">
+              <label class="switch">
+                <input 
+                  type="checkbox" 
+                  v-model="settings.player_loop"
+                  @change="handleSettingChange('player_loop', settings.player_loop)"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 默认静音 -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">默认静音</div>
+              <div class="setting-description">
+                视频加载时是否默认静音播放
+              </div>
+            </div>
+            <div class="setting-control">
+              <label class="switch">
+                <input 
+                  type="checkbox" 
+                  v-model="settings.player_muted"
+                  @change="handleSettingChange('player_muted', settings.player_muted)"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 默认音量 -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">默认音量</div>
+              <div class="setting-description">
+                视频播放时的默认音量 (0-1)
+              </div>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="number" 
+                class="input-field"
+                v-model.number="settings.player_default_volume"
+                min="0"
+                max="1"
+                step="0.1"
+                @change="handleSettingChange('player_default_volume', settings.player_default_volume)"
+              />
+            </div>
+          </div>
+
+          <!-- 显示控件 -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">显示播放控件</div>
+              <div class="setting-description">
+                是否显示视频播放控制栏（进度条、音量等）
+              </div>
+            </div>
+            <div class="setting-control">
+              <label class="switch">
+                <input 
+                  type="checkbox" 
+                  v-model="settings.player_show_controls"
+                  @change="handleSettingChange('player_show_controls', settings.player_show_controls)"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 优先使用MPD -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">优先使用MPD格式</div>
+              <div class="setting-description">
+                当视频有MPD文件可用时，优先使用DASH自适应码率播放
+              </div>
+            </div>
+            <div class="setting-control">
+              <label class="switch">
+                <input 
+                  type="checkbox" 
+                  v-model="settings.player_prefer_mpd"
+                  @change="handleSettingChange('player_prefer_mpd', settings.player_prefer_mpd)"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 启用自适应码率 -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">自适应码率 (ABR)</div>
+              <div class="setting-description">
+                根据网络状况自动调整视频质量
+              </div>
+            </div>
+            <div class="setting-control">
+              <label class="switch">
+                <input 
+                  type="checkbox" 
+                  v-model="settings.player_abr_enabled"
+                  @change="handleSettingChange('player_abr_enabled', settings.player_abr_enabled)"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 缓冲目标时长 -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">缓冲目标时长 (秒)</div>
+              <div class="setting-description">
+                播放器尝试预缓冲的视频时长
+              </div>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="number" 
+                class="input-field"
+                v-model.number="settings.player_buffering_goal"
+                min="5"
+                max="120"
+                step="5"
+                @change="handleSettingChange('player_buffering_goal', settings.player_buffering_goal)"
+              />
+            </div>
+          </div>
+
+          <!-- 重新缓冲目标时长 -->
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">重新缓冲目标时长 (秒)</div>
+              <div class="setting-description">
+                视频卡顿时重新缓冲的目标时长
+              </div>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="number" 
+                class="input-field"
+                v-model.number="settings.player_rebuffering_goal"
+                min="1"
+                max="10"
+                step="1"
+                @change="handleSettingChange('player_rebuffering_goal', settings.player_rebuffering_goal)"
+              />
+            </div>
+          </div>
+
+          <!-- 默认带宽估计 -->
+          <div class="setting-item" :class="{ disabled: !settings.player_abr_enabled }">
+            <div class="setting-info">
+              <div class="setting-label">默认带宽估计 (bps)</div>
+              <div class="setting-description">
+                用于初始质量选择的带宽估计值
+              </div>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="number" 
+                class="input-field"
+                v-model.number="settings.player_abr_default_bandwidth"
+                :disabled="!settings.player_abr_enabled"
+                min="100000"
+                max="10000000"
+                step="100000"
+                @change="handleSettingChange('player_abr_default_bandwidth', settings.player_abr_default_bandwidth)"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 保存按钮 -->
       <div class="actions">
         <button class="save-btn" @click="saveAllSettings" :disabled="!hasChanges || saving">
@@ -258,7 +479,19 @@ const settings = reactive({
   video_transcode_format: 'dash',
   video_transcode_output_dir_mode: 'datetime',
   video_transcode_retain_original: true,
-  video_transcode_max_concurrent: 2
+  video_transcode_max_concurrent: 2,
+  // 播放器设置
+  player_autoplay: false,
+  player_loop: false,
+  player_muted: false,
+  player_default_volume: 0.5,
+  player_show_controls: true,
+  player_buffering_goal: 30,
+  player_rebuffering_goal: 2,
+  player_buffer_behind: 30,
+  player_abr_enabled: true,
+  player_abr_default_bandwidth: 1000000,
+  player_prefer_mpd: true
 })
 
 const originalSettings = ref({})
@@ -350,6 +583,7 @@ async function refreshQueueStatus(silent = false) {
 async function loadSettings() {
   loading.value = true
   try {
+    // 加载视频转码设置
     const result = await settingsApi.getVideoStatus()
     
     if (result.success) {
@@ -366,12 +600,30 @@ async function loadSettings() {
       ffmpegAvailable.value = result.data.ffmpegAvailable || false
       ffmpegConfig.value = result.data.ffmpegConfig || { ffmpegPath: '', ffprobePath: '' }
       queueStatus.value = result.data.queueStatus || null
-      
-      // 保存原始设置
-      originalSettings.value = { ...settings }
     } else {
       showMessage(result.message || '加载设置失败', 'error')
     }
+
+    // 加载播放器设置
+    const playerResult = await settingsApi.getPlayerConfig()
+    if (playerResult.success) {
+      const playerConfig = playerResult.data || {}
+      
+      settings.player_autoplay = playerConfig.autoplay ?? false
+      settings.player_loop = playerConfig.loop ?? false
+      settings.player_muted = playerConfig.muted ?? false
+      settings.player_default_volume = playerConfig.default_volume ?? 0.5
+      settings.player_show_controls = playerConfig.show_controls ?? true
+      settings.player_buffering_goal = playerConfig.buffering_goal ?? 30
+      settings.player_rebuffering_goal = playerConfig.rebuffering_goal ?? 2
+      settings.player_buffer_behind = playerConfig.buffer_behind ?? 30
+      settings.player_abr_enabled = playerConfig.abr_enabled ?? true
+      settings.player_abr_default_bandwidth = playerConfig.abr_default_bandwidth ?? 1000000
+      settings.player_prefer_mpd = playerConfig.prefer_mpd ?? true
+    }
+      
+    // 保存原始设置
+    originalSettings.value = { ...settings }
   } catch (error) {
     console.error('加载设置失败:', error)
     showMessage('加载设置失败', 'error')
@@ -404,6 +656,15 @@ function handleSettingChange(key, value) {
       settings.video_transcode_max_concurrent = 10
     }
   }
+  
+  // 验证播放器音量设置
+  if (key === 'player_default_volume') {
+    if (value < 0) {
+      settings.player_default_volume = 0
+    } else if (value > 1) {
+      settings.player_default_volume = 1
+    }
+  }
 }
 
 // 保存所有设置
@@ -412,13 +673,26 @@ async function saveAllSettings() {
   
   try {
     const settingsToSave = {
+      // 视频转码设置
       video_transcode_enabled: String(settings.video_transcode_enabled),
       video_transcode_min_bitrate: String(settings.video_transcode_min_bitrate),
       video_transcode_max_bitrate: String(settings.video_transcode_max_bitrate),
       video_transcode_format: settings.video_transcode_format,
       video_transcode_output_dir_mode: settings.video_transcode_output_dir_mode,
       video_transcode_retain_original: String(settings.video_transcode_retain_original),
-      video_transcode_max_concurrent: String(settings.video_transcode_max_concurrent)
+      video_transcode_max_concurrent: String(settings.video_transcode_max_concurrent),
+      // 播放器设置
+      player_autoplay: String(settings.player_autoplay),
+      player_loop: String(settings.player_loop),
+      player_muted: String(settings.player_muted),
+      player_default_volume: String(settings.player_default_volume),
+      player_show_controls: String(settings.player_show_controls),
+      player_buffering_goal: String(settings.player_buffering_goal),
+      player_rebuffering_goal: String(settings.player_rebuffering_goal),
+      player_buffer_behind: String(settings.player_buffer_behind),
+      player_abr_enabled: String(settings.player_abr_enabled),
+      player_abr_default_bandwidth: String(settings.player_abr_default_bandwidth),
+      player_prefer_mpd: String(settings.player_prefer_mpd)
     }
     
     const result = await settingsApi.updateSettings(settingsToSave)
@@ -501,6 +775,22 @@ function showMessage(message, type = 'success') {
 }
 
 .ffmpeg-status.available {
+  background: var(--success-bg);
+  color: var(--success-color);
+}
+
+.player-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  background: var(--success-bg);
+  color: var(--success-color);
+}
+
+.player-status.available {
   background: var(--success-bg);
   color: var(--success-color);
 }
