@@ -179,6 +179,28 @@
               />
             </div>
           </div>
+
+          <!-- DASH切片时长 -->
+          <div class="setting-item" :class="{ disabled: !settings.video_transcode_enabled }">
+            <div class="setting-info">
+              <div class="setting-label">DASH切片时长</div>
+              <div class="setting-description">
+                DASH视频每个分片的时长 (2-10秒)
+              </div>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="number" 
+                class="input-field"
+                v-model.number="settings.video_transcode_segment_duration"
+                :disabled="!settings.video_transcode_enabled"
+                min="2"
+                max="10"
+                step="1"
+                @change="handleSettingChange('video_transcode_segment_duration', settings.video_transcode_segment_duration)"
+              />
+            </div>
+          </div>
         </div>
 
         <!-- 码率预览 -->
@@ -501,6 +523,7 @@ const settings = reactive({
   video_transcode_output_dir_mode: 'datetime',
   video_transcode_retain_original: true,
   video_transcode_max_concurrent: 2,
+  video_transcode_segment_duration: 4,
   // 播放器设置
   player_autoplay: false,
   player_loop: false,
@@ -617,6 +640,7 @@ async function loadSettings() {
       settings.video_transcode_output_dir_mode = videoSettings.video_transcode_output_dir_mode || 'datetime'
       settings.video_transcode_retain_original = videoSettings.video_transcode_retain_original !== 'false'
       settings.video_transcode_max_concurrent = parseInt(videoSettings.video_transcode_max_concurrent) || 2
+      settings.video_transcode_segment_duration = parseInt(videoSettings.video_transcode_segment_duration) || 4
       
       ffmpegAvailable.value = result.data.ffmpegAvailable || false
       ffmpegConfig.value = result.data.ffmpegConfig || { ffmpegPath: '', ffprobePath: '' }
@@ -673,8 +697,21 @@ function handleSettingChange(key, value) {
   if (key === 'video_transcode_max_concurrent') {
     if (value < 1) {
       settings.video_transcode_max_concurrent = 1
+      showMessage('并发数不能小于1', 'warning')
     } else if (value > 10) {
       settings.video_transcode_max_concurrent = 10
+      showMessage('并发数不能大于10', 'warning')
+    }
+  }
+  
+  // 验证DASH切片时长设置
+  if (key === 'video_transcode_segment_duration') {
+    if (value < 2) {
+      settings.video_transcode_segment_duration = 2
+      showMessage('切片时长不能小于2秒', 'warning')
+    } else if (value > 10) {
+      settings.video_transcode_segment_duration = 10
+      showMessage('切片时长不能大于10秒', 'warning')
     }
   }
   
@@ -702,6 +739,7 @@ async function saveAllSettings() {
       video_transcode_output_dir_mode: settings.video_transcode_output_dir_mode,
       video_transcode_retain_original: String(settings.video_transcode_retain_original),
       video_transcode_max_concurrent: String(settings.video_transcode_max_concurrent),
+      video_transcode_segment_duration: String(settings.video_transcode_segment_duration),
       // 播放器设置
       player_autoplay: String(settings.player_autoplay),
       player_loop: String(settings.player_loop),
