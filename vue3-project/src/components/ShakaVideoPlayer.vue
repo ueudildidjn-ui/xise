@@ -294,12 +294,21 @@ const initPlayer = async () => {
     // 附加到视频元素
     await player.attach(videoElement.value)
 
-    // 优化配置以提升DASH播放流畅度，优先使用低码率（约500kbps）
+    // 优化配置以提升DASH播放流畅度，参数可通过 .env 配置
+    // 从环境变量读取配置，提供默认值
+    const defaultBandwidth = parseInt(import.meta.env.VITE_VIDEO_DEFAULT_BANDWIDTH) || 500000
+    const bufferingGoal = parseInt(import.meta.env.VITE_VIDEO_BUFFERING_GOAL) || 16
+    const rebufferingGoal = parseInt(import.meta.env.VITE_VIDEO_REBUFFERING_GOAL) || 5
+    const bufferBehind = parseInt(import.meta.env.VITE_VIDEO_BUFFER_BEHIND) || 16
+    const switchInterval = parseInt(import.meta.env.VITE_VIDEO_SWITCH_INTERVAL) || 1
+    const bandwidthUpgradeTarget = parseFloat(import.meta.env.VITE_VIDEO_BANDWIDTH_UPGRADE_TARGET) || 0.85
+    const bandwidthDowngradeTarget = parseFloat(import.meta.env.VITE_VIDEO_BANDWIDTH_DOWNGRADE_TARGET) || 0.50
+    
     player.configure({
       streaming: {
-        bufferingGoal: 16,            // 缓冲目标（秒）- 约2个8秒切片
-        rebufferingGoal: 5,           // 重新缓冲目标（秒）- 降低以更快恢复播放
-        bufferBehind: 16,             // 保留后面的缓冲（秒）- 与bufferingGoal保持一致
+        bufferingGoal,                // 缓冲目标（秒）
+        rebufferingGoal,              // 重新缓冲目标（秒）
+        bufferBehind,                 // 保留后面的缓冲（秒）
         retryParameters: {
           timeout: 30000,             // 请求超时（毫秒）
           maxAttempts: 3,             // 最大重试次数
@@ -310,13 +319,13 @@ const initPlayer = async () => {
       },
       abr: {
         enabled: props.adaptiveBitrate,
-        defaultBandwidthEstimate: 500000,    // 默认带宽估计改为500kbps，优先尝试低码率
-        switchInterval: 1,                    // 切换间隔（秒）- 大幅减少以更快响应，适合短视频
-        bandwidthUpgradeTarget: 0.85,         // 带宽升级目标 - 更激进，更快升级码率
-        bandwidthDowngradeTarget: 0.50,       // 带宽降级目标 - 更敏感，更快降级以保持流畅
+        defaultBandwidthEstimate: defaultBandwidth,    // 默认带宽估计
+        switchInterval,                                 // 切换间隔（秒）
+        bandwidthUpgradeTarget,                         // 带宽升级目标
+        bandwidthDowngradeTarget,                       // 带宽降级目标
         restrictions: {
-          minBandwidth: 0,                    // 最小带宽限制
-          maxBandwidth: Infinity              // 最大带宽限制
+          minBandwidth: 0,                              // 最小带宽限制
+          maxBandwidth: Infinity                        // 最大带宽限制
         }
       }
     })
