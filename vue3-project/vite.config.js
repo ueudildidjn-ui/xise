@@ -33,7 +33,7 @@ export default defineConfig({
      allowedHosts: [   //添加白名单域名，手动部署取消前面的注释把qq.com替换成你的白名单域名
         'localhost',
         '127.0.0.1',
-        'xiaoshiliu.yuelk.com'
+        'xiaoshiliu.yuelk.com',
         'moxi.meilanyv.cn'
       ],  
     proxy: {
