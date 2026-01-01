@@ -410,11 +410,75 @@ async function checkFFmpegAvailable() {
   });
 }
 
+/**
+ * 验证视频文件是否为有效的媒体文件
+ * 使用 ffprobe 检查视频流是否存在且可读
+ * @param {string} videoPath - 视频文件路径
+ * @returns {Promise<{valid: boolean, message?: string, info?: Object}>}
+ */
+async function validateVideoMedia(videoPath) {
+  try {
+    if (!fs.existsSync(videoPath)) {
+      return { valid: false, message: '视频文件不存在' };
+    }
+
+    // 使用 ffprobe 分析视频
+    const info = await analyzeVideo(videoPath);
+    
+    // 验证基本视频属性
+    if (!info.width || !info.height || info.width <= 0 || info.height <= 0) {
+      return { valid: false, message: '无效的视频分辨率' };
+    }
+    
+    if (!info.duration || info.duration <= 0) {
+      return { valid: false, message: '无效的视频时长' };
+    }
+    
+    if (!info.codec) {
+      return { valid: false, message: '无法识别视频编解码器' };
+    }
+    
+    console.log(`✅ 视频验证通过: ${path.basename(videoPath)}, ` +
+      `分辨率: ${info.width}x${info.height}, ` +
+      `时长: ${info.duration.toFixed(2)}秒, ` +
+      `编解码器: ${info.codec}`);
+    
+    return { valid: true, info };
+  } catch (error) {
+    console.error(`❌ 视频验证失败 [${videoPath}]:`, error.message);
+    return { 
+      valid: false, 
+      message: error.message || '视频文件无法解析，可能已损坏或格式不支持'
+    };
+  }
+}
+
+/**
+ * 删除无效的视频文件
+ * @param {string} videoPath - 视频文件路径
+ * @returns {Promise<boolean>}
+ */
+async function deleteInvalidVideo(videoPath) {
+  try {
+    if (fs.existsSync(videoPath)) {
+      fs.unlinkSync(videoPath);
+      console.log(`🗑️ 已删除无效视频文件: ${videoPath}`);
+      return true;
+    }
+    return true;
+  } catch (error) {
+    console.error(`❌ 删除无效视频文件失败 [${videoPath}]:`, error.message);
+    return false;
+  }
+}
+
 module.exports = {
   analyzeVideo,
   selectResolutions,
   calculateAspectRatioSize,
   generateOutputPath,
   convertToDash,
-  checkFFmpegAvailable
+  checkFFmpegAvailable,
+  validateVideoMedia,
+  deleteInvalidVideo
 };

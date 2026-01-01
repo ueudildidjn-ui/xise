@@ -57,6 +57,8 @@
           <div class="progress-fill" :style="{ width: uploadProgress + '%' }"></div>
         </div>
         <p class="progress-text">{{ Math.floor(uploadProgress) }}%</p>
+        <p v-if="uploadStatus" class="progress-status">{{ uploadStatus }}</p>
+        <p v-if="chunkInfo.total > 0" class="chunk-info">分片 {{ chunkInfo.current }}/{{ chunkInfo.total }}</p>
       </div>
     </div>
 
@@ -67,7 +69,7 @@
     <div class="upload-tips">
       <p>• 支持 MP4、MOV、AVI 格式</p>
       <p>• 文件大小不超过100MB</p>
-      <p>• 建议视频时长不超过5分钟</p>
+      <p>• 支持断点续传和分片校验</p>
       <p v-if="videoData && !isUploading">• 点击缩略图可自定义封面</p>
     </div>
 
@@ -91,6 +93,10 @@ const props = defineProps({
   maxSize: {
     type: Number,
     default: 100 * 1024 * 1024 // 100MB
+  },
+  useChunkedUpload: {
+    type: Boolean,
+    default: true // 默认启用分片上传
   }
 })
 
@@ -104,6 +110,8 @@ const customCover = ref(null) // 自定义封面图片URL
 const customCoverFile = ref(null) // 自定义封面图片文件
 const isUploading = ref(false)
 const uploadProgress = ref(0)
+const chunkInfo = ref({ current: 0, total: 0 }) // 分片信息
+const uploadStatus = ref('') // 上传状态文字
 const isDragOver = ref(false)
 const error = ref('')
 const showToast = ref(false)
@@ -347,6 +355,8 @@ const startUpload = async () => {
 
   isUploading.value = true
   uploadProgress.value = 0
+  chunkInfo.value = { current: 0, total: 0 }
+  uploadStatus.value = '准备上传...'
 
   try {
     // 确定要传递的缩略图文件
@@ -359,17 +369,64 @@ const startUpload = async () => {
       thumbnailToUpload = videoData.value.thumbnail
     }
 
-    // 上传视频和缩略图
-    const result = await videoApi.uploadVideo(
-      videoData.value.file,
-      (progress) => {
-        uploadProgress.value = progress
-      },
-      thumbnailToUpload // 传递缩略图文件
-    )
+    let result
+
+    // 根据配置选择上传方式
+    if (props.useChunkedUpload) {
+      // 使用分片上传
+      uploadStatus.value = '计算文件校验...'
+      result = await videoApi.uploadVideoChunked(
+        videoData.value.file,
+        {
+          onProgress: (progress) => {
+            uploadProgress.value = progress
+            if (progress < 100) {
+              uploadStatus.value = `上传中 ${progress}%`
+            } else {
+              uploadStatus.value = '合并中...'
+            }
+          },
+          onChunkProgress: (info) => {
+            chunkInfo.value = { current: info.current, total: info.total }
+            if (info.skipped) {
+              uploadStatus.value = `分片 ${info.current}/${info.total} (已存在)`
+            } else {
+              uploadStatus.value = `分片 ${info.current}/${info.total}`
+            }
+          }
+        }
+      )
+      
+      // 分片上传成功后，单独上传缩略图
+      if (result.success && thumbnailToUpload) {
+        try {
+          uploadStatus.value = '上传封面...'
+          const thumbnailResult = await uploadImage(thumbnailToUpload)
+          if (thumbnailResult.success) {
+            result.data.coverUrl = thumbnailResult.data.url
+            console.log('✅ 缩略图上传成功:', thumbnailResult.data.url)
+          } else {
+            console.warn('⚠️ 缩略图上传失败:', thumbnailResult.message)
+          }
+        } catch (e) {
+          console.warn('⚠️ 缩略图上传异常:', e.message)
+        }
+      }
+    } else {
+      // 使用普通上传
+      result = await videoApi.uploadVideo(
+        videoData.value.file,
+        (progress) => {
+          uploadProgress.value = progress
+          uploadStatus.value = `上传中 ${progress}%`
+        },
+        thumbnailToUpload
+      )
+    }
 
     if (result.success) {
       isUploading.value = false
+      uploadStatus.value = ''
       if (videoData.value) {
         videoData.value.uploaded = true
         videoData.value.url = result.data.url
@@ -386,6 +443,7 @@ const startUpload = async () => {
       }
     } else {
       isUploading.value = false
+      uploadStatus.value = ''
       error.value = result.message || '视频上传失败'
       emit('error', error.value)
       showMessage(error.value, 'error')
@@ -394,6 +452,7 @@ const startUpload = async () => {
   } catch (err) {
     console.error('视频上传失败:', err)
     isUploading.value = false
+    uploadStatus.value = ''
     error.value = '视频上传失败，请重试'
     emit('error', error.value)
     showMessage(error.value, 'error')
@@ -670,23 +729,37 @@ defineExpose({
 
 .progress-bar {
   width: 100%;
-  height: 4px;
+  height: 6px;
   background: var(--bg-color-tertiary);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
   margin-bottom: 8px;
 }
 
 .progress-fill {
   height: 100%;
-  background: var(--primary-color);
-  transition: width 0.2s ease;
+  background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+  transition: width 0.3s ease;
+  border-radius: 3px;
 }
 
 .progress-text {
   font-size: 12px;
   color: var(--text-color-secondary);
   margin: 0;
+}
+
+.progress-status {
+  font-size: 11px;
+  color: var(--text-color-tertiary);
+  margin: 4px 0 0 0;
+}
+
+.chunk-info {
+  font-size: 10px;
+  color: var(--primary-color);
+  margin: 2px 0 0 0;
+  font-weight: 500;
 }
 
 .error-message {

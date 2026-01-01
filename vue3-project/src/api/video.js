@@ -1,10 +1,285 @@
 import request from './request.js'
 import apiConfig from '@/config/api.js'
+import SparkMD5 from 'spark-md5'
+
+/**
+ * 默认分片大小 3MB
+ */
+const DEFAULT_CHUNK_SIZE = 3 * 1024 * 1024
 
 /**
  * 视频上传API
  */
 export const videoApi = {
+  /**
+   * 获取服务器分片配置
+   * @returns {Promise<{chunkSize: number, maxFileSize: number}>}
+   */
+  async getChunkConfig() {
+    try {
+      const response = await request.get('/upload/chunk/config')
+      if (response.success) {
+        return {
+          chunkSize: response.data.chunkSize || DEFAULT_CHUNK_SIZE,
+          maxFileSize: response.data.maxFileSize || 100 * 1024 * 1024
+        }
+      }
+      return { chunkSize: DEFAULT_CHUNK_SIZE, maxFileSize: 100 * 1024 * 1024 }
+    } catch (error) {
+      console.warn('获取分片配置失败，使用默认配置:', error)
+      return { chunkSize: DEFAULT_CHUNK_SIZE, maxFileSize: 100 * 1024 * 1024 }
+    }
+  },
+
+  /**
+   * 计算文件MD5（用于生成唯一标识符）
+   * @param {File} file - 文件
+   * @returns {Promise<string>} MD5值
+   */
+  async calculateFileMD5(file) {
+    return new Promise((resolve, reject) => {
+      const spark = new SparkMD5.ArrayBuffer()
+      const reader = new FileReader()
+      const chunkSize = 2 * 1024 * 1024 // 2MB chunks for MD5 calculation
+      let currentChunk = 0
+      const chunks = Math.ceil(file.size / chunkSize)
+
+      reader.onload = (e) => {
+        spark.append(e.target.result)
+        currentChunk++
+
+        if (currentChunk < chunks) {
+          loadNext()
+        } else {
+          resolve(spark.end())
+        }
+      }
+
+      reader.onerror = () => {
+        reject(new Error('文件读取失败'))
+      }
+
+      function loadNext() {
+        const start = currentChunk * chunkSize
+        const end = Math.min(start + chunkSize, file.size)
+        reader.readAsArrayBuffer(file.slice(start, end))
+      }
+
+      loadNext()
+    })
+  },
+
+  /**
+   * 计算分片MD5
+   * @param {Blob} chunk - 分片数据
+   * @returns {Promise<string>} MD5值
+   */
+  async calculateChunkMD5(chunk) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const spark = new SparkMD5.ArrayBuffer()
+        spark.append(e.target.result)
+        resolve(spark.end())
+      }
+      reader.onerror = () => reject(new Error('分片读取失败'))
+      reader.readAsArrayBuffer(chunk)
+    })
+  },
+
+  /**
+   * 验证分片是否已存在
+   * @param {string} identifier - 文件标识符
+   * @param {number} chunkNumber - 分片编号
+   * @param {string} md5 - 分片MD5
+   * @returns {Promise<{exists: boolean, valid: boolean}>}
+   */
+  async verifyChunk(identifier, chunkNumber, md5) {
+    try {
+      const response = await request.get('/upload/chunk/verify', {
+        params: { identifier, chunkNumber, md5 }
+      })
+      if (response.success) {
+        return response.data
+      }
+      return { exists: false, valid: false }
+    } catch (error) {
+      console.warn('分片验证失败:', error)
+      return { exists: false, valid: false }
+    }
+  },
+
+  /**
+   * 上传单个分片
+   * @param {Blob} chunk - 分片数据
+   * @param {Object} params - 分片参数
+   * @returns {Promise<{success: boolean, data?: Object, message?: string}>}
+   */
+  async uploadChunk(chunk, params) {
+    const { identifier, chunkNumber, totalChunks, filename } = params
+    
+    const formData = new FormData()
+    formData.append('file', chunk, `chunk_${chunkNumber}`)
+    formData.append('identifier', identifier)
+    formData.append('chunkNumber', chunkNumber.toString())
+    formData.append('totalChunks', totalChunks.toString())
+    formData.append('filename', filename)
+
+    try {
+      const response = await request.post('/upload/chunk', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 120000 // 2分钟超时
+      })
+      
+      return {
+        success: response.success,
+        data: response.data,
+        message: response.message
+      }
+    } catch (error) {
+      console.error(`分片 ${chunkNumber} 上传失败:`, error)
+      return {
+        success: false,
+        message: error.message || '分片上传失败'
+      }
+    }
+  },
+
+  /**
+   * 合并分片
+   * @param {Object} params - 合并参数
+   * @returns {Promise<{success: boolean, data?: Object, message?: string}>}
+   */
+  async mergeChunks(params) {
+    const { identifier, totalChunks, filename } = params
+
+    try {
+      const response = await request.post('/upload/chunk/merge', {
+        identifier,
+        totalChunks,
+        filename
+      }, {
+        timeout: 300000 // 5分钟超时
+      })
+      
+      return {
+        success: response.success,
+        data: response.data,
+        message: response.message
+      }
+    } catch (error) {
+      console.error('分片合并失败:', error)
+      return {
+        success: false,
+        message: error.message || '分片合并失败'
+      }
+    }
+  },
+
+  /**
+   * 分片上传视频文件
+   * @param {File} file - 视频文件
+   * @param {Object} options - 选项
+   * @param {Function} options.onProgress - 进度回调 (0-100)
+   * @param {Function} options.onChunkProgress - 分片进度回调
+   * @returns {Promise<{success: boolean, data?: Object, message?: string}>}
+   */
+  async uploadVideoChunked(file, options = {}) {
+    const { onProgress, onChunkProgress } = options
+
+    try {
+      // 获取服务器分片配置
+      const config = await this.getChunkConfig()
+      const chunkSize = config.chunkSize
+
+      // 计算文件唯一标识符
+      console.log('📊 计算文件MD5...')
+      const fileMD5 = await this.calculateFileMD5(file)
+      const identifier = `${fileMD5}_${file.size}`
+      console.log(`📝 文件标识符: ${identifier}`)
+
+      // 计算分片数量
+      const totalChunks = Math.ceil(file.size / chunkSize)
+      console.log(`📦 文件大小: ${this.formatFileSize(file.size)}, 分片数: ${totalChunks}`)
+
+      let uploadedChunks = 0
+
+      // 逐个上传分片
+      for (let i = 1; i <= totalChunks; i++) {
+        const start = (i - 1) * chunkSize
+        const end = Math.min(start + chunkSize, file.size)
+        const chunk = file.slice(start, end)
+
+        // 计算分片MD5用于验证
+        const chunkMD5 = await this.calculateChunkMD5(chunk)
+
+        // 检查分片是否已存在（断点续传）
+        const verifyResult = await this.verifyChunk(identifier, i, chunkMD5)
+        
+        if (verifyResult.exists && verifyResult.valid) {
+          console.log(`⏭️ 分片 ${i}/${totalChunks} 已存在，跳过`)
+          uploadedChunks++
+          const progress = Math.round((uploadedChunks / totalChunks) * 100)
+          onProgress?.(progress)
+          onChunkProgress?.({ current: i, total: totalChunks, skipped: true })
+          continue
+        }
+
+        // 上传分片
+        console.log(`📤 上传分片 ${i}/${totalChunks}...`)
+        const uploadResult = await this.uploadChunk(chunk, {
+          identifier,
+          chunkNumber: i,
+          totalChunks,
+          filename: file.name
+        })
+
+        if (!uploadResult.success) {
+          console.error(`❌ 分片 ${i} 上传失败:`, uploadResult.message)
+          return {
+            success: false,
+            message: `分片 ${i} 上传失败: ${uploadResult.message}`
+          }
+        }
+
+        uploadedChunks++
+        const progress = Math.round((uploadedChunks / totalChunks) * 100)
+        onProgress?.(progress)
+        onChunkProgress?.({ current: i, total: totalChunks, skipped: false })
+        
+        console.log(`✅ 分片 ${i}/${totalChunks} 上传成功`)
+      }
+
+      // 合并分片
+      console.log('🔄 开始合并分片...')
+      const mergeResult = await this.mergeChunks({
+        identifier,
+        totalChunks,
+        filename: file.name
+      })
+
+      if (!mergeResult.success) {
+        console.error('❌ 分片合并失败:', mergeResult.message)
+        return {
+          success: false,
+          message: mergeResult.message || '分片合并失败'
+        }
+      }
+
+      console.log('✅ 视频上传完成:', mergeResult.data)
+      return {
+        success: true,
+        data: mergeResult.data
+      }
+    } catch (error) {
+      console.error('❌ 分片上传失败:', error)
+      return {
+        success: false,
+        message: error.message || '视频上传失败'
+      }
+    }
+  },
+
   /**
    * 上传单个视频文件
    * @param {File} file - 视频文件

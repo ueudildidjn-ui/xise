@@ -2,11 +2,20 @@ const express = require('express');
 const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES } = require('../constants');
 const multer = require('multer');
+const path = require('path');
 const { authenticateToken } = require('../middleware/auth');
 const { uploadFile, uploadVideo } = require('../utils/uploadHelper');
 const transcodingQueue = require('../utils/transcodingQueue');
 const config = require('../config/config');
 const { pool } = require('../config/config');
+const { 
+  saveChunk, 
+  verifyChunk, 
+  checkUploadComplete, 
+  mergeChunks,
+  startCleanupScheduler
+} = require('../utils/chunkUploadHelper');
+const { validateVideoMedia, deleteInvalidVideo } = require('../utils/videoTranscoder');
 
 // 配置 multer 内存存储（用于云端图床）
 const storage = multer.memoryStorage();
@@ -271,6 +280,203 @@ router.post('/video', authenticateToken, videoUpload.fields([
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ 
       code: RESPONSE_CODES.ERROR, 
       message: '上传失败' 
+    });
+  }
+});
+
+// 启动分片清理调度器
+startCleanupScheduler();
+
+// 配置 multer - 分片上传
+const chunkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: config.upload.video.chunk.chunkSize + 1024 * 1024 // 分片大小 + 1MB余量
+  }
+});
+
+// 获取分片上传配置
+router.get('/chunk/config', authenticateToken, (req, res) => {
+  res.json({
+    code: RESPONSE_CODES.SUCCESS,
+    message: '获取分片配置成功',
+    data: {
+      chunkSize: config.upload.video.chunk.chunkSize,
+      maxFileSize: 100 * 1024 * 1024 // 100MB
+    }
+  });
+});
+
+// 验证分片是否已存在（用于秒传/断点续传）
+router.get('/chunk/verify', authenticateToken, async (req, res) => {
+  try {
+    const { identifier, chunkNumber, md5 } = req.query;
+    
+    if (!identifier || !chunkNumber) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: '缺少必要参数'
+      });
+    }
+    
+    const result = await verifyChunk(identifier, parseInt(chunkNumber), md5);
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: '验证完成',
+      data: {
+        exists: result.exists,
+        valid: result.valid
+      }
+    });
+  } catch (error) {
+    console.error('分片验证失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      code: RESPONSE_CODES.ERROR,
+      message: '分片验证失败'
+    });
+  }
+});
+
+// 上传分片
+router.post('/chunk', authenticateToken, chunkUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: '没有上传分片'
+      });
+    }
+    
+    const { identifier, chunkNumber, totalChunks, filename } = req.body;
+    
+    if (!identifier || !chunkNumber || !totalChunks) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: '缺少必要参数'
+      });
+    }
+    
+    // 保存分片
+    const saveResult = await saveChunk(
+      req.file.buffer,
+      identifier,
+      parseInt(chunkNumber)
+    );
+    
+    if (!saveResult.success) {
+      return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        code: RESPONSE_CODES.ERROR,
+        message: saveResult.message || '分片保存失败'
+      });
+    }
+    
+    // 检查是否所有分片都已上传
+    const checkResult = await checkUploadComplete(identifier, parseInt(totalChunks));
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: '分片上传成功',
+      data: {
+        chunkNumber: parseInt(chunkNumber),
+        uploaded: checkResult.uploadedChunks.length,
+        total: parseInt(totalChunks),
+        complete: checkResult.complete
+      }
+    });
+  } catch (error) {
+    console.error('分片上传失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      code: RESPONSE_CODES.ERROR,
+      message: '分片上传失败'
+    });
+  }
+});
+
+// 合并分片
+router.post('/chunk/merge', authenticateToken, async (req, res) => {
+  try {
+    const { identifier, totalChunks, filename } = req.body;
+    
+    if (!identifier || !totalChunks || !filename) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: '缺少必要参数'
+      });
+    }
+    
+    console.log(`🔄 开始合并分片 - 用户ID: ${req.user.id}, 文件名: ${filename}, 总分片数: ${totalChunks}`);
+    
+    // 合并分片
+    const mergeResult = await mergeChunks(identifier, parseInt(totalChunks), filename);
+    
+    if (!mergeResult.success) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: mergeResult.message || '分片合并失败'
+      });
+    }
+    
+    const filePath = mergeResult.filePath;
+    
+    // 使用 ffprobe 验证视频文件有效性
+    console.log(`🔍 使用 ffprobe 验证视频文件: ${filePath}`);
+    const validationResult = await validateVideoMedia(filePath);
+    
+    if (!validationResult.valid) {
+      console.error(`❌ 视频验证失败: ${validationResult.message}`);
+      // 删除无效的视频文件
+      await deleteInvalidVideo(filePath);
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: validationResult.message || '视频文件无效，已删除'
+      });
+    }
+    
+    // 生成视频访问URL
+    const ext = path.extname(filename);
+    const basename = path.basename(filePath);
+    const videoUrl = `${config.upload.video.local.baseUrl}/${config.upload.video.local.uploadDir}/${basename}`;
+    
+    let coverUrl = null;
+    
+    // 如果启用了视频转码，且是本地存储策略，则添加到转码队列
+    if (config.videoTranscoding.enabled && config.upload.video.strategy === 'local') {
+      try {
+        console.log('🎬 将视频添加到转码队列...');
+        
+        const taskId = transcodingQueue.addTask(
+          filePath,
+          req.user.id,
+          videoUrl
+        );
+        
+        console.log(`✅ 视频已加入转码队列 [任务ID: ${taskId}]`);
+      } catch (error) {
+        console.error('❌ 添加到转码队列失败:', error.message);
+        // 转码失败不影响视频上传
+      }
+    }
+    
+    console.log(`✅ 分片合并完成 - 用户ID: ${req.user.id}, 文件名: ${filename}, URL: ${videoUrl}`);
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: '视频上传成功',
+      data: {
+        originalname: filename,
+        url: videoUrl,
+        filePath: filePath,
+        coverUrl: coverUrl,
+        transcoding: config.videoTranscoding.enabled && config.upload.video.strategy === 'local',
+        videoInfo: validationResult.info
+      }
+    });
+  } catch (error) {
+    console.error('分片合并失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      code: RESPONSE_CODES.ERROR,
+      message: '分片合并失败'
     });
   }
 });

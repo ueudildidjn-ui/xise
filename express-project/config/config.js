@@ -86,6 +86,17 @@ const config = {
         endpoint: process.env.R2_ENDPOINT,
         publicUrl: process.env.R2_PUBLIC_URL, // 可选：自定义域名
         region: process.env.R2_REGION || 'auto'
+      },
+      // 分片上传配置
+      chunk: {
+        // 分片临时存储目录
+        tempDir: process.env.VIDEO_CHUNK_TEMP_DIR || 'uploads/chunks',
+        // 分片大小（字节），默认3MB
+        chunkSize: parseInt(process.env.VIDEO_CHUNK_SIZE) || 3 * 1024 * 1024,
+        // 分片自动清理间隔（毫秒），默认30分钟
+        cleanupInterval: parseInt(process.env.VIDEO_CHUNK_CLEANUP_INTERVAL) || 30 * 60 * 1000,
+        // 分片过期时间（毫秒），默认2小时
+        expireTime: parseInt(process.env.VIDEO_CHUNK_EXPIRE_TIME) || 2 * 60 * 60 * 1000
       }
     }
   },
