@@ -14,8 +14,16 @@ class TranscodingQueue {
   constructor(maxConcurrent = null) {
     this.queue = []; // 待处理任务队列
     this.processing = new Map(); // 正在处理的任务 Map<taskId, task>
+    
     // 使用配置中的并发数，如果没有配置则使用传入的参数或默认值2
-    this.maxConcurrent = maxConcurrent ?? config.videoTranscoding.maxConcurrentTasks ?? 2;
+    if (maxConcurrent !== null) {
+      this.maxConcurrent = maxConcurrent;
+    } else if (config.videoTranscoding.maxConcurrentTasks) {
+      this.maxConcurrent = config.videoTranscoding.maxConcurrentTasks;
+    } else {
+      this.maxConcurrent = 2;
+    }
+    
     this.taskIdCounter = 0; // 任务ID计数器
   }
 
@@ -118,9 +126,9 @@ class TranscodingQueue {
       task.completedAt = new Date();
       this.processing.delete(task.id);
 
-      // 继续处理队列中的下一个任务
+      // 继续处理队列中的下一个任务（使用 setImmediate 避免堆栈溢出）
       console.log(`🔄 任务完成 [ID: ${task.id}]，继续处理队列...`);
-      this.processQueue();
+      setImmediate(() => this.processQueue());
     }
   }
 
