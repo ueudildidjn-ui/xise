@@ -774,8 +774,18 @@ const selectDefaultBitrateTrack = () => {
     
     console.log(`📹 原始视频最高质量: ${maxOriginalHeight}p, 最高码率: ${Math.round(maxOriginalBandwidth / 1000)}k`)
     
-    // 确定目标分辨率：优先720p，但不超过原始最高分辨率
-    const targetHeight = Math.min(720, maxOriginalHeight)
+    // 确定目标分辨率
+    // 如果ABR已禁用且设置了VITE_VIDEO_MAX_RESOLUTION_HEIGHT，使用该配置作为固定分辨率
+    // 否则优先720p，但不超过原始最高分辨率
+    let targetHeight
+    if (!props.adaptiveBitrate && maxResolutionHeight > 0) {
+      // ABR禁用模式：使用VITE_VIDEO_MAX_RESOLUTION_HEIGHT作为固定分辨率
+      targetHeight = Math.min(maxResolutionHeight, maxOriginalHeight)
+      console.log(`🔒 ABR已禁用，使用固定分辨率: ${targetHeight}p（配置值: ${maxResolutionHeight}p）`)
+    } else {
+      // ABR启用模式：优先720p作为默认起始分辨率
+      targetHeight = Math.min(720, maxOriginalHeight)
+    }
     
     // 优先查找目标分辨率的轨道
     let defaultTrack = tracks.find(track => track.height === targetHeight)
@@ -807,56 +817,62 @@ const selectDefaultBitrateTrack = () => {
       player.configure({ abr: { enabled: false } })
       player.selectVariantTrack(defaultTrack, true)
       
-      const abrMessage = targetHeight === 720 && maxOriginalHeight >= 720
-        ? '🎯 ABR已启用: 优先保持720p，仅在严重卡顿时降级'
-        : `🎯 ABR已启用: 优先保持${targetHeight}p（原始最高${maxOriginalHeight}p），仅在严重卡顿时降级`
-      
-      // 延迟重新启用ABR，确保默认轨道有足够时间证明其稳定性
-      // 如果默认轨道播放流畅且缓冲充足，就不需要频繁切换
-      // 注意：以下是可调整的常量，不同视频长度可能需要不同值：
-      // - 短视频（< 30秒）：沉淀期 5-10秒，缓冲阈值 3-5秒
-      // - 中等视频（30秒 - 5分钟）：沉淀期 10-15秒，缓冲阈值 5-8秒
-      // - 长视频（> 5分钟）：沉淀期 15-20秒，缓冲阈值 8-12秒
-      const settlingPeriod = 15000  // 15秒沉淀期，让默认轨道充分缓冲
-      const bufferThreshold = 8      // 8秒缓冲阈值，只有缓冲充足时才启用ABR
-      
-      // 清除之前的定时器（如果有）
-      if (reEnableAbrTimer) {
-        clearTimeout(reEnableAbrTimer)
-      }
-      
-      reEnableAbrTimer = setTimeout(() => {
-        if (player && props.adaptiveBitrate) {
-          // 检查缓冲状态：只有在缓冲健康时才重新启用ABR
-          const buffered = videoElement.value?.buffered
-          const currentTime = videoElement.value?.currentTime || 0
-          let bufferedAhead = 0
-          
-          if (buffered && buffered.length > 0) {
-            for (let i = 0; i < buffered.length; i++) {
-              if (buffered.start(i) <= currentTime && buffered.end(i) > currentTime) {
-                bufferedAhead = buffered.end(i) - currentTime
-                break
-              }
-            }
-          }
-          
-          // 只有当前向缓冲超过阈值时才重新启用ABR
-          // 这表明当前码率下网络状况良好，可以考虑升级
-          if (bufferedAhead > bufferThreshold) {
-            player.configure({ abr: { enabled: true } })
-            console.log(abrMessage)
-            console.log(`✅ 缓冲充足 (${bufferedAhead.toFixed(1)}秒)，ABR已重新启用`)
-          } else {
-            console.log(`⏸️ 缓冲不足 (${bufferedAhead.toFixed(1)}秒)，暂不启用ABR以保持稳定`)
-          }
-        }
-      }, settlingPeriod)
-      
       const resolution = `${defaultTrack.width}x${defaultTrack.height}`
       const bitrate = Math.round(defaultTrack.bandwidth / 1000)
-      const note = defaultTrack.height < 720 ? `（原始最高${maxOriginalHeight}p）` : ''
+      const note = defaultTrack.height < targetHeight ? `（原始最高${maxOriginalHeight}p）` : ''
       console.log(`✅ 已选择默认轨道: ${defaultTrack.height}p (${resolution}) 码率: ${bitrate}k ${note}`)
+      
+      // 如果ABR已启用，延迟重新启用ABR
+      if (props.adaptiveBitrate) {
+        const abrMessage = targetHeight === 720 && maxOriginalHeight >= 720
+          ? '🎯 ABR已启用: 优先保持720p，仅在严重卡顿时降级'
+          : `🎯 ABR已启用: 优先保持${targetHeight}p（原始最高${maxOriginalHeight}p），仅在严重卡顿时降级`
+        
+        // 延迟重新启用ABR，确保默认轨道有足够时间证明其稳定性
+        // 如果默认轨道播放流畅且缓冲充足，就不需要频繁切换
+        // 注意：以下是可调整的常量，不同视频长度可能需要不同值：
+        // - 短视频（< 30秒）：沉淀期 5-10秒，缓冲阈值 3-5秒
+        // - 中等视频（30秒 - 5分钟）：沉淀期 10-15秒，缓冲阈值 5-8秒
+        // - 长视频（> 5分钟）：沉淀期 15-20秒，缓冲阈值 8-12秒
+        const settlingPeriod = 15000  // 15秒沉淀期，让默认轨道充分缓冲
+        const bufferThreshold = 8      // 8秒缓冲阈值，只有缓冲充足时才启用ABR
+        
+        // 清除之前的定时器（如果有）
+        if (reEnableAbrTimer) {
+          clearTimeout(reEnableAbrTimer)
+        }
+        
+        reEnableAbrTimer = setTimeout(() => {
+          if (player && props.adaptiveBitrate) {
+            // 检查缓冲状态：只有在缓冲健康时才重新启用ABR
+            const buffered = videoElement.value?.buffered
+            const currentTime = videoElement.value?.currentTime || 0
+            let bufferedAhead = 0
+            
+            if (buffered && buffered.length > 0) {
+              for (let i = 0; i < buffered.length; i++) {
+                if (buffered.start(i) <= currentTime && buffered.end(i) > currentTime) {
+                  bufferedAhead = buffered.end(i) - currentTime
+                  break
+                }
+              }
+            }
+            
+            // 只有当前向缓冲超过阈值时才重新启用ABR
+            // 这表明当前码率下网络状况良好，可以考虑升级
+            if (bufferedAhead > bufferThreshold) {
+              player.configure({ abr: { enabled: true } })
+              console.log(abrMessage)
+              console.log(`✅ 缓冲充足 (${bufferedAhead.toFixed(1)}秒)，ABR已重新启用`)
+            } else {
+              console.log(`⏸️ 缓冲不足 (${bufferedAhead.toFixed(1)}秒)，暂不启用ABR以保持稳定`)
+            }
+          }
+        }, settlingPeriod)
+      } else {
+        // ABR已禁用，保持固定分辨率
+        console.log(`🔒 ABR保持禁用状态，固定使用 ${defaultTrack.height}p`)
+      }
     }
   } catch (err) {
     console.warn('选择默认码率轨道失败:', err)

@@ -15,19 +15,44 @@
 
 在 `vue3-project/.env` 文件中配置以下参数：
 
-### 1. ABR 最大分辨率限制
+### 1. ABR 总开关 (自适应码率控制)
 
 ```bash
-# 限制ABR自动模式可选择的最大分辨率高度（像素）
-# 例如: 720 表示自动模式最高只能选择720p
-# 注意: 用户手动选择画质时不受此限制
+# 是否启用自适应码率 (ABR总开关)
+# true: 启用ABR自动切换，根据网络状况动态调整分辨率
+# false: 禁用ABR，使用VITE_VIDEO_MAX_RESOLUTION_HEIGHT作为固定分辨率
+VITE_VIDEO_ADAPTIVE_BITRATE=true
+```
+
+**说明**：
+- **启用 (true)**：播放器会根据网络状况自动切换分辨率，提供最佳播放体验
+- **禁用 (false)**：播放器使用固定分辨率，不会自动切换
+- 默认值：`true`
+- **适用场景**：
+  - `true` - 网络状况波动的环境，需要动态适应
+  - `false` - 网络稳定且需要固定画质的场景
+
+### 2. ABR 最大分辨率限制
+
+```bash
+# 限制ABR可选择的最大分辨率高度（像素）
+# 例如: 720 表示最高只能选择720p
 VITE_VIDEO_MAX_RESOLUTION_HEIGHT=720
 ```
 
 **说明**：
-- 设置为 `720` 时，ABR 自动模式最高选择 720p，即使有 1080p 可用
-- 用户可以通过画质菜单手动选择 1080p 或更高分辨率
-- 设置为 `0` 或不设置表示不限制
+- **当 `VITE_VIDEO_ADAPTIVE_BITRATE=true` (ABR启用) 时**：
+  - 此限制仅对ABR自动模式有效
+  - 用户仍可通过画质菜单手动选择更高分辨率（如1080p）
+  - 设置为 `720` 时，ABR 自动模式最高选择 720p
+  - 设置为 `0` 或不设置表示不限制
+
+- **当 `VITE_VIDEO_ADAPTIVE_BITRATE=false` (ABR禁用) 时**：
+  - 播放器将使用此配置作为**固定分辨率**
+  - 不会根据网络状况自动切换
+  - 设置为 `720` 时，播放器固定使用 720p
+  - 设置为 `0` 或不设置时，使用默认的 720p（如果可用）
+
 - **适用场景**：移动网络、带宽受限环境
 
 ### 2. 调试模式
@@ -299,6 +324,7 @@ FFMPEG_HARDWARE_ACCEL_TYPE=
 **配置**：
 ```bash
 # 前端
+VITE_VIDEO_ADAPTIVE_BITRATE=true  # 启用ABR
 VITE_VIDEO_MAX_RESOLUTION_HEIGHT=720
 VITE_VIDEO_DEFAULT_BANDWIDTH=500000
 ```
@@ -312,6 +338,7 @@ VITE_VIDEO_DEFAULT_BANDWIDTH=500000
 **配置**：
 ```bash
 # 前端
+VITE_VIDEO_ADAPTIVE_BITRATE=true  # 启用ABR
 VITE_VIDEO_BUFFERING_GOAL=8
 VITE_VIDEO_REBUFFERING_GOAL=3
 VITE_VIDEO_SWITCH_INTERVAL=1
@@ -327,6 +354,7 @@ VITE_VIDEO_MAX_RESOLUTION_HEIGHT=720
 **配置**：
 ```bash
 # 前端
+VITE_VIDEO_ADAPTIVE_BITRATE=true  # 启用ABR
 VITE_VIDEO_MAX_RESOLUTION_HEIGHT=0  # 不限制
 
 # 后端
@@ -338,7 +366,20 @@ ORIGINAL_VIDEO_MAX_BITRATE=15000
 
 **效果**：最高质量编码，支持 1080p/4K，用户体验最佳。
 
-### 场景 4：带宽受限服务器
+### 场景 4：固定分辨率播放（会议录像、教学视频）
+
+**问题**：内容不需要动态切换分辨率，希望保持固定画质以获得一致的观看体验。
+
+**配置**：
+```bash
+# 前端
+VITE_VIDEO_ADAPTIVE_BITRATE=false  # 禁用ABR
+VITE_VIDEO_MAX_RESOLUTION_HEIGHT=720  # 固定使用720p
+```
+
+**效果**：播放器固定使用 720p，不会根据网络状况自动切换分辨率，提供一致的观看体验。
+
+### 场景 5：带宽受限服务器
 
 **问题**：服务器出口带宽有限，希望降低总体码率。
 
@@ -356,11 +397,30 @@ DASH_RESOLUTIONS=1280x720:2000,854x480:800,640x360:500
 
 ## 常见问题
 
-### Q1: 用户能否手动选择超过限制的分辨率？
+### Q1: ABR 总开关是什么？如何使用？
 
-**A:** 可以。`VITE_VIDEO_MAX_RESOLUTION_HEIGHT` 只限制 ABR 自动模式，用户通过画质菜单可以手动选择任何可用的分辨率（包括 1080p、4K 等）。
+**A:** `VITE_VIDEO_ADAPTIVE_BITRATE` 是 ABR (自适应码率) 的总开关：
+- **设置为 `true`** (默认)：启用 ABR，播放器根据网络状况自动切换分辨率
+- **设置为 `false`**：禁用 ABR，播放器使用固定分辨率 (`VITE_VIDEO_MAX_RESOLUTION_HEIGHT`)
 
-### Q2: 如何启用调试模式查看播放器配置？
+**使用建议**：
+- 网络环境稳定 + 需要固定画质 → 设为 `false`
+- 网络环境波动 + 需要流畅播放 → 设为 `true`
+
+### Q2: 禁用 ABR 后，播放器使用什么分辨率？
+
+**A:** 当 `VITE_VIDEO_ADAPTIVE_BITRATE=false` 时：
+- 播放器使用 `VITE_VIDEO_MAX_RESOLUTION_HEIGHT` 配置的分辨率作为固定分辨率
+- 例如设置为 `720`，播放器将固定使用 720p，不会自动切换
+- 如果设置为 `0` 或未设置，默认使用 720p（如果可用）
+
+### Q3: 用户能否手动选择超过限制的分辨率？
+
+**A:** 这取决于 ABR 是否启用：
+- **ABR 启用时** (`VITE_VIDEO_ADAPTIVE_BITRATE=true`)：可以。用户通过画质菜单可以手动选择任何可用的分辨率（包括 1080p、4K 等），`VITE_VIDEO_MAX_RESOLUTION_HEIGHT` 只限制自动模式。
+- **ABR 禁用时** (`VITE_VIDEO_ADAPTIVE_BITRATE=false`)：播放器固定使用配置的分辨率，用户无法通过画质菜单切换。
+
+### Q4: 如何启用调试模式查看播放器配置？
 
 **A:** 在前端 `.env` 文件中设置：
 ```bash
@@ -368,7 +428,7 @@ VITE_VIDEO_DEBUG_CONFIG=true
 ```
 然后在浏览器开发者工具的控制台中查看输出。
 
-### Q3: VBR 和 CRF 哪个更好？
+### Q5: VBR 和 CRF 哪个更好？
 
 **A:** 
 - **VBR**（默认，推荐）：码率更可控，适合大多数场景
@@ -376,16 +436,17 @@ VITE_VIDEO_DEBUG_CONFIG=true
 
 一般情况下推荐使用 VBR（不设置 `FFMPEG_CRF`）。
 
-### Q4: 如何优化短视频的播放体验？
+### Q6: 如何优化短视频的播放体验？
 
 **A:** 调整以下参数：
 ```bash
+VITE_VIDEO_ADAPTIVE_BITRATE=true    # 启用ABR
 VITE_VIDEO_BUFFERING_GOAL=8        # 降低缓冲目标
 VITE_VIDEO_SWITCH_INTERVAL=1       # 更快切换
 VITE_VIDEO_MAX_RESOLUTION_HEIGHT=720  # 限制最高画质
 ```
 
-### Q5: 硬件加速什么时候该启用？
+### Q7: 硬件加速什么时候该启用？
 
 **A:** 
 - **启用条件**：服务器有专用 GPU（NVIDIA、Intel、AMD）
@@ -393,7 +454,7 @@ VITE_VIDEO_MAX_RESOLUTION_HEIGHT=720  # 限制最高画质
 - **劣势**：质量略低于 CPU 编码
 - **建议**：大量视频转码时启用，追求质量时禁用
 
-### Q6: 如何查看转码日志确认 VBR 模式？
+### Q8: 如何查看转码日志确认 VBR 模式？
 
 **A:** 转码时会输出以下日志：
 ```
@@ -403,26 +464,39 @@ VITE_VIDEO_MAX_RESOLUTION_HEIGHT=720  # 限制最高画质
 
 如果看到此日志，说明 VBR 模式已正确启用。
 
-### Q7: 为什么视频加载时会频繁切换码率？
+### Q9: 为什么视频加载时会频繁切换码率？
 
 **A:** **v1.3.1 已修复**。早期版本中，播放器选择默认 720p 轨道后会立即重新启用 ABR，导致根据估算带宽频繁切换。
 
-**新版本行为**：
+**新版本行为** (仅当 `VITE_VIDEO_ADAPTIVE_BITRATE=true` 时)：
 - 选择默认轨道后有 15 秒沉淀期
 - 期间 ABR 保持禁用，让默认轨道充分缓冲
 - 沉淀期结束后检查缓冲健康度（需 > 8秒）
 - 只有在缓冲充足时才重新启用 ABR
 
-**如何验证**：
+**如果想完全避免码率切换**，可以设置：
+```bash
+VITE_VIDEO_ADAPTIVE_BITRATE=false  # 禁用ABR
+VITE_VIDEO_MAX_RESOLUTION_HEIGHT=720  # 固定使用720p
+```
+
+**如何验证 ABR 启用状态**：
 在浏览器控制台查看日志：
+
+- **ABR 启用时** (`VITE_VIDEO_ADAPTIVE_BITRATE=true`)：
 ```
 ✅ 已选择默认轨道: 720p (406x720) 码率: 539k
 ✅ 缓冲充足 (12.3秒)，ABR已重新启用
 ```
 
-如果默认轨道播放流畅且缓冲充足，就不会看到频繁的码率切换。
+- **ABR 禁用时** (`VITE_VIDEO_ADAPTIVE_BITRATE=false`)：
+```
+🔒 ABR已禁用，使用固定分辨率: 720p（配置值: 720p）
+✅ 已选择默认轨道: 720p (406x720) 码率: 539k
+🔒 ABR保持禁用状态，固定使用 720p
+```
 
-### Q8: 如何调整 ABR 沉淀期和缓冲阈值？
+### Q10: 如何调整 ABR 沉淀期和缓冲阈值？
 
 **A:** 沉淀期（15秒）和缓冲阈值（8秒）目前是硬编码在 `ShakaVideoPlayer.vue` 中的常量。如需调整：
 
