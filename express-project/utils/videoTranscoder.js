@@ -293,17 +293,26 @@ async function convertToDash(inputPath, userId, progressCallback) {
           `-pix_fmt:v:${index} ${ffmpegOpts.pixelFormat}`
         ];
         
-        // 如果设置了 CRF，使用恒定质量模式
+        // 如果设置了 CRF，使用恒定质量模式（CRF本身就是动态码率）
         if (ffmpegOpts.crf !== null && ffmpegOpts.crf >= 0 && ffmpegOpts.crf <= 51) {
           videoOptions.push(`-crf:v:${index} ${ffmpegOpts.crf}`);
-          // CRF模式下码率作为参考
+          // CRF模式下设置最大码率上限，确保不会超出预期
           videoOptions.push(`-maxrate:v:${index} ${Math.floor(resolution.bitrate * 1.2)}k`);
           videoOptions.push(`-bufsize:v:${index} ${Math.floor(resolution.bitrate * 2)}k`);
+          console.log(`📊 流${index} CRF模式: CRF=${ffmpegOpts.crf}, 最大码率=${Math.floor(resolution.bitrate * 1.2)}k`);
         } else {
-          // 使用码率模式
+          // 使用动态码率模式 (VBR - Variable Bitrate)
+          // -b:v 设置平均目标码率
+          // -maxrate 设置最大码率上限（不会超过此值）
+          // -bufsize 设置码率控制缓冲区大小
+          // 这种配置允许码率在0到maxrate之间动态变化，平均接近b:v
           videoOptions.push(`-b:v:${index} ${resolution.bitrate}k`);
-          videoOptions.push(`-maxrate:v:${index} ${Math.floor(resolution.bitrate * 1.2)}k`);
-          videoOptions.push(`-bufsize:v:${index} ${Math.floor(resolution.bitrate * 2)}k`);
+          // 最大码率设为目标码率的1.5倍，提供足够的动态空间
+          videoOptions.push(`-maxrate:v:${index} ${Math.floor(resolution.bitrate * 1.5)}k`);
+          // bufsize设为maxrate的2倍，确保平滑的码率变化
+          videoOptions.push(`-bufsize:v:${index} ${Math.floor(resolution.bitrate * 3)}k`);
+          // 不设置 -minrate，允许码率降到0，实现真正的动态码率
+          console.log(`📊 流${index} VBR模式: 目标=${resolution.bitrate}k, 最大=${Math.floor(resolution.bitrate * 1.5)}k, 缓冲=${Math.floor(resolution.bitrate * 3)}k`);
         }
         
         // GOP 大小（关键帧间隔）
