@@ -366,8 +366,8 @@ const initPlayer = async () => {
         ...playerConfig,
         adaptiveBitrate: props.adaptiveBitrate,
         maxResolutionHeight: maxResolutionHeight || '不限制',
-        strategy: '优先720p，仅在严重卡顿时降级',
-        note: '最大分辨率限制仅在ABR自动模式下生效，用户手动选择画质时不受限制',
+        strategy: '优先720p（不超过原始视频质量），仅在严重卡顿时降级',
+        note: '最大分辨率和码率限制仅在ABR自动模式下生效，用户手动选择画质时不受限制',
         videoSrc: props.src
       })
     }
@@ -391,7 +391,39 @@ const initPlayer = async () => {
     const useDash = isDashVideo(props.src)
     if (useDash) {
       loadQualities()
-      // 尝试选择默认轨道（优先720p）
+      
+      // 获取原始视频的最高质量限制
+      const tracks = player.getVariantTracks()
+      if (tracks.length > 0) {
+        const maxOriginalHeight = Math.max(...tracks.map(t => t.height))
+        const maxOriginalBandwidth = Math.max(...tracks.map(t => t.bandwidth))
+        
+        // 应用原始视频质量限制到ABR配置
+        // 确保自动模式不会选择超过原始视频质量的轨道
+        const effectiveMaxHeight = maxResolutionHeight > 0 
+          ? Math.min(maxResolutionHeight, maxOriginalHeight)
+          : maxOriginalHeight
+        
+        player.configure({
+          abr: {
+            restrictions: {
+              ...createRestrictions(effectiveMaxHeight),
+              maxBandwidth: maxOriginalBandwidth  // 不超过原始最高码率
+            }
+          }
+        })
+        
+        if (debugConfig) {
+          console.log('📊 ABR质量限制已应用:', {
+            原始最高分辨率: `${maxOriginalHeight}p`,
+            原始最高码率: `${Math.round(maxOriginalBandwidth / 1000)}k`,
+            ABR最大分辨率: `${effectiveMaxHeight}p`,
+            ABR最大码率: `${Math.round(maxOriginalBandwidth / 1000)}k`
+          })
+        }
+      }
+      
+      // 尝试选择默认轨道（优先720p，但不超过原始质量）
       selectDefaultBitrateTrack()
     }
     
@@ -714,7 +746,7 @@ const updateBitrateInfo = () => {
   }
 }
 
-// 选择默认码率轨道（优先选择720p，因为是转码的标准分辨率）
+// 选择默认码率轨道（优先选择720p，但不超过原始视频最高码率）
 const selectDefaultBitrateTrack = () => {
   if (!player) return
   
@@ -722,18 +754,37 @@ const selectDefaultBitrateTrack = () => {
     const tracks = player.getVariantTracks()
     if (tracks.length === 0) return
     
-    // 优先查找720p分辨率的轨道（高度为720的轨道）
-    let defaultTrack = tracks.find(track => track.height === 720)
+    // 找到原始视频的最高分辨率和最高码率（代表源视频质量）
+    const maxOriginalHeight = Math.max(...tracks.map(t => t.height))
+    const maxOriginalBandwidth = Math.max(...tracks.map(t => t.bandwidth))
     
-    // 如果没有720p，则选择最接近720p的分辨率
+    console.log(`📹 原始视频最高质量: ${maxOriginalHeight}p, 最高码率: ${Math.round(maxOriginalBandwidth / 1000)}k`)
+    
+    // 确定目标分辨率：优先720p，但不超过原始最高分辨率
+    const targetHeight = Math.min(720, maxOriginalHeight)
+    
+    // 优先查找目标分辨率的轨道
+    let defaultTrack = tracks.find(track => track.height === targetHeight)
+    
+    // 如果没有找到目标分辨率，则选择最接近且不超过目标的分辨率
     if (!defaultTrack) {
-      // 按照与720p的差距排序，选择最接近的
-      const sortedTracks = [...tracks].sort((a, b) => {
-        const diffA = Math.abs(a.height - 720)
-        const diffB = Math.abs(b.height - 720)
-        return diffA - diffB
-      })
-      defaultTrack = sortedTracks[0]
+      // 过滤出不超过目标高度的轨道
+      const validTracks = tracks.filter(track => track.height <= targetHeight)
+      
+      if (validTracks.length > 0) {
+        // 在有效轨道中选择最接近目标的
+        const sortedTracks = [...validTracks].sort((a, b) => {
+          const diffA = Math.abs(a.height - targetHeight)
+          const diffB = Math.abs(b.height - targetHeight)
+          return diffA - diffB
+        })
+        defaultTrack = sortedTracks[0]
+      } else {
+        // 如果所有轨道都超过目标，选择最低的（不应该发生，但作为保险）
+        defaultTrack = tracks.reduce((min, track) => 
+          track.height < min.height ? track : min
+        , tracks[0])
+      }
     }
     
     // 如果找到了合适的轨道且不是当前轨道，则切换
@@ -742,7 +793,9 @@ const selectDefaultBitrateTrack = () => {
       player.configure({ abr: { enabled: false } })
       player.selectVariantTrack(defaultTrack, true)
       
-      const abrMessage = '🎯 ABR已启用: 优先保持720p，仅在严重卡顿时降级'
+      const abrMessage = targetHeight === 720 && maxOriginalHeight >= 720
+        ? '🎯 ABR已启用: 优先保持720p，仅在严重卡顿时降级'
+        : `🎯 ABR已启用: 优先保持${targetHeight}p（原始最高${maxOriginalHeight}p），仅在严重卡顿时降级`
       
       // 使用一次性事件监听器来在轨道切换完成后重新启用ABR
       const reEnableAbr = () => {
@@ -767,7 +820,8 @@ const selectDefaultBitrateTrack = () => {
       
       const resolution = `${defaultTrack.width}x${defaultTrack.height}`
       const bitrate = Math.round(defaultTrack.bandwidth / 1000)
-      console.log(`✅ 已选择默认轨道: ${defaultTrack.height}p (${resolution}) 码率: ${bitrate}k`)
+      const note = defaultTrack.height < 720 ? `（原始最高${maxOriginalHeight}p）` : ''
+      console.log(`✅ 已选择默认轨道: ${defaultTrack.height}p (${resolution}) 码率: ${bitrate}k ${note}`)
     }
   } catch (err) {
     console.warn('选择默认码率轨道失败:', err)
@@ -921,7 +975,29 @@ watch(() => props.src, (newSrc) => {
       // 检查是否是 DASH 视频以加载画质选项
       if (isDashVideo(newSrc)) {
         loadQualities()
-        // 尝试选择默认轨道（优先720p）
+        
+        // 获取原始视频的最高质量限制
+        const tracks = player.getVariantTracks()
+        if (tracks.length > 0) {
+          const maxOriginalHeight = Math.max(...tracks.map(t => t.height))
+          const maxOriginalBandwidth = Math.max(...tracks.map(t => t.bandwidth))
+          
+          // 应用原始视频质量限制到ABR配置
+          const effectiveMaxHeight = maxResolutionHeight > 0 
+            ? Math.min(maxResolutionHeight, maxOriginalHeight)
+            : maxOriginalHeight
+          
+          player.configure({
+            abr: {
+              restrictions: {
+                ...createRestrictions(effectiveMaxHeight),
+                maxBandwidth: maxOriginalBandwidth  // 不超过原始最高码率
+              }
+            }
+          })
+        }
+        
+        // 尝试选择默认轨道（优先720p，但不超过原始质量）
         selectDefaultBitrateTrack()
       }
       // 更新码率信息
