@@ -331,8 +331,10 @@ const initPlayer = async () => {
     const switchInterval = parseInt(import.meta.env.VITE_VIDEO_SWITCH_INTERVAL) || 1
     const bandwidthUpgradeTarget = parseFloat(import.meta.env.VITE_VIDEO_BANDWIDTH_UPGRADE_TARGET) || 0.85
     const bandwidthDowngradeTarget = parseFloat(import.meta.env.VITE_VIDEO_BANDWIDTH_DOWNGRADE_TARGET) || 0.50
+    const maxResolutionHeight = parseInt(import.meta.env.VITE_VIDEO_MAX_RESOLUTION_HEIGHT) || 0
+    const debugConfig = import.meta.env.VITE_VIDEO_DEBUG_CONFIG === 'true'
     
-    player.configure({
+    const playerConfig = {
       streaming: {
         bufferingGoal,                // 缓冲目标（秒）
         rebufferingGoal,              // 重新缓冲目标（秒）
@@ -353,10 +355,25 @@ const initPlayer = async () => {
         bandwidthDowngradeTarget,                       // 带宽降级目标
         restrictions: {
           minBandwidth: 0,                              // 最小带宽限制
-          maxBandwidth: Infinity                        // 最大带宽限制
+          maxBandwidth: Infinity,                       // 最大带宽限制
+          // 最大分辨率高度限制（仅在ABR自动模式下生效，手动选择不受限制）
+          maxHeight: maxResolutionHeight || Infinity
         }
       }
-    })
+    }
+    
+    // 如果启用调试，输出配置到控制台
+    if (debugConfig) {
+      console.log('🎬 Shaka Player 配置:', {
+        ...playerConfig,
+        adaptiveBitrate: props.adaptiveBitrate,
+        maxResolutionHeight: maxResolutionHeight || '不限制',
+        note: '最大分辨率限制仅在ABR自动模式下生效，用户手动选择画质时不受限制',
+        videoSrc: props.src
+      })
+    }
+    
+    player.configure(playerConfig)
 
     // 监听错误
     player.addEventListener('error', onPlayerError)
@@ -501,11 +518,26 @@ const selectQuality = (quality) => {
   if (!player) return
 
   if (quality.id === -1) {
-    // 自动模式
-    player.configure({ abr: { enabled: true } })
+    // 自动模式 - 应用最大分辨率限制
+    const maxResolutionHeight = parseInt(import.meta.env.VITE_VIDEO_MAX_RESOLUTION_HEIGHT) || 0
+    player.configure({ 
+      abr: { 
+        enabled: true,
+        restrictions: {
+          maxHeight: maxResolutionHeight || Infinity
+        }
+      } 
+    })
   } else {
-    // 手动选择画质
-    player.configure({ abr: { enabled: false } })
+    // 手动选择画质 - 不应用分辨率限制，用户可以选择任何分辨率
+    player.configure({ 
+      abr: { 
+        enabled: false,
+        restrictions: {
+          maxHeight: Infinity  // 手动模式不限制
+        }
+      } 
+    })
     const tracks = player.getVariantTracks()
     const selectedTrack = tracks.find(t => t.id === quality.id)
     if (selectedTrack) {
