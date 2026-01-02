@@ -1076,6 +1076,8 @@ defineExpose({
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 8px var(--shadow-color);
+  container-type: inline-size;
+  container-name: video-player;
 }
 
 .video-container {
@@ -1435,6 +1437,41 @@ defineExpose({
 
 .fullscreen .video-element {
   object-fit: contain;
+}
+
+/* 容器查询：当视频播放器宽度较小时隐藏部分控件 */
+@container video-player (max-width: 500px) {
+  .volume-control {
+    display: none;
+  }
+  
+  .time-display {
+    min-width: 70px;
+    font-size: 11px;
+  }
+  
+  .quality-control {
+    display: none;
+  }
+  
+  .controls-row {
+    gap: 8px;
+  }
+}
+
+/* 非常窄的视频播放器：进一步优化 */
+@container video-player (max-width: 400px) {
+  .time-display {
+    display: none;
+  }
+  
+  .controls-row {
+    gap: 6px;
+  }
+  
+  .custom-controls {
+    padding: 20px 12px 12px;
+  }
 }
 
 /* 响应式设计 */
