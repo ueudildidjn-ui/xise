@@ -175,7 +175,42 @@ const config = {
         })
     },
     // 是否删除原始视频文件
-    deleteOriginal: process.env.DELETE_ORIGINAL_VIDEO === 'true'
+    deleteOriginal: process.env.DELETE_ORIGINAL_VIDEO === 'true',
+    // FFmpeg 高级优化参数
+    ffmpeg: {
+      // 编码预设 (速度vs质量)
+      preset: process.env.FFMPEG_PRESET || 'medium',
+      // 编码配置
+      profile: process.env.FFMPEG_PROFILE || 'main',
+      // CRF值 (恒定质量模式) - 验证范围10-51
+      crf: (() => {
+        if (!process.env.FFMPEG_CRF) return null;
+        const crf = parseInt(process.env.FFMPEG_CRF);
+        if (isNaN(crf) || crf < 10 || crf > 51) {
+          console.warn(`⚠️ 无效的 FFMPEG_CRF 值: ${process.env.FFMPEG_CRF}，有效范围10-51，将使用 VBR 模式`);
+          return null;
+        }
+        return crf;
+      })(),
+      // GOP大小 (关键帧间隔)
+      gopSize: process.env.FFMPEG_GOP_SIZE ? parseInt(process.env.FFMPEG_GOP_SIZE) : null,
+      // B帧数量
+      bFrames: process.env.FFMPEG_B_FRAMES ? parseInt(process.env.FFMPEG_B_FRAMES) : null,
+      // 参考帧数量
+      refFrames: process.env.FFMPEG_REF_FRAMES ? parseInt(process.env.FFMPEG_REF_FRAMES) : null,
+      // 编码复杂度 (VP9/AV1)
+      complexity: process.env.FFMPEG_COMPLEXITY ? parseInt(process.env.FFMPEG_COMPLEXITY) : null,
+      // 音频编码码率 (kbps)
+      audioBitrate: parseInt(process.env.FFMPEG_AUDIO_BITRATE) || 128,
+      // 音频采样率 (Hz)
+      audioSampleRate: parseInt(process.env.FFMPEG_AUDIO_SAMPLE_RATE) || 48000,
+      // 像素格式
+      pixelFormat: process.env.FFMPEG_PIXEL_FORMAT || 'yuv420p',
+      // 硬件加速
+      hardwareAccel: process.env.FFMPEG_HARDWARE_ACCEL === 'true',
+      // 硬件加速类型
+      hardwareAccelType: process.env.FFMPEG_HARDWARE_ACCEL_TYPE || ''
+    }
   },
 
   // API配置

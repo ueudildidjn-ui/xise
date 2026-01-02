@@ -260,8 +260,11 @@ async function convertToDash(inputPath, userId, progressCallback) {
     return new Promise((resolve, reject) => {
       const command = ffmpeg(inputPath);
 
-      // 设置视频编码器和线程数限制
+      // 设置视频编码器
       command.videoCodec('libx264');
+      
+      // 获取 FFmpeg 优化参数
+      const ffmpegOpts = config.videoTranscoding.ffmpeg;
       
       // 添加线程数限制，避免资源占用过多
       // maxThreads > 0 使用指定线程数，0表示不限制（使用所有可用线程）
@@ -273,19 +276,81 @@ async function convertToDash(inputPath, userId, progressCallback) {
         console.log(`⚙️ 不限制线程数，使用所有可用线程`);
       }
       
+      // 添加硬件加速（如果启用）
+      if (ffmpegOpts.hardwareAccel && ffmpegOpts.hardwareAccelType) {
+        // 验证硬件加速类型，防止命令注入
+        const validAccelTypes = ['cuda', 'qsv', 'videotoolbox', 'vaapi', 'dxva2', 'amf', 'vdpau'];
+        const accelType = ffmpegOpts.hardwareAccelType.toLowerCase().trim();
+        
+        if (validAccelTypes.includes(accelType)) {
+          command.inputOptions([`-hwaccel ${accelType}`]);
+          console.log(`⚡ 启用硬件加速: ${accelType}`);
+        } else {
+          console.warn(`⚠️ 不支持的硬件加速类型: ${accelType}，跳过硬件加速`);
+        }
+      }
+      
       // 为每个分辨率添加输出流
       selectedResolutions.forEach((resolution, index) => {
-        command
-          .outputOptions([
-            `-map 0:v:0`,
-            `-s:v:${index} ${resolution.width}x${resolution.height}`,
-            `-b:v:${index} ${resolution.bitrate}k`,
-            `-maxrate:v:${index} ${Math.floor(resolution.bitrate * 1.2)}k`,
-            `-bufsize:v:${index} ${Math.floor(resolution.bitrate * 2)}k`,
-            `-c:v:${index} libx264`,
-            `-profile:v:${index} main`,
-            `-preset:v:${index} medium`
-          ]);
+        const videoOptions = [
+          `-map 0:v:0`,
+          `-s:v:${index} ${resolution.width}x${resolution.height}`,
+          `-c:v:${index} libx264`,
+          `-profile:v:${index} ${ffmpegOpts.profile}`,
+          `-preset:v:${index} ${ffmpegOpts.preset}`,
+          `-pix_fmt:v:${index} ${ffmpegOpts.pixelFormat}`
+        ];
+        
+        // 如果设置了 CRF，使用恒定质量模式（CRF本身就是动态码率）
+        // CRF范围: 10-51，值越小质量越高（0-9 接近无损，文件过大）
+        if (ffmpegOpts.crf !== null && ffmpegOpts.crf >= 10 && ffmpegOpts.crf <= 51) {
+          videoOptions.push(`-crf:v:${index} ${ffmpegOpts.crf}`);
+          // CRF模式下设置最大码率上限，确保不会超出预期
+          videoOptions.push(`-maxrate:v:${index} ${Math.floor(resolution.bitrate * 1.2)}k`);
+          videoOptions.push(`-bufsize:v:${index} ${Math.floor(resolution.bitrate * 2)}k`);
+          console.log(`📊 流${index} CRF模式: CRF=${ffmpegOpts.crf}, 最大码率=${Math.floor(resolution.bitrate * 1.2)}k`);
+        } else if (ffmpegOpts.crf !== null) {
+          // CRF 值无效，回退到 VBR 模式
+          console.warn(`⚠️ CRF 值 ${ffmpegOpts.crf} 无效（有效范围10-51），使用 VBR 模式`);
+          videoOptions.push(`-b:v:${index} ${resolution.bitrate}k`);
+          videoOptions.push(`-maxrate:v:${index} ${Math.floor(resolution.bitrate * 1.5)}k`);
+          videoOptions.push(`-bufsize:v:${index} ${Math.floor(resolution.bitrate * 3)}k`);
+          console.log(`📊 流${index} VBR模式: 目标=${resolution.bitrate}k, 最大=${Math.floor(resolution.bitrate * 1.5)}k, 缓冲=${Math.floor(resolution.bitrate * 3)}k`);
+        } else {
+          // 使用动态码率模式 (VBR - Variable Bitrate)
+          // -b:v 设置平均目标码率
+          // -maxrate 设置最大码率上限（不会超过此值）
+          // -bufsize 设置码率控制缓冲区大小
+          // 这种配置允许码率在0到maxrate之间动态变化，平均接近b:v
+          videoOptions.push(`-b:v:${index} ${resolution.bitrate}k`);
+          // 最大码率设为目标码率的1.5倍，提供足够的动态空间
+          videoOptions.push(`-maxrate:v:${index} ${Math.floor(resolution.bitrate * 1.5)}k`);
+          // bufsize设为maxrate的2倍，确保平滑的码率变化
+          videoOptions.push(`-bufsize:v:${index} ${Math.floor(resolution.bitrate * 3)}k`);
+          // 不设置 -minrate，允许码率降到0，实现真正的动态码率
+          console.log(`📊 流${index} VBR模式: 目标=${resolution.bitrate}k, 最大=${Math.floor(resolution.bitrate * 1.5)}k, 缓冲=${Math.floor(resolution.bitrate * 3)}k`);
+        }
+        
+        // GOP 大小（关键帧间隔）
+        if (ffmpegOpts.gopSize !== null && ffmpegOpts.gopSize > 0) {
+          videoOptions.push(`-g:v:${index} ${ffmpegOpts.gopSize}`);
+        } else {
+          // 默认使用帧率的2倍作为GOP大小
+          const gopSize = Math.round(videoInfo.fps * 2);
+          videoOptions.push(`-g:v:${index} ${gopSize}`);
+        }
+        
+        // B帧数量
+        if (ffmpegOpts.bFrames !== null && ffmpegOpts.bFrames >= 0) {
+          videoOptions.push(`-bf:v:${index} ${ffmpegOpts.bFrames}`);
+        }
+        
+        // 参考帧数量
+        if (ffmpegOpts.refFrames !== null && ffmpegOpts.refFrames > 0) {
+          videoOptions.push(`-refs:v:${index} ${ffmpegOpts.refFrames}`);
+        }
+        
+        command.outputOptions(videoOptions);
       });
 
       // 添加音频流（如果存在）
@@ -293,9 +358,11 @@ async function convertToDash(inputPath, userId, progressCallback) {
         command.outputOptions([
           '-map 0:a:0',
           '-c:a aac',
-          '-b:a 128k',
+          `-b:a ${ffmpegOpts.audioBitrate}k`,
+          `-ar ${ffmpegOpts.audioSampleRate}`,
           '-ac 2'
         ]);
+        console.log(`🔊 音频配置: ${ffmpegOpts.audioBitrate}kbps @ ${ffmpegOpts.audioSampleRate}Hz`);
       }
 
       // DASH 输出配置
@@ -317,6 +384,14 @@ async function convertToDash(inputPath, userId, progressCallback) {
       // 添加命令开始监听（用于调试）
       command.on('start', (commandLine) => {
         console.log('🎬 FFmpeg 命令:', commandLine);
+        console.log('📊 编码参数:', {
+          preset: ffmpegOpts.preset,
+          profile: ffmpegOpts.profile,
+          crf: ffmpegOpts.crf || '未设置（使用码率模式）',
+          gopSize: ffmpegOpts.gopSize || '自动（帧率x2）',
+          bFrames: ffmpegOpts.bFrames || '默认',
+          refFrames: ffmpegOpts.refFrames || '默认'
+        });
       });
 
       // 进度监听

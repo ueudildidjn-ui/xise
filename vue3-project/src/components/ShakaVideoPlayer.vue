@@ -331,8 +331,9 @@ const initPlayer = async () => {
     const switchInterval = parseInt(import.meta.env.VITE_VIDEO_SWITCH_INTERVAL) || 1
     const bandwidthUpgradeTarget = parseFloat(import.meta.env.VITE_VIDEO_BANDWIDTH_UPGRADE_TARGET) || 0.85
     const bandwidthDowngradeTarget = parseFloat(import.meta.env.VITE_VIDEO_BANDWIDTH_DOWNGRADE_TARGET) || 0.50
+    const debugConfig = import.meta.env.VITE_VIDEO_DEBUG_CONFIG === 'true'
     
-    player.configure({
+    const playerConfig = {
       streaming: {
         bufferingGoal,                // 缓冲目标（秒）
         rebufferingGoal,              // 重新缓冲目标（秒）
@@ -351,12 +352,23 @@ const initPlayer = async () => {
         switchInterval,                                 // 切换间隔（秒）
         bandwidthUpgradeTarget,                         // 带宽升级目标
         bandwidthDowngradeTarget,                       // 带宽降级目标
-        restrictions: {
-          minBandwidth: 0,                              // 最小带宽限制
-          maxBandwidth: Infinity                        // 最大带宽限制
-        }
+        // 使用统一的 restrictions 创建函数
+        restrictions: createRestrictions(maxResolutionHeight)
       }
-    })
+    }
+    
+    // 如果启用调试，输出配置到控制台
+    if (debugConfig) {
+      console.log('🎬 Shaka Player 配置:', {
+        ...playerConfig,
+        adaptiveBitrate: props.adaptiveBitrate,
+        maxResolutionHeight: maxResolutionHeight || '不限制',
+        note: '最大分辨率限制仅在ABR自动模式下生效，用户手动选择画质时不受限制',
+        videoSrc: props.src
+      })
+    }
+    
+    player.configure(playerConfig)
 
     // 监听错误
     player.addEventListener('error', onPlayerError)
@@ -473,7 +485,12 @@ const seek = (event) => {
   
   const rect = event.currentTarget.getBoundingClientRect()
   const percent = (event.clientX - rect.left) / rect.width
-  videoElement.value.currentTime = duration.value * percent
+  const newTime = duration.value * percent
+  
+  // 验证新时间是有效的有限数值
+  if (isFinite(newTime) && newTime >= 0) {
+    videoElement.value.currentTime = newTime
+  }
 }
 
 // 切换静音
@@ -496,16 +513,39 @@ const toggleQualityMenu = () => {
   showQualityMenu.value = !showQualityMenu.value
 }
 
+// 获取最大分辨率配置
+const maxResolutionHeight = parseInt(import.meta.env.VITE_VIDEO_MAX_RESOLUTION_HEIGHT) || 0
+
+// 创建 restrictions 配置对象
+const createRestrictions = (maxHeight) => ({
+  minBandwidth: 0,
+  maxBandwidth: Infinity,
+  maxHeight: maxHeight || Infinity,
+  minHeight: 0,
+  maxWidth: Infinity,
+  minWidth: 0
+})
+
 // 选择画质
 const selectQuality = (quality) => {
   if (!player) return
 
   if (quality.id === -1) {
-    // 自动模式
-    player.configure({ abr: { enabled: true } })
+    // 自动模式 - 应用最大分辨率限制
+    player.configure({ 
+      abr: { 
+        enabled: true,
+        restrictions: createRestrictions(maxResolutionHeight)
+      } 
+    })
   } else {
-    // 手动选择画质
-    player.configure({ abr: { enabled: false } })
+    // 手动选择画质 - 不应用分辨率限制，用户可以选择任何分辨率
+    player.configure({ 
+      abr: { 
+        enabled: false,
+        restrictions: createRestrictions(Infinity)
+      } 
+    })
     const tracks = player.getVariantTracks()
     const selectedTrack = tracks.find(t => t.id === quality.id)
     if (selectedTrack) {
@@ -922,7 +962,11 @@ onBeforeUnmount(() => {
 defineExpose({
   play: () => videoElement.value?.play(),
   pause: () => videoElement.value?.pause(),
-  seek: (time) => { if (videoElement.value) videoElement.value.currentTime = time }
+  seek: (time) => { 
+    if (videoElement.value && isFinite(time) && time >= 0) {
+      videoElement.value.currentTime = time
+    }
+  }
 })
 </script>
 
