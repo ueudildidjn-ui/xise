@@ -615,12 +615,13 @@ class WebPOptimizer {
    * 应用图片水印
    * @param {sharp.Sharp} image - Sharp图片对象
    * @param {Object} metadata - 图片元数据
+   * @param {Object} context - 上下文（包含用户自定义选项）
    * @returns {Promise<sharp.Sharp>}
    */
 /**
    * 应用图片水印 - 修正版（支持 PNG 透明度叠加）
    */
-  async applyImageWatermark(image, metadata) {
+  async applyImageWatermark(image, metadata, context = {}) {
     if (!this.options.enableWatermark || this.options.watermarkType !== 'image') {
       return image;
     }
@@ -660,7 +661,10 @@ class WebPOptimizer {
       watermarkProcessor = watermarkProcessor.resize(newWidth, newHeight);
       
       // 4. 应用全局透明度 (关键修复)
-      const opacity = this.options.watermarkOpacity;
+      // 用户自定义透明度优先，否则使用配置的透明度
+      const opacity = context.customOpacity || this.options.watermarkOpacity;
+      console.log(`WebP Optimizer: 图片水印透明度 - ${opacity}%${context.customOpacity ? ' (用户自定义)' : ' (后端配置)'}`);
+      
       if (opacity < 100) {
         const alphaFactor = opacity / 100;
         // 使用 linear 函数调整通道：[R, G, B, A] 
@@ -948,7 +952,7 @@ class WebPOptimizer {
             const buffer = await image.toBuffer();
             image = sharp(buffer);
           } else if (this.options.watermarkType === 'image') {
-            image = await this.applyImageWatermark(image, metadata);
+            image = await this.applyImageWatermark(image, metadata, context);
             // 获取buffer并重新创建Sharp实例，确保composite操作被应用
             const buffer = await image.toBuffer();
             image = sharp(buffer);
