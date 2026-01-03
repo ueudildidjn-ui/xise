@@ -403,6 +403,53 @@ class WebPOptimizer {
   }
 
   /**
+   * 使用sharp的text方法创建文字水印
+   * @param {string} text - 水印文字
+   * @param {number} fontSize - 字体大小
+   * @param {string} color - 颜色 (hex格式)
+   * @param {number} opacity - 透明度 (0-100)
+   * @param {string|null} fontPath - 自定义字体路径
+   * @returns {Object} sharp text input对象
+   */
+  createTextWatermarkInput(text, fontSize, color, opacity, fontPath = null) {
+    // 将hex颜色转换为rgba
+    const hexColor = color.replace('#', '');
+    const r = parseInt(hexColor.substring(0, 2), 16);
+    const g = parseInt(hexColor.substring(2, 4), 16);
+    const b = parseInt(hexColor.substring(4, 6), 16);
+    const a = Math.round((opacity / 100) * 255);
+    
+    // 构建text input对象
+    const textInput = {
+      text: text,
+      width: 2400, // 设置较大的宽度以支持长文本
+      height: fontSize * 2, // 高度为字体大小的2倍
+      rgba: true,
+      dpi: 300
+    };
+    
+    // 如果有自定义字体路径，添加font属性
+    if (fontPath && fs.existsSync(fontPath)) {
+      textInput.font = fontPath;
+      textInput.fontfile = fontPath;
+      console.log(`WebP Optimizer: 使用自定义字体 - ${fontPath}`);
+    } else {
+      // 使用系统字体，优先使用支持中文的字体
+      textInput.font = 'sans-serif';
+      console.log(`WebP Optimizer: 使用系统默认字体`);
+    }
+    
+    // 设置颜色和透明度
+    // Sharp的text功能会创建一个图层，我们通过blend来控制透明度
+    return {
+      input: textInput,
+      blend: 'over',
+      // 注意: sharp的text目前不直接支持设置颜色，需要通过其他方式处理
+      // 我们继续使用SVG方法以保持颜色和透明度的精确控制
+    };
+  }
+
+  /**
    * 应用文字水印
    * @param {sharp.Sharp} image - Sharp图片对象
    * @param {Object} metadata - 图片元数据
@@ -428,36 +475,140 @@ class WebPOptimizer {
     
     console.log(`WebP Optimizer: 应用文字水印 - 内容: "${text}", 字体大小: ${fontSize}, 透明度: ${opacity}%, 位置: ${this.options.watermarkPosition}`);
     
-    // 创建文字水印SVG（传入字体路径）
-    const svgBuffer = this.createTextWatermarkSvg(text, fontSize, color, opacity, fontPath);
-    
-    // 获取SVG尺寸估算（改进中文字符宽度计算）
-    const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
-    const otherChars = text.length - chineseChars;
-    const charWidth = fontSize * CHAR_WIDTH_RATIO;
-    const watermarkWidth = Math.ceil(chineseChars * fontSize + otherChars * charWidth) + 20;
-    const watermarkHeight = fontSize + 10;
-    
-    // 计算位置
-    const position = this.getWatermarkPosition(
-      this.options.watermarkPosition,
-      metadata.width,
-      metadata.height,
-      watermarkWidth,
-      watermarkHeight,
-      {
-        positionMode: this.options.watermarkPositionMode,
-        preciseX: this.options.watermarkPreciseX,
-        preciseY: this.options.watermarkPreciseY
+    try {
+      // 尝试使用sharp的text方法（适用于sharp 0.32.0+）
+      // text方法对中文支持更好，但需要系统字体支持
+      const hexColor = color.replace('#', '');
+      const r = parseInt(hexColor.substring(0, 2), 16);
+      const g = parseInt(hexColor.substring(2, 4), 16);
+      const b = parseInt(hexColor.substring(4, 6), 16);
+      const a = Math.round((opacity / 100) * 255);
+      
+      // 创建text input
+      const textInput = {
+        text: {
+          text: text,
+          font: 'sans-serif',
+          fontSize: fontSize,
+          rgba: true,
+          dpi: 300
+        }
+      };
+      
+      // 如果有自定义字体，设置fontfile
+      if (fontPath && fs.existsSync(fontPath)) {
+        textInput.text.fontfile = fontPath;
+        console.log(`WebP Optimizer: 使用自定义字体文件 - ${fontPath}`);
       }
-    );
-    
-    // 应用水印
-    return image.composite([{
-      input: svgBuffer,
-      top: position.y,
-      left: position.x
-    }]);
+      
+      // 计算水印尺寸（估算）
+      const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+      const otherChars = text.length - chineseChars;
+      const charWidth = fontSize * CHAR_WIDTH_RATIO;
+      const watermarkWidth = Math.ceil(chineseChars * fontSize + otherChars * charWidth) + 20;
+      const watermarkHeight = fontSize + 10;
+      
+      // 计算位置
+      const position = this.getWatermarkPosition(
+        this.options.watermarkPosition,
+        metadata.width,
+        metadata.height,
+        watermarkWidth,
+        watermarkHeight,
+        {
+          positionMode: this.options.watermarkPositionMode,
+          preciseX: this.options.watermarkPreciseX,
+          preciseY: this.options.watermarkPreciseY
+        }
+      );
+      
+      // 先创建文字图层
+      const textBuffer = await sharp({
+        text: {
+          text: text,
+          font: fontPath && fs.existsSync(fontPath) ? undefined : 'sans-serif',
+          fontfile: fontPath && fs.existsSync(fontPath) ? fontPath : undefined,
+          rgba: true,
+          dpi: 300
+        }
+      })
+      .png()
+      .toBuffer();
+      
+      // 调整颜色和透明度
+      const textImage = sharp(textBuffer);
+      const textMeta = await textImage.metadata();
+      
+      // 应用颜色tint和透明度
+      let processedText = textImage;
+      
+      // 如果需要调整颜色或透明度
+      if (opacity < 100) {
+        const { data, info } = await textImage.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        
+        // 修改颜色和透明度
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] > 0) { // 只处理非透明像素
+            data[i] = r;     // R
+            data[i + 1] = g; // G
+            data[i + 2] = b; // B
+            data[i + 3] = Math.round(data[i + 3] * (opacity / 100)); // A
+          }
+        }
+        
+        processedText = sharp(data, {
+          raw: {
+            width: info.width,
+            height: info.height,
+            channels: 4
+          }
+        });
+      }
+      
+      const processedBuffer = await processedText.png().toBuffer();
+      
+      // 应用水印
+      return image.composite([{
+        input: processedBuffer,
+        top: position.y,
+        left: position.x,
+        blend: 'over'
+      }]);
+      
+    } catch (error) {
+      console.warn(`WebP Optimizer: 使用text方法失败，回退到SVG方法: ${error.message}`);
+      
+      // 回退到SVG方法
+      const svgBuffer = this.createTextWatermarkSvg(text, fontSize, color, opacity, fontPath);
+      
+      // 获取SVG尺寸估算（改进中文字符宽度计算）
+      const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+      const otherChars = text.length - chineseChars;
+      const charWidth = fontSize * CHAR_WIDTH_RATIO;
+      const watermarkWidth = Math.ceil(chineseChars * fontSize + otherChars * charWidth) + 20;
+      const watermarkHeight = fontSize + 10;
+      
+      // 计算位置
+      const position = this.getWatermarkPosition(
+        this.options.watermarkPosition,
+        metadata.width,
+        metadata.height,
+        watermarkWidth,
+        watermarkHeight,
+        {
+          positionMode: this.options.watermarkPositionMode,
+          preciseX: this.options.watermarkPreciseX,
+          preciseY: this.options.watermarkPreciseY
+        }
+      );
+      
+      // 应用水印
+      return image.composite([{
+        input: svgBuffer,
+        top: position.y,
+        left: position.x
+      }]);
+    }
   }
 
   /**
@@ -508,13 +659,12 @@ class WebPOptimizer {
       const opacity = this.options.watermarkOpacity / 100;
       console.log(`WebP Optimizer: 水印缩放 - 目标尺寸: ${newWidth}x${newHeight}, 透明度: ${opacity * 100}%, 平铺模式: ${this.options.watermarkTileMode ? '是' : '否'}`);
       
-      // 获取水印Buffer - 先调整大小
+      // 获取水印Buffer - 先调整大小并确保有alpha通道
       const resizedWatermark = watermark.resize(newWidth, newHeight).ensureAlpha();
       
       let watermarkBuffer;
       if (opacity < 1) {
         // 需要调整透明度时，提取并修改alpha通道
-        // 使用 raw 格式获取像素数据，手动调整alpha通道
         const { data, info } = await resizedWatermark
           .raw()
           .toBuffer({ resolveWithObject: true });
@@ -524,19 +674,20 @@ class WebPOptimizer {
           data[i] = Math.round(data[i] * opacity);
         }
         
-        // 重新创建图片
+        // 重新创建图片，使用PNG格式以保留透明度
         watermarkBuffer = await sharp(data, {
           raw: {
             width: info.width,
             height: info.height,
-            channels: 4
+            channels: info.channels
           }
         }).png().toBuffer();
         
-        console.log(`WebP Optimizer: 已应用水印透明度调整`);
+        console.log(`WebP Optimizer: 已应用水印透明度调整 (${Math.round(opacity * 100)}%)`);
       } else {
-        // 不需要调整透明度时，直接使用原图
-        watermarkBuffer = await resizedWatermark.toBuffer();
+        // 不需要调整透明度时，转换为PNG以保留原有透明度
+        watermarkBuffer = await resizedWatermark.png().toBuffer();
+        console.log(`WebP Optimizer: 使用原始透明度 (100%)`);
       }
       
       // 检查是否使用平铺模式
@@ -561,7 +712,8 @@ class WebPOptimizer {
               compositeOps.push({
                 input: watermarkBuffer,
                 top: y,
-                left: x
+                left: x,
+                blend: 'over' // 明确指定blend模式
               });
             }
           }
@@ -586,11 +738,12 @@ class WebPOptimizer {
         
         console.log(`WebP Optimizer: 水印位置 - x: ${position.x}, y: ${position.y}`);
         
-        // 应用水印
+        // 应用水印，明确指定blend模式为over以正确处理透明度
         return image.composite([{
           input: watermarkBuffer,
           top: position.y,
-          left: position.x
+          left: position.x,
+          blend: 'over' // 使用over模式正确处理透明度
         }]);
       }
     } catch (error) {
