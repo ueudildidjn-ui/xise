@@ -181,8 +181,10 @@ const config = {
       preciseX: parseInt(process.env.WATERMARK_PRECISE_X) || 0,
       // 精确Y坐标 (当positionMode为precise时使用)
       preciseY: parseInt(process.env.WATERMARK_PRECISE_Y) || 0,
-      // 图片水印比例 (1-10, 表示水印占原图的1/10到10/10)
+      // 图片水印比例 (1-10, 表示水印占原图较小边的10%-100%)
       imageRatio: parseInt(process.env.WATERMARK_IMAGE_RATIO) || 4,
+      // 水印平铺模式 (true=平铺, false=单个)
+      tileMode: process.env.WATERMARK_TILE_MODE === 'true',
       // 水印颜色 (hex格式)
       color: process.env.WATERMARK_COLOR || '#ffffff'
     },

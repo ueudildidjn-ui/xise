@@ -88,6 +88,7 @@ class WebPOptimizer {
       watermarkPreciseX: webpConfig.watermark?.preciseX || 0,
       watermarkPreciseY: webpConfig.watermark?.preciseY || 0,
       watermarkImageRatio: webpConfig.watermark?.imageRatio || 4, // 1-10, 表示图片水印占原图比例的1/10到10/10
+      watermarkTileMode: webpConfig.watermark?.tileMode || false, // 平铺模式
       watermarkColor: webpConfig.watermark?.color || '#ffffff',
       
       // 用户名水印设置
@@ -114,7 +115,7 @@ class WebPOptimizer {
   }
 
   /**
-   * 检查文件是否支持转换
+   * 检查文件是否支持转换为WebP
    * @param {string} mimetype - 文件MIME类型
    * @returns {boolean}
    */
@@ -134,6 +135,19 @@ class WebPOptimizer {
     }
     
     return false;
+  }
+  
+  /**
+   * 检查文件是否是支持处理的图片格式（用于水印等处理）
+   * @param {string} mimetype - 文件MIME类型
+   * @returns {boolean}
+   */
+  isSupportedImage(mimetype) {
+    const mimeType = mimetype.toLowerCase();
+    return mimeType === 'image/jpeg' || 
+           mimeType === 'image/jpg' || 
+           mimeType === 'image/png' || 
+           mimeType === 'image/webp';
   }
 
   /**
@@ -402,7 +416,7 @@ class WebPOptimizer {
       
       // 调整水印大小
       const opacity = this.options.watermarkOpacity / 100;
-      console.log(`WebP Optimizer: 水印缩放 - 目标尺寸: ${newWidth}x${newHeight}, 透明度: ${opacity * 100}%`);
+      console.log(`WebP Optimizer: 水印缩放 - 目标尺寸: ${newWidth}x${newHeight}, 透明度: ${opacity * 100}%, 平铺模式: ${this.options.watermarkTileMode ? '是' : '否'}`);
       
       // 获取水印Buffer - 先调整大小
       const resizedWatermark = watermark.resize(newWidth, newHeight).ensureAlpha();
@@ -435,28 +449,60 @@ class WebPOptimizer {
         watermarkBuffer = await resizedWatermark.toBuffer();
       }
       
-      // 计算位置
-      const position = this.getWatermarkPosition(
-        this.options.watermarkPosition,
-        metadata.width,
-        metadata.height,
-        newWidth,
-        newHeight,
-        {
-          positionMode: this.options.watermarkPositionMode,
-          preciseX: this.options.watermarkPreciseX,
-          preciseY: this.options.watermarkPreciseY
+      // 检查是否使用平铺模式
+      if (this.options.watermarkTileMode) {
+        // 平铺模式：在整个图片上平铺水印
+        const compositeOps = [];
+        const padding = 20; // 水印之间的间距
+        
+        // 计算需要多少行和列
+        const cols = Math.ceil(metadata.width / (newWidth + padding));
+        const rows = Math.ceil(metadata.height / (newHeight + padding));
+        
+        console.log(`WebP Optimizer: 平铺模式 - 列数: ${cols}, 行数: ${rows}`);
+        
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const x = col * (newWidth + padding);
+            const y = row * (newHeight + padding);
+            
+            // 确保水印在图片范围内
+            if (x < metadata.width && y < metadata.height) {
+              compositeOps.push({
+                input: watermarkBuffer,
+                top: y,
+                left: x
+              });
+            }
+          }
         }
-      );
-      
-      console.log(`WebP Optimizer: 水印位置 - x: ${position.x}, y: ${position.y}`);
-      
-      // 应用水印
-      return image.composite([{
-        input: watermarkBuffer,
-        top: position.y,
-        left: position.x
-      }]);
+        
+        console.log(`WebP Optimizer: 平铺水印数量: ${compositeOps.length}`);
+        return image.composite(compositeOps);
+      } else {
+        // 单个水印模式
+        const position = this.getWatermarkPosition(
+          this.options.watermarkPosition,
+          metadata.width,
+          metadata.height,
+          newWidth,
+          newHeight,
+          {
+            positionMode: this.options.watermarkPositionMode,
+            preciseX: this.options.watermarkPreciseX,
+            preciseY: this.options.watermarkPreciseY
+          }
+        );
+        
+        console.log(`WebP Optimizer: 水印位置 - x: ${position.x}, y: ${position.y}`);
+        
+        // 应用水印
+        return image.composite([{
+          input: watermarkBuffer,
+          top: position.y,
+          left: position.x
+        }]);
+      }
     } catch (error) {
       console.error('WebP Optimizer: 应用图片水印失败:', error.message);
       return image;
@@ -528,7 +574,17 @@ class WebPOptimizer {
    * @returns {Promise<{buffer: Buffer, filename: string, mimetype: string, processed: boolean}>}
    */
   async processImage(fileBuffer, mimetype, context = {}) {
-    // 检查是否需要处理
+    // 检查是否是支持的图片格式
+    const isSupported = this.isSupportedImage(mimetype);
+    if (!isSupported) {
+      return {
+        buffer: fileBuffer,
+        mimetype: mimetype,
+        processed: false
+      };
+    }
+    
+    // 检查是否需要转换为WebP
     const shouldConvertToWebp = this.shouldConvert(mimetype);
     
     // 用户可以通过 context.applyWatermark 控制是否添加水印
@@ -609,7 +665,7 @@ class WebPOptimizer {
         }
       }
       
-      // 3. WebP转换
+      // 3. WebP转换或保持原格式
       let outputBuffer;
       let outputMimetype = mimetype;
       
@@ -624,6 +680,16 @@ class WebPOptimizer {
         outputMimetype = 'image/webp';
         
         console.log(`WebP Optimizer: 已转换为WebP - 质量: ${this.options.webpQuality}, 无损: ${this.options.webpLossless}`);
+      } else if (mimetype.toLowerCase() === 'image/webp') {
+        // 如果原图是WebP，保持WebP格式输出
+        const webpOptions = {
+          quality: this.options.webpQuality,
+          alphaQuality: this.options.webpAlphaQuality,
+          lossless: this.options.webpLossless
+        };
+        outputBuffer = await image.webp(webpOptions).toBuffer();
+        outputMimetype = 'image/webp';
+        console.log(`WebP Optimizer: 保持WebP格式输出 - 质量: ${this.options.webpQuality}`);
       } else {
         // 如果不转换WebP，保持原格式输出
         outputBuffer = await image.toBuffer();
