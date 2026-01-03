@@ -51,8 +51,8 @@ class WebPOptimizer {
       watermarkType: webpConfig.watermark?.type || 'text', // 'text' 或 'image'
       watermarkText: webpConfig.watermark?.text || '',
       watermarkFontSize: webpConfig.watermark?.fontSize || 24,
-      watermarkFontPath: webpConfig.watermark?.fontPath || null,
-      watermarkImage: webpConfig.watermark?.imagePath || null,
+      watermarkFontPath: this.resolvePath(webpConfig.watermark?.fontPath),
+      watermarkImage: this.resolvePath(webpConfig.watermark?.imagePath),
       watermarkOpacity: webpConfig.watermark?.opacity || 50,
       watermarkPosition: webpConfig.watermark?.position || '9', // 九宫格位置，默认右下
       watermarkPositionMode: webpConfig.watermark?.positionMode || 'grid', // 'grid' 或 'precise'
@@ -64,7 +64,7 @@ class WebPOptimizer {
       // 用户名水印设置
       enableUsernameWatermark: webpConfig.usernameWatermark?.enabled || false,
       usernameWatermarkFontSize: webpConfig.usernameWatermark?.fontSize || 20,
-      usernameWatermarkFontPath: webpConfig.usernameWatermark?.fontPath || null,
+      usernameWatermarkFontPath: this.resolvePath(webpConfig.usernameWatermark?.fontPath),
       usernameWatermarkOpacity: webpConfig.usernameWatermark?.opacity || 70,
       usernameWatermarkPosition: webpConfig.usernameWatermark?.position || '7', // 默认左下
       usernameWatermarkPositionMode: webpConfig.usernameWatermark?.positionMode || 'grid',
@@ -73,6 +73,33 @@ class WebPOptimizer {
       usernameWatermarkColor: webpConfig.usernameWatermark?.color || '#ffffff',
       usernameWatermarkText: webpConfig.usernameWatermark?.text || '@username'
     };
+  }
+
+  /**
+   * 解析路径（相对路径转换为绝对路径）
+   * @param {string|null} inputPath - 输入路径
+   * @returns {string|null}
+   */
+  resolvePath(inputPath) {
+    if (!inputPath) {
+      return null;
+    }
+    // 路径以 / 开头但不是以常见系统目录开头（如 /usr, /var, /etc, /opt, /home）
+    // 则视为相对于项目根目录的路径
+    const systemDirs = ['/usr', '/var', '/etc', '/opt', '/home', '/root', '/tmp', '/lib', '/bin', '/sbin'];
+    const isSystemPath = systemDirs.some(dir => inputPath.startsWith(dir + '/') || inputPath === dir);
+    
+    if (inputPath.startsWith('/') && !isSystemPath) {
+      // 以 / 开头但不是系统路径，视为相对于项目根目录
+      return path.join(process.cwd(), inputPath);
+    }
+    
+    // 如果不是绝对路径，也相对于项目根目录解析
+    if (!path.isAbsolute(inputPath)) {
+      return path.join(process.cwd(), inputPath);
+    }
+    
+    return inputPath;
   }
 
   /**
@@ -254,8 +281,11 @@ class WebPOptimizer {
     
     const text = this.processWatermarkText(this.options.watermarkText, context);
     if (!text) {
+      console.warn('WebP Optimizer: 文字水印内容为空');
       return image;
     }
+    
+    console.log(`WebP Optimizer: 应用文字水印 - 内容: "${text}", 字体大小: ${this.options.watermarkFontSize}, 位置: ${this.options.watermarkPosition}`);
     
     const fontSize = this.options.watermarkFontSize;
     const opacity = this.options.watermarkOpacity;
@@ -303,15 +333,24 @@ class WebPOptimizer {
     }
     
     const watermarkPath = this.options.watermarkImage;
-    if (!watermarkPath || !fs.existsSync(watermarkPath)) {
-      console.warn('WebP Optimizer: 水印图片不存在:', watermarkPath);
+    console.log(`WebP Optimizer: 尝试加载图片水印 - 路径: ${watermarkPath}`);
+    
+    if (!watermarkPath) {
+      console.warn('WebP Optimizer: 未配置水印图片路径');
+      return image;
+    }
+    
+    if (!fs.existsSync(watermarkPath)) {
+      console.warn(`WebP Optimizer: 水印图片不存在: ${watermarkPath}`);
       return image;
     }
     
     try {
+      console.log(`WebP Optimizer: 成功找到水印图片: ${watermarkPath}`);
       // 加载水印图片
       let watermark = sharp(watermarkPath);
       const watermarkMeta = await watermark.metadata();
+      console.log(`WebP Optimizer: 水印图片尺寸: ${watermarkMeta.width}x${watermarkMeta.height}, 格式: ${watermarkMeta.format}`);
       
       // 计算水印尺寸（基于比例）
       const ratio = this.options.watermarkImageRatio / 10;
@@ -428,13 +467,19 @@ class WebPOptimizer {
    * 处理图片 - 主入口函数
    * @param {Buffer} fileBuffer - 文件缓冲区
    * @param {string} mimetype - 文件MIME类型
-   * @param {Object} context - 上下文（包含用户信息等）
+   * @param {Object} context - 上下文（包含用户信息等，以及 applyWatermark 控制是否添加水印）
    * @returns {Promise<{buffer: Buffer, filename: string, mimetype: string, processed: boolean}>}
    */
   async processImage(fileBuffer, mimetype, context = {}) {
     // 检查是否需要处理
     const shouldConvertToWebp = this.shouldConvert(mimetype);
-    const shouldApplyWatermark = this.options.enableWatermark || this.options.enableUsernameWatermark;
+    
+    // 用户可以通过 context.applyWatermark 控制是否添加水印
+    // 如果未指定（undefined），则使用后端配置的默认值
+    // 如果指定了 false，则不添加水印
+    // 如果指定了 true，则添加水印（前提是后端已启用）
+    const userWantsWatermark = context.applyWatermark !== false; // 默认为 true
+    const shouldApplyWatermark = userWantsWatermark && (this.options.enableWatermark || this.options.enableUsernameWatermark);
     const shouldResize = this.options.maxWidth || this.options.maxHeight;
     
     // 如果不需要任何处理，直接返回原图
@@ -452,6 +497,8 @@ class WebPOptimizer {
       let metadata = await image.metadata();
       
       console.log(`WebP Optimizer: 处理图片 - 原始尺寸: ${metadata.width}x${metadata.height}, 格式: ${metadata.format}`);
+      console.log(`WebP Optimizer: 水印配置 - 后端主水印: ${this.options.enableWatermark ? '启用' : '禁用'}, 类型: ${this.options.watermarkType}, 用户名水印: ${this.options.enableUsernameWatermark ? '启用' : '禁用'}`);
+      console.log(`WebP Optimizer: 用户选择 - 添加水印: ${userWantsWatermark ? '是' : '否'}, 实际应用: ${shouldApplyWatermark ? '是' : '否'}`);
       
       // 1. 尺寸缩放
       if (shouldResize) {
