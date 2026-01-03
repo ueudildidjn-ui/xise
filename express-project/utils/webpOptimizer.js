@@ -215,9 +215,10 @@ class WebPOptimizer {
    * @param {number} fontSize - 字体大小
    * @param {string} color - 颜色 (hex格式)
    * @param {number} opacity - 透明度 (0-100)
+   * @param {string|null} fontPath - 自定义字体路径
    * @returns {Buffer} SVG缓冲区
    */
-  createTextWatermarkSvg(text, fontSize, color, opacity) {
+  createTextWatermarkSvg(text, fontSize, color, opacity, fontPath = null) {
     // 将hex颜色转换为rgba
     const hexColor = color.replace('#', '');
     const r = parseInt(hexColor.substring(0, 2), 16);
@@ -225,16 +226,36 @@ class WebPOptimizer {
     const b = parseInt(hexColor.substring(4, 6), 16);
     const a = opacity / 100;
     
-    // 计算文字宽度（估算）
+    // 计算文字宽度（估算，中文字符宽度约等于字体大小）
+    // 检测中文字符并调整宽度估算
+    const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+    const otherChars = text.length - chineseChars;
     const charWidth = fontSize * CHAR_WIDTH_RATIO;
-    const width = Math.ceil(text.length * charWidth) + 20;
+    const width = Math.ceil(chineseChars * fontSize + otherChars * charWidth) + 20;
     const height = fontSize + 10;
+    
+    // 构建字体相关的CSS
+    let fontFaceRule = '';
+    let fontFamily = '"Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "PingFang SC", Arial, sans-serif';
+    
+    // 如果提供了自定义字体路径，使用 @font-face 加载
+    if (fontPath && fs.existsSync(fontPath)) {
+      const fontUrl = `file://${fontPath}`;
+      fontFaceRule = `
+        @font-face {
+          font-family: 'CustomWatermarkFont';
+          src: url('${fontUrl}');
+        }`;
+      fontFamily = '"CustomWatermarkFont", "Noto Sans CJK SC", "Source Han Sans SC", Arial, sans-serif';
+      console.log(`WebP Optimizer: 使用自定义字体 - ${fontPath}`);
+    }
     
     // 创建SVG
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
       <style>
+        ${fontFaceRule}
         .watermark-text {
-          font-family: "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+          font-family: ${fontFamily};
           font-size: ${fontSize}px;
           fill: rgba(${r}, ${g}, ${b}, ${a});
           text-shadow: 1px 1px 2px rgba(0, 0, 0, ${a * 0.8});
@@ -301,13 +322,16 @@ class WebPOptimizer {
     const fontSize = this.options.watermarkFontSize;
     const opacity = this.options.watermarkOpacity;
     const color = this.options.watermarkColor;
+    const fontPath = this.options.watermarkFontPath;
     
-    // 创建文字水印SVG
-    const svgBuffer = this.createTextWatermarkSvg(text, fontSize, color, opacity);
+    // 创建文字水印SVG（传入字体路径）
+    const svgBuffer = this.createTextWatermarkSvg(text, fontSize, color, opacity, fontPath);
     
-    // 获取SVG尺寸估算
+    // 获取SVG尺寸估算（改进中文字符宽度计算）
+    const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+    const otherChars = text.length - chineseChars;
     const charWidth = fontSize * CHAR_WIDTH_RATIO;
-    const watermarkWidth = Math.ceil(text.length * charWidth) + 20;
+    const watermarkWidth = Math.ceil(chineseChars * fontSize + otherChars * charWidth) + 20;
     const watermarkHeight = fontSize + 10;
     
     // 计算位置
@@ -462,13 +486,16 @@ class WebPOptimizer {
     const fontSize = this.options.usernameWatermarkFontSize;
     const opacity = this.options.usernameWatermarkOpacity;
     const color = this.options.usernameWatermarkColor;
+    const fontPath = this.options.usernameWatermarkFontPath;
     
-    // 创建文字水印SVG
-    const svgBuffer = this.createTextWatermarkSvg(text, fontSize, color, opacity);
+    // 创建文字水印SVG（传入字体路径）
+    const svgBuffer = this.createTextWatermarkSvg(text, fontSize, color, opacity, fontPath);
     
-    // 获取SVG尺寸估算
+    // 获取SVG尺寸估算（改进中文字符宽度计算）
+    const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+    const otherChars = text.length - chineseChars;
     const charWidth = fontSize * CHAR_WIDTH_RATIO;
-    const watermarkWidth = Math.ceil(text.length * charWidth) + 20;
+    const watermarkWidth = Math.ceil(chineseChars * fontSize + otherChars * charWidth) + 20;
     const watermarkHeight = fontSize + 10;
     
     // 计算位置
@@ -658,6 +685,14 @@ if (webpOptimizer.options.enableWatermark) {
   console.log(`  - 类型: ${webpOptimizer.options.watermarkType}`);
   if (webpOptimizer.options.watermarkType === 'text') {
     console.log(`  - 文字: ${webpOptimizer.options.watermarkText || '(未配置)'}`);
+    const fontPath = webpOptimizer.options.watermarkFontPath;
+    if (fontPath) {
+      const fontExists = fs.existsSync(fontPath);
+      console.log(`  - 字体: ${fontPath}`);
+      console.log(`  - 字体存在: ${fontExists ? '是' : '否 ⚠️ 请检查路径!'}`);
+    } else {
+      console.log(`  - 字体: 使用系统默认字体`);
+    }
   } else if (webpOptimizer.options.watermarkType === 'image') {
     const imgPath = webpOptimizer.options.watermarkImage;
     const imgExists = imgPath && fs.existsSync(imgPath);
@@ -671,6 +706,14 @@ console.log(`用户名水印: ${webpOptimizer.options.enableUsernameWatermark ? 
 if (webpOptimizer.options.enableUsernameWatermark) {
   console.log(`  - 文字: ${webpOptimizer.options.usernameWatermarkText}`);
   console.log(`  - 位置: ${webpOptimizer.options.usernameWatermarkPosition}`);
+  const fontPath = webpOptimizer.options.usernameWatermarkFontPath;
+  if (fontPath) {
+    const fontExists = fs.existsSync(fontPath);
+    console.log(`  - 字体: ${fontPath}`);
+    console.log(`  - 字体存在: ${fontExists ? '是' : '否 ⚠️ 请检查路径!'}`);
+  } else {
+    console.log(`  - 字体: 使用系统默认字体`);
+  }
 }
 console.log('==========================================');
 
