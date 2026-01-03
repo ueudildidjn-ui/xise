@@ -437,8 +437,11 @@ class WebPOptimizer {
     
     const text = this.processWatermarkText(this.options.usernameWatermarkText, context);
     if (!text) {
+      console.warn('WebP Optimizer: 用户名水印内容为空');
       return image;
     }
+    
+    console.log(`WebP Optimizer: 应用用户名水印 - 内容: "${text}", 字体大小: ${this.options.usernameWatermarkFontSize}, 位置: ${this.options.usernameWatermarkPosition}`);
     
     const fontSize = this.options.usernameWatermarkFontSize;
     const opacity = this.options.usernameWatermarkOpacity;
@@ -621,6 +624,30 @@ class WebPOptimizer {
 
 // 创建单例实例
 const webpOptimizer = new WebPOptimizer();
+
+// 启动时输出配置信息，帮助用户排查问题
+console.log('========== WebP Optimizer 配置 ==========');
+console.log(`WebP转换: ${webpOptimizer.options.enableWebpConversion ? '启用' : '禁用'}`);
+console.log(`主水印: ${webpOptimizer.options.enableWatermark ? '启用' : '禁用'}`);
+if (webpOptimizer.options.enableWatermark) {
+  console.log(`  - 类型: ${webpOptimizer.options.watermarkType}`);
+  if (webpOptimizer.options.watermarkType === 'text') {
+    console.log(`  - 文字: ${webpOptimizer.options.watermarkText || '(未配置)'}`);
+  } else if (webpOptimizer.options.watermarkType === 'image') {
+    const imgPath = webpOptimizer.options.watermarkImage;
+    const imgExists = imgPath && fs.existsSync(imgPath);
+    console.log(`  - 图片: ${imgPath || '(未配置)'}`);
+    console.log(`  - 图片存在: ${imgExists ? '是' : '否 ⚠️ 请检查路径!'}`);
+  }
+  console.log(`  - 位置: ${webpOptimizer.options.watermarkPosition}`);
+  console.log(`  - 透明度: ${webpOptimizer.options.watermarkOpacity}%`);
+}
+console.log(`用户名水印: ${webpOptimizer.options.enableUsernameWatermark ? '启用' : '禁用'}`);
+if (webpOptimizer.options.enableUsernameWatermark) {
+  console.log(`  - 文字: ${webpOptimizer.options.usernameWatermarkText}`);
+  console.log(`  - 位置: ${webpOptimizer.options.usernameWatermarkPosition}`);
+}
+console.log('==========================================');
 
 /**
  * 处理图片（便捷函数）
