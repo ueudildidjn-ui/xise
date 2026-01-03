@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>WebP优化器 - 高级优化选项预览</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; margin: 40px; background: #f1f1f1; }
+        .wrap { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.13); max-width: 1000px; }
+        h1 { color: #23282d; font-size: 23px; margin-bottom: 20px; }
+        h2 { color: #23282d; font-size: 18px; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-top: 30px; }
+        h3 { color: #23282d; font-size: 16px; margin-top: 25px; }
+        .form-table { margin-top: 20px; }
+        .form-table th { text-align: left; padding: 20px 10px 20px 0; width: 200px; vertical-align: top; }
+        .form-table td { padding: 20px 10px; }
+        input[type="range"] { width: 300px; margin-right: 10px; }
+        input[type="checkbox"] { margin-right: 10px; }
+        select { padding: 5px; min-width: 200px; }
+        .description { color: #666; font-size: 13px; margin-top: 5px; line-height: 1.4; }
+        .card { background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px; margin: 20px 0; }
+        .notice { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 15px 0; }
+        .success { background: #d4edda; border-left: 4px solid #28a745; }
+        .advanced-section { background: #f8f9fa; border: 1px solid #e9ecef; padding: 20px; border-radius: 5px; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>WebP优化设置</h1>
+        <p>此插件可以自动将上传的JPEG和PNG图片转换为WebP格式，大幅减小文件大小并提高网站加载速度。</p>
+
+        <!-- 高级WebP优化部分 -->
+        <h2>高级WebP优化</h2>
+        <p>高级WebP压缩选项，可进一步优化文件大小和质量。这些选项主要在使用ImageMagick时生效。</p>
+        <div class="notice">
+            <strong>⚠️ 注意：</strong>高级选项可能会影响压缩速度，建议根据实际需求调整。默认设置已经适合大多数用户。
+        </div>
+        
+        <div class="advanced-section">
+            <table class="form-table">
+                <tr>
+                    <th>无损WebP</th>
+                    <td>
+                        <input type="checkbox" name="webp_lossless" value="1" />
+                        <p class="description">启用无损WebP压缩（文件更大但质量完美，适合有透明背景的PNG图片）</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>滤镜强度</th>
+                    <td>
+                        <input type="range" value="60" min="0" max="100" />
+                        <span>60</span>
+                        <p class="description">去块滤镜强度 (0-100)。较高的值可以减少块状伪影，但可能会让图片变模糊</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>滤镜锐度</th>
+                    <td>
+                        <input type="range" value="0" min="0" max="7" />
+                        <span>0</span>
+                        <p class="description">去块滤镜锐度 (0-7)。值为0时禁用，值越大边缘保持越好</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>透明度滤镜</th>
+                    <td>
+                        <select>
+                            <option value="auto" selected>自动选择</option>
+                            <option value="none">不使用滤镜</option>
+                            <option value="fast">快速滤镜</option>
+                            <option value="best">最佳滤镜</option>
+                        </select>
+                        <p class="description">透明度通道的滤镜算法。"最佳"质量更好但速度较慢</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>透明度质量</th>
+                    <td>
+                        <input type="range" value="100" min="0" max="100" />
+                        <span>100%</span>
+                        <p class="description">透明度通道的压缩质量 (0-100)。仅对有透明背景的图片有效</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>预处理滤镜</th>
+                    <td>
+                        <select>
+                            <option value="0" selected>不使用预处理</option>
+                            <option value="1">段平滑滤镜</option>
+                            <option value="2">伪随机抖动</option>
+                        </select>
+                        <p class="description">预处理滤镜可以改善视觉质量，但会增加处理时间</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>压缩段数</th>
+                    <td>
+                        <input type="range" value="4" min="1" max="4" />
+                        <span>4</span>
+                        <p class="description">压缩时使用的段数 (1-4)。更多段数可能获得更好压缩，但速度较慢</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>分析遍数</th>
+                    <td>
+                        <input type="range" value="1" min="1" max="10" />
+                        <span>1</span>
+                        <p class="description">分析遍数 (1-10)。更多遍数可能获得更好压缩，但会显著增加处理时间</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>目标文件大小</th>
+                    <td>
+                        <input type="number" placeholder="例如: 50000" min="1000" />
+                        <p class="description">目标文件大小（字节）。设置后会尝试压缩到指定大小，可能会覆盖质量设置。留空使用质量设置。</p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- 新的推荐设置 -->
+        <div class="card">
+            <h2>高级WebP优化建议</h2>
+            <ul>
+                <li><strong>无损WebP：</strong>仅对有透明背景的PNG图片启用</li>
+                <li><strong>滤镜强度：</strong>60（默认值，平衡块状伪影和清晰度）</li>
+                <li><strong>透明度滤镜：</strong>自动选择（系统自动优化）</li>
+                <li><strong>透明度质量：</strong>100%（保持透明度完美）</li>
+                <li><strong>压缩段数：</strong>4（最大值，获得最佳压缩）</li>
+                <li><strong>分析遍数：</strong>1（默认值，过高会显著增加处理时间）</li>
+                <li><strong>目标文件大小：</strong>留空使用质量控制（推荐）</li>
+            </ul>
+            
+            <h3>优化场景建议</h3>
+            <ul>
+                <li><strong>网站首页图片：</strong>启用多遍分析(3-5遍)，获得最佳压缩</li>
+                <li><strong>产品图片：</strong>调高滤镜锐度(3-5)，保持细节清晰</li>
+                <li><strong>透明背景Logo：</strong>启用无损压缩，保证透明度完美</li>
+                <li><strong>大量图片处理：</strong>使用默认设置，平衡速度和质量</li>
+            </ul>
+        </div>
+
+        <!-- 性能影响提示 -->
+        <div class="notice">
+            <h3>性能影响说明</h3>
+            <ul>
+                <li><strong>无损压缩：</strong>处理时间增加约20%，文件大小比有损大30-50%</li>
+                <li><strong>高滤镜强度：</strong>处理时间增加约10-15%</li>
+                <li><strong>多遍分析：</strong>每增加1遍，处理时间增加约25%</li>
+                <li><strong>预处理滤镜：</strong>处理时间增加约10-20%</li>
+                <li><strong>目标文件大小：</strong>可能需要多次重压缩，时间不可预测</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,171 @@
+/* WebP Optimizer Admin Styles */
+.webp-optimizer-admin {
+    max-width: 1200px;
+}
+
+.webp-optimizer-admin .card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.webp-optimizer-admin .card h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.webp-optimizer-admin .system-info-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.webp-optimizer-admin .system-info-table th,
+.webp-optimizer-admin .system-info-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.webp-optimizer-admin .system-info-table th {
+    background-color: #f9f9f9;
+    font-weight: 600;
+    width: 200px;
+}
+
+.webp-optimizer-admin .status-success {
+    color: #46b450;
+    font-weight: 600;
+}
+
+.webp-optimizer-admin .status-error {
+    color: #dc3232;
+    font-weight: 600;
+}
+
+.webp-optimizer-admin .recommendations {
+    background: #e7f3ff;
+    border-left: 4px solid #0073aa;
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.webp-optimizer-admin .recommendations h3 {
+    margin-top: 0;
+    color: #0073aa;
+}
+
+.webp-optimizer-admin .recommendations ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.webp-optimizer-admin .recommendations li {
+    margin-bottom: 8px;
+}
+
+.webp-optimizer-admin .usage-notes {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.webp-optimizer-admin .usage-notes h3 {
+    margin-top: 0;
+    color: #856404;
+}
+
+.webp-optimizer-admin .form-table th {
+    width: 200px;
+    padding: 15px 10px 15px 0;
+}
+
+.webp-optimizer-admin .form-table td {
+    padding: 15px 10px;
+}
+
+.webp-optimizer-admin .form-table input[type="number"] {
+    width: 100px;
+}
+
+.webp-optimizer-admin .form-table select {
+    width: 200px;
+}
+
+.webp-optimizer-admin .description {
+    font-style: italic;
+    color: #666;
+    margin-top: 5px;
+}
+
+.webp-optimizer-admin .submit {
+    padding: 0;
+    margin: 20px 0;
+}
+
+.webp-optimizer-admin .button-primary {
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+/* 响应式设计 */
+@media screen and (max-width: 782px) {
+    .webp-optimizer-admin .form-table th,
+    .webp-optimizer-admin .form-table td {
+        display: block;
+        width: 100%;
+        padding: 10px 0;
+    }
+    
+    .webp-optimizer-admin .form-table th {
+        border-bottom: none;
+        padding-bottom: 5px;
+    }
+    
+    .webp-optimizer-admin .system-info-table th,
+    .webp-optimizer-admin .system-info-table td {
+        display: block;
+        width: 100%;
+        padding: 8px 0;
+        border: none;
+    }
+    
+    .webp-optimizer-admin .system-info-table th {
+        background: none;
+        font-weight: 600;
+        padding-bottom: 5px;
+    }
+}
+
+/* Watermark position grid styles */
+.watermark-positions-grid label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60px;
+    transition: all 0.2s ease;
+}
+
+.watermark-positions-grid label:hover {
+    background-color: #f0f0f1;
+    border-color: #0073aa !important;
+}
+
+.watermark-positions-grid label input[type="checkbox"]:checked + br + small {
+    font-weight: bold;
+    color: #0073aa;
+}
+
+.watermark-positions-grid label input[type="checkbox"]:checked {
+    background-color: #0073aa;
+}
+
+/* Range slider styling */
+input[type="range"] {
+    width: 200px;
+    margin-right: 10px;
+}

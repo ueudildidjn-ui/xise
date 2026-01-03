@@ -1,0 +1,19 @@
+# 字体文件 - 体积较大，不提交到版本控制
+# Font files - Large files, not committed to version control
+*.ttf
+*.otf
+*.woff
+*.woff2
+
+# 字体目录中的大文件（保留许可证文件）
+# Large files in fonts directory (keep license files)
+fonts/*.ttf
+fonts/*.otf
+fonts/*.woff
+fonts/*.woff2
+
+# 保留小的许可证和说明文件
+# Keep small license and readme files
+!fonts/LICENSE.txt
+!fonts/README.md
+!fonts/.gitkeep

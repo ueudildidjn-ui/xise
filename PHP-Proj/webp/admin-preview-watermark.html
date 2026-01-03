@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebP Optimizer - 水印功能预览</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+            margin: 20px;
+            background: #f1f1f1;
+        }
+        .wrap {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.13);
+            max-width: 1200px;
+        }
+        h1 { color: #23282d; margin-bottom: 20px; }
+        h2 { color: #23282d; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 30px; }
+        .form-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .form-table th {
+            width: 200px;
+            padding: 15px 10px 15px 0;
+            text-align: left;
+            vertical-align: top;
+            font-weight: 600;
+        }
+        .form-table td {
+            padding: 15px 10px;
+            vertical-align: top;
+        }
+        .form-table tr {
+            border-bottom: 1px solid #f1f1f1;
+        }
+        .description {
+            color: #666;
+            font-style: italic;
+            margin-top: 5px;
+            font-size: 13px;
+        }
+        input[type="text"], input[type="url"], select {
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .regular-text {
+            width: 300px;
+        }
+        input[type="range"] {
+            width: 200px;
+            margin-right: 10px;
+        }
+        .button {
+            background: #0073aa;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .button:hover {
+            background: #005a87;
+        }
+        
+        /* Watermark grid styles */
+        .watermark-positions-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            width: 200px;
+            margin-bottom: 10px;
+        }
+        .watermark-positions-grid label {
+            text-align: center;
+            padding: 8px;
+            border: 1px solid #ddd;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+            transition: all 0.2s ease;
+            border-radius: 4px;
+        }
+        .watermark-positions-grid label:hover {
+            background-color: #f0f0f1;
+            border-color: #0073aa;
+        }
+        .watermark-positions-grid label input[type="checkbox"] {
+            margin: 0 0 5px 0;
+        }
+        .watermark-positions-grid label small {
+            font-size: 12px;
+        }
+        
+        .card {
+            background: #fff;
+            border: 1px solid #ccd0d4;
+            box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .system-info {
+            background: #e7f3ff;
+            border-left: 4px solid #0073aa;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        
+        .status-success { color: #46b450; font-weight: 600; }
+        .status-error { color: #dc3232; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>WebP优化设置</h1>
+        <p>此插件可以自动将上传的JPEG和PNG图片转换为WebP格式，大幅减小文件大小并提高网站加载速度。现已支持强大的水印功能！</p>
+        
+        <!-- 系统信息 -->
+        <div class="card">
+            <h2>系统信息</h2>
+            <table class="form-table">
+                <tr>
+                    <th>GD库支持</th>
+                    <td><span class="status-success">✓ 已安装</span></td>
+                </tr>
+                <tr>
+                    <th>ImageMagick支持</th>
+                    <td><span class="status-success">✓ 已安装</span></td>
+                </tr>
+                <tr>
+                    <th>WebP支持</th>
+                    <td><span class="status-success">✓ 支持</span></td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- 基本设置 -->
+        <h2>基本设置</h2>
+        <p>配置WebP转换的基本参数</p>
+        <table class="form-table">
+            <tr>
+                <th>启用WebP转换</th>
+                <td>
+                    <input type="checkbox" checked />
+                    <p class="description">启用后，上传的JPEG和PNG图片将自动转换为WebP格式</p>
+                </td>
+            </tr>
+            <tr>
+                <th>WebP质量 (1-100)</th>
+                <td>
+                    <input type="number" value="85" min="1" max="100" style="width: 100px;" />
+                    <p class="description">推荐值：85（高质量）、75（平衡）、65（高压缩）。数值越高质量越好但文件越大。</p>
+                </td>
+            </tr>
+            <tr>
+                <th>转换JPEG图片</th>
+                <td>
+                    <input type="checkbox" checked />
+                    <p class="description">将JPEG/JPG图片转换为WebP格式</p>
+                </td>
+            </tr>
+            <tr>
+                <th>转换PNG图片</th>
+                <td>
+                    <input type="checkbox" checked />
+                    <p class="description">将PNG图片转换为WebP格式</p>
+                </td>
+            </tr>
+        </table>
+        
+        <!-- 高级设置 -->
+        <h2>高级设置</h2>
+        <p>高级优化选项，请根据您的需求进行配置</p>
+        <table class="form-table">
+            <tr>
+                <th>保留原图</th>
+                <td>
+                    <input type="checkbox" />
+                    <p class="description">保留原始图片文件（将占用更多存储空间）</p>
+                </td>
+            </tr>
+            <tr>
+                <th>最大宽度 (像素)</th>
+                <td>
+                    <input type="number" value="1920" min="100" style="width: 100px;" />
+                    <p class="description">如果图片宽度超过此值将被缩放（留空表示不限制）</p>
+                </td>
+            </tr>
+            <tr>
+                <th>最大高度 (像素)</th>
+                <td>
+                    <input type="number" value="" min="100" style="width: 100px;" />
+                    <p class="description">如果图片高度超过此值将被缩放（留空表示不限制）</p>
+                </td>
+            </tr>
+            <tr>
+                <th>压缩方式</th>
+                <td>
+                    <select>
+                        <option value="auto" selected>自动选择</option>
+                        <option value="gd">GD库（兼容性好）</option>
+                        <option value="imagick">ImageMagick（质量更好）</option>
+                    </select>
+                    <p class="description">选择图像处理库。自动模式将优先使用ImageMagick</p>
+                </td>
+            </tr>
+        </table>
+        
+        <!-- 水印设置 -->
+        <h2>水印设置 <span style="color: #e74c3c; font-size: 14px; font-weight: normal;">🎉 双水印支持</span></h2>
+        <p>为处理后的图片添加水印，支持文字和图片水印，可设置透明度和位置。现在支持独立的用户名水印功能。</p>
+        
+        <!-- 功能状态 -->
+        <div class="system-info">
+            <strong style="color: #46b450;">✅ 水印功能已配置并启用</strong> (文字/图片水印 + 用户名水印)
+            <h4 style="margin-top: 10px;">💡 水印功能说明</h4>
+            <ul style="margin-bottom: 0;">
+                <li><strong>文字/图片水印：</strong>支持自定义文字内容（含@username占位符）或图片水印</li>
+                <li><strong>用户名水印：</strong>独立的WordPress用户名水印，可单独设置位置和样式</li>
+                <li><strong>双水印支持：</strong>可同时启用两种水印，实现更丰富的水印组合</li>
+            </ul>
+        </div>
+        
+        <table class="form-table">
+            <tr>
+                <th>启用水印</th>
+                <td>
+                    <input type="checkbox" checked />
+                    <p class="description">为处理后的图片添加水印</p>
+                </td>
+            </tr>
+            <tr>
+                <th>水印类型</th>
+                <td>
+                    <select>
+                        <option value="text" selected>文字水印</option>
+                        <option value="image">图片水印</option>
+                    </select>
+                    <p class="description">选择水印类型</p>
+                </td>
+            </tr>
+            <tr>
+                <th>水印文字</th>
+                <td>
+                    <input type="text" value="Copyright @username 2024 - CS.Yuelk.com" class="regular-text" style="background: #fff8dc; border-color: #dba617;" />
+                    <div style="background: #f9f9f9; border: 1px solid #ddd; padding: 8px; margin-top: 5px; border-radius: 4px; font-size: 12px;">
+                        <strong>占位符演示：</strong><br>
+                        <span style="color: #666;">输入文字：</span><code>Copyright @username 2024 - CS.Yuelk.com</code><br>
+                        <span style="color: #666;">实际显示：</span><strong style="color: #0073aa;">Copyright admin 2024 - CS.Yuelk.com</strong> <span style="color: #999;">(当前用户: admin)</span>
+                    </div>
+                    <p class="description">文字水印内容（仅在选择文字水印时生效）。<br><strong>特殊占位符：</strong>使用 <code>@username</code> 将自动替换为当前WordPress用户名。</p>
+                </td>
+            </tr>
+            <tr>
+                <th>字体大小</th>
+                <td>
+                    <input type="range" value="24" min="10" max="72" oninput="this.nextElementSibling.textContent=this.value+'px'" />
+                    <span>24px</span>
+                    <p class="description">文字水印字体大小（10-72像素，仅文字水印生效）</p>
+                </td>
+            </tr>
+            <tr>
+                <th>字体类型</th>
+                <td>
+                    <select>
+                        <option value="system" selected>系统默认字体（本地优先）</option>
+                        <option value="noto-cjk">Noto Sans CJK（中文推荐）🟢本地</option>
+                        <option value="source-han">Source Han Sans（思源黑体）</option>
+                        <option value="microsoft-yahei">Microsoft YaHei（微软雅黑）</option>
+                        <option value="arial">Arial</option>
+                        <option value="dejavu">DejaVu Sans 🟢本地</option>
+                    </select>
+                    <p class="description">文字水印字体类型。🟢标记表示插件已内置该字体，当前本地字体: 2 个</p>
+                </td>
+            </tr>
+            <tr>
+                <th>水印图片</th>
+                <td>
+                    <input type="url" value="https://example.com/watermark.png" class="regular-text" placeholder="https://example.com/watermark.png" />
+                    <button type="button" class="button">选择图片</button>
+                    <button type="button" class="button" style="background: #46b450;">测试水印图片</button>
+                    <p class="description">水印图片URL（仅在选择图片水印时生效，建议使用PNG格式支持透明度）</p>
+                </td>
+            </tr>
+            <tr>
+                <th>水印透明度</th>
+                <td>
+                    <input type="range" value="50" min="0" max="100" oninput="this.nextElementSibling.textContent=this.value+'%'" />
+                    <span>50%</span>
+                    <p class="description">水印透明度，0为完全透明，100为完全不透明</p>
+                </td>
+            </tr>
+            <tr>
+                <th>定位模式</th>
+                <td>
+                    <select onchange="togglePositionMode(this)">
+                        <option value="grid" selected>九宫格模式</option>
+                        <option value="precise">精确坐标模式</option>
+                    </select>
+                    <p class="description">选择水印定位方式：九宫格模式或精确坐标模式</p>
+                </td>
+            </tr>
+            <tr>
+                <th>水印位置</th>
+                <td>
+                    <div class="watermark-positions-grid">
+                        <label title="左上">
+                            <input type="checkbox" />
+                            <small>左上</small>
+                        </label>
+                        <label title="上中">
+                            <input type="checkbox" />
+                            <small>上中</small>
+                        </label>
+                        <label title="右上">
+                            <input type="checkbox" />
+                            <small>右上</small>
+                        </label>
+                        <label title="左中">
+                            <input type="checkbox" />
+                            <small>左中</small>
+                        </label>
+                        <label title="中心">
+                            <input type="checkbox" checked />
+                            <small>中心</small>
+                        </label>
+                        <label title="右中">
+                            <input type="checkbox" />
+                            <small>右中</small>
+                        </label>
+                        <label title="左下">
+                            <input type="checkbox" />
+                            <small>左下</small>
+                        </label>
+                        <label title="下中">
+                            <input type="checkbox" />
+                            <small>下中</small>
+                        </label>
+                        <label title="右下">
+                            <input type="checkbox" />
+                            <small>右下</small>
+                        </label>
+                    </div>
+                    <p class="description">选择水印位置，可选择多个位置（九宫格布局，仅在"九宫格模式"时有效）</p>
+                </td>
+            </tr>
+            <tr>
+                <th>精确坐标</th>
+                <td>
+                    <div id="watermark_precise_fields" style="display: none;">
+                        <label>X坐标: <input type="number" value="0" min="0" style="width: 80px;" /> px</label>
+                        <label>Y坐标: <input type="number" value="0" min="0" style="width: 80px;" /> px</label>
+                        <br><small>距离图片左上角的精确像素位置</small>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <th>图片水印尺寸</th>
+                <td>
+                    <div>
+                        <label><input type="radio" name="watermark_image_size_mode" value="auto" checked onchange="toggleImageSizeMode()" /> 自动调整（最大1/4图片尺寸）</label><br>
+                        <label><input type="radio" name="watermark_image_size_mode" value="manual" onchange="toggleImageSizeMode()" /> 手动设置尺寸</label>
+                    </div>
+                    <div id="watermark_manual_size" style="display: none; margin-top: 10px;">
+                        <label>宽度: <input type="number" min="10" max="1000" style="width: 80px;" /> px</label>
+                        <label>高度: <input type="number" min="10" max="1000" style="width: 80px;" /> px</label>
+                        <br><small>留空则保持宽高比例自动缩放</small>
+                    </div>
+                    <p class="description">选择图片水印尺寸控制方式（仅对图片水印有效）</p>
+                    
+                    <!-- 用户名水印独立功能分割线 -->
+                    <hr style="margin: 20px 0; border: none; border-top: 2px solid #e5e5e5;" />
+                    <h3 style="color: #0073aa; margin: 20px 0 10px;">📝 WordPress用户名水印 (独立功能) <span style="color: #e74c3c; font-size: 12px; font-weight: normal;">🆕 新增</span></h3>
+                    <p style="color: #666; font-style: italic;">WordPress用户名水印是独立于上方文字/图片水印的功能，可同时使用并分别设置位置和样式。</p>
+                </td>
+            </tr>
+        </table>
+        
+        <!-- 用户名水印独立设置 -->
+        <table class="form-table" style="border-top: 2px solid #0073aa;">
+            <tr style="background: #f8f9fa;">
+                <th>启用用户名水印</th>
+                <td>
+                    <input type="checkbox" checked />
+                    <p class="description">为图片添加当前WordPress用户名作为独立水印（与上方文字/图片水印分开设置）</p>
+                </td>
+            </tr>
+            <tr>
+                <th>用户名水印字体大小</th>
+                <td>
+                    <input type="range" value="20" min="10" max="72" oninput="this.nextElementSibling.textContent=this.value+'px'" />
+                    <span>20px</span>
+                    <p class="description">用户名水印字体大小（10-72像素）</p>
+                </td>
+            </tr>
+            <tr>
+                <th>用户名水印字体类型</th>
+                <td>
+                    <select>
+                        <option value="system" selected>系统默认字体（本地优先）</option>
+                        <option value="noto-cjk">Noto Sans CJK（中文推荐）🟢本地</option>
+                        <option value="source-han">Source Han Sans（思源黑体）</option>
+                        <option value="microsoft-yahei">Microsoft YaHei（微软雅黑）</option>
+                        <option value="arial">Arial</option>
+                        <option value="dejavu">DejaVu Sans 🟢本地</option>
+                    </select>
+                    <p class="description">用户名水印字体类型。🟢标记表示插件已内置该字体，当前本地字体: 2 个</p>
+                </td>
+            </tr>
+            <tr>
+                <th>用户名水印透明度</th>
+                <td>
+                    <input type="range" value="70" min="0" max="100" oninput="this.nextElementSibling.textContent=this.value+'%'" />
+                    <span>70%</span>
+                    <p class="description">用户名水印透明度，0为完全透明，100为完全不透明</p>
+                </td>
+            </tr>
+            <tr>
+                <th>用户名水印定位模式</th>
+                <td>
+                    <select onchange="toggleUsernamePositionMode(this)">
+                        <option value="grid" selected>九宫格模式</option>
+                        <option value="precise">精确坐标模式</option>
+                    </select>
+                    <p class="description">选择用户名水印定位方式：九宫格模式或精确坐标模式</p>
+                </td>
+            </tr>
+            <tr>
+                <th>用户名水印位置</th>
+                <td>
+                    <div class="username-watermark-positions-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; width: 200px; margin-bottom: 10px;">
+                        <label title="左上" style="text-align: center; padding: 8px; border: 1px solid #ddd; cursor: pointer; border-radius: 4px;">
+                            <input type="checkbox" style="margin: 0 0 5px 0;" />
+                            <br><small>左上</small>
+                        </label>
+                        <label title="上中" style="text-align: center; padding: 8px; border: 1px solid #ddd; cursor: pointer; border-radius: 4px;">
+                            <input type="checkbox" style="margin: 0 0 5px 0;" />
+                            <br><small>上中</small>
+                        </label>
+                        <label title="右上" style="text-align: center; padding: 8px; border: 1px solid #ddd; cursor: pointer; border-radius: 4px;">
+                            <input type="checkbox" style="margin: 0 0 5px 0;" />
+                            <br><small>右上</small>
+                        </label>
+                        <label title="左中" style="text-align: center; padding: 8px; border: 1px solid #ddd; cursor: pointer; border-radius: 4px;">
+                            <input type="checkbox" style="margin: 0 0 5px 0;" />
+                            <br><small>左中</small>
+                        </label>
+                        <label title="中心" style="text-align: center; padding: 8px; border: 1px solid #ddd; cursor: pointer; border-radius: 4px;">
+                            <input type="checkbox" style="margin: 0 0 5px 0;" />
+                            <br><small>中心</small>
+                        </label>
+                        <label title="右中" style="text-align: center; padding: 8px; border: 1px solid #ddd; cursor: pointer; border-radius: 4px;">
+                            <input type="checkbox" style="margin: 0 0 5px 0;" />
+                            <br><small>右中</small>
+                        </label>
+                        <label title="左下" style="text-align: center; padding: 8px; border: 1px solid #0073aa; cursor: pointer; border-radius: 4px; background: #e7f3ff;">
+                            <input type="checkbox" checked style="margin: 0 0 5px 0;" />
+                            <br><small style="font-weight: bold; color: #0073aa;">左下</small>
+                        </label>
+                        <label title="下中" style="text-align: center; padding: 8px; border: 1px solid #ddd; cursor: pointer; border-radius: 4px;">
+                            <input type="checkbox" style="margin: 0 0 5px 0;" />
+                            <br><small>下中</small>
+                        </label>
+                        <label title="右下" style="text-align: center; padding: 8px; border: 1px solid #ddd; cursor: pointer; border-radius: 4px;">
+                            <input type="checkbox" style="margin: 0 0 5px 0;" />
+                            <br><small>右下</small>
+                        </label>
+                    </div>
+                    <p class="description">选择用户名水印位置，可选择多个位置（九宫格布局，仅在"九宫格模式"时有效）</p>
+                </td>
+            </tr>
+            <tr>
+                <th>用户名水印精确坐标</th>
+                <td>
+                    <div id="username_watermark_precise_fields" style="display: none;">
+                        <label>X坐标: <input type="number" value="20" min="0" style="width: 80px;" /> px</label>
+                        <label>Y坐标: <input type="number" value="20" min="0" style="width: 80px;" /> px</label>
+                        <br><small>距离图片左上角的精确像素位置</small>
+                    </div>
+                </td>
+            </tr>
+        </table>
+        
+        <!-- 演示效果 -->
+        <div style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin: 15px 0; border-radius: 4px;">
+            <h4 style="color: #0073aa; margin-top: 0;">🎯 双水印效果演示</h4>
+            <div style="background: #fff; padding: 20px; border: 2px dashed #0073aa; position: relative; height: 150px; border-radius: 4px;">
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #0073aa; font-weight: bold;">Copyright admin 2024 - CS.Yuelk.com</div>
+                <div style="position: absolute; bottom: 10px; left: 10px; color: #666; font-size: 14px; background: rgba(255,255,255,0.8); padding: 2px 6px; border-radius: 3px;">admin</div>
+                <div style="position: absolute; top: 10px; right: 10px; color: #999; font-size: 11px;">示例图片 800x600</div>
+            </div>
+            <p style="margin-bottom: 0; color: #666; font-size: 13px;">
+                <strong>演示说明：</strong>中心位置显示文字水印（含@username占位符替换），左下角显示独立的用户名水印，两者可分别设置样式和位置。
+            </p>
+        </div>
+        
+        <script>
+        function togglePositionMode(select) {
+            var preciseFields = document.getElementById("watermark_precise_fields");
+            var gridFields = document.querySelector(".watermark-positions-grid").parentElement.parentElement;
+            
+            if (select.value === "precise") {
+                if (preciseFields) preciseFields.style.display = "block";
+                if (gridFields) gridFields.style.display = "none";
+            } else {
+                if (preciseFields) preciseFields.style.display = "none"; 
+                if (gridFields) gridFields.style.display = "table-row";
+            }
+        }
+        
+        function toggleUsernamePositionMode(select) {
+            var preciseFields = document.getElementById("username_watermark_precise_fields");
+            var gridFields = document.querySelector(".username-watermark-positions-grid");
+            if (gridFields) gridFields = gridFields.parentElement.parentElement;
+            
+            if (select.value === "precise") {
+                if (preciseFields) preciseFields.style.display = "block";
+                if (gridFields) gridFields.style.display = "none";
+            } else {
+                if (preciseFields) preciseFields.style.display = "none"; 
+                if (gridFields) gridFields.style.display = "table-row";
+            }
+        }
+        
+        function toggleImageSizeMode() {
+            var manualSize = document.getElementById("watermark_manual_size");
+            var manualRadio = document.querySelector("input[name='watermark_image_size_mode'][value='manual']:checked");
+            
+            if (manualRadio && manualSize) {
+                manualSize.style.display = "block";
+            } else if (manualSize) {
+                manualSize.style.display = "none";
+            }
+        }
+        </script>
+        
+        <p>
+            <button type="submit" class="button" style="background: #0073aa; color: white; padding: 10px 20px; font-size: 14px;">保存设置</button>
+        </p>
+        
+        <!-- 使用说明 -->
+        <div class="card">
+            <h2>使用说明</h2>
+            <ol>
+                <li><strong>启用插件：</strong>勾选"启用WebP转换"后插件开始工作</li>
+                <li><strong>自动转换：</strong>新上传的JPEG/PNG图片将自动转换为WebP</li>
+                <li><strong>质量控制：</strong>推荐质量值85，可根据需求调整</li>
+                <li><strong>水印功能：</strong>启用水印后，转换的图片将自动添加水印</li>
+                <li><strong>用户名水印：</strong>在水印文字中使用 <code>@username</code> 会自动替换为WordPress用户名</li>
+                <li><strong>定位模式：</strong>支持九宫格定位和精确坐标定位两种方式</li>
+                <li><strong>图片水印尺寸：</strong>可选择自动缩放或手动设置精确尺寸</li>
+                <li><strong>兼容性：</strong>现代浏览器都支持WebP格式</li>
+                <li><strong>文件大小：</strong>WebP通常比JPEG小25-35%，比PNG小80%以上</li>
+            </ol>
+            
+            <h3>水印功能特点</h3>
+            <ul>
+                <li><strong>双水印支持：</strong>支持文字/图片水印和独立的用户名水印同时使用</li>
+                <li><strong>文字水印：</strong>支持自定义文字内容和字体设置，自动添加阴影效果增强可见性</li>
+                <li><strong>用户名占位符：</strong>使用 @username 自动替换为当前WordPress用户名</li>
+                <li><strong>独立用户名水印：</strong>专门的WordPress用户名水印功能，可单独设置字体、大小、位置和透明度</li>
+                <li><strong>字体控制：</strong>两种水印都可调节字体大小（10-72px）和字体类型</li>
+                <li><strong>图片水印：</strong>支持PNG、JPEG、GIF、WebP格式，支持自动缩放和手动尺寸设置</li>
+                <li><strong>精确尺寸控制：</strong>图片水印可设置精确的宽度和高度像素值</li>
+                <li><strong>独立透明度控制：</strong>两种水印分别可调0-100%透明度</li>
+                <li><strong>智能定位：</strong>每种水印都支持九宫格定位和精确坐标定位</li>
+                <li><strong>多位置支持：</strong>每种水印都可设置多个位置同时显示</li>
+                <li><strong>精确坐标：</strong>支持设置每种水印的精确X、Y像素坐标位置</li>
+                <li><strong>媒体库集成：</strong>直接从WordPress媒体库选择水印图片</li>
+            </ul>
+            
+            <h3>注意事项</h3>
+            <ul>
+                <li>转换仅对新上传的图片生效，不会影响已存在的文件</li>
+                <li>如果保留原图，将占用双倍存储空间</li>
+                <li>水印会在WebP转换完成后自动应用</li>
+                <li>建议在启用前备份重要图片</li>
+                <li>转换过程可能稍微延长上传时间</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // 模拟透明度滑动条
+        document.querySelector('input[type="range"]').addEventListener('input', function(e) {
+            e.target.nextElementSibling.textContent = e.target.value + '%';
+        });
+        
+        // 模拟checkbox选中效果
+        document.querySelectorAll('.watermark-positions-grid input[type="checkbox"]').forEach(function(checkbox) {
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    this.parentElement.style.backgroundColor = '#e7f3ff';
+                    this.parentElement.style.borderColor = '#0073aa';
+                    this.parentElement.querySelector('small').style.fontWeight = 'bold';
+                    this.parentElement.querySelector('small').style.color = '#0073aa';
+                } else {
+                    this.parentElement.style.backgroundColor = '';
+                    this.parentElement.style.borderColor = '#ddd';
+                    this.parentElement.querySelector('small').style.fontWeight = '';
+                    this.parentElement.querySelector('small').style.color = '';
+                }
+            });
+            
+            // 初始状态
+            if (checkbox.checked) {
+                checkbox.parentElement.style.backgroundColor = '#e7f3ff';
+                checkbox.parentElement.style.borderColor = '#0073aa';
+                checkbox.parentElement.querySelector('small').style.fontWeight = 'bold';
+                checkbox.parentElement.querySelector('small').style.color = '#0073aa';
+            }
+        });
+    </script>
+</body>
+</html>

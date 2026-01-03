@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebP优化插件 - 管理界面预览</title>
+    <style>
+        body {
+            font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;
+            background: #f1f1f1;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .wrap {
+            background: #fff;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.13);
+        }
+        
+        .card {
+            background: #fff;
+            border: 1px solid #ccd0d4;
+            box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .card h2 {
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+        }
+        
+        .form-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .form-table th,
+        .form-table td {
+            padding: 15px 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .form-table th {
+            background-color: #f9f9f9;
+            font-weight: 600;
+            width: 200px;
+        }
+        
+        .description {
+            font-style: italic;
+            color: #666;
+            margin-top: 5px;
+            font-size: 13px;
+        }
+        
+        .status-success {
+            color: #46b450;
+            font-weight: 600;
+        }
+        
+        .status-error {
+            color: #dc3232;
+            font-weight: 600;
+        }
+        
+        .recommendations {
+            background: #e7f3ff;
+            border-left: 4px solid #0073aa;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .recommendations h2 {
+            margin-top: 0;
+            color: #0073aa;
+            border: none;
+            padding: 0;
+        }
+        
+        .usage-notes {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .usage-notes h2 {
+            margin-top: 0;
+            color: #856404;
+            border: none;
+            padding: 0;
+        }
+        
+        .button-primary {
+            background: #0073aa;
+            border: 1px solid #006799;
+            color: #fff;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 3px;
+            cursor: pointer;
+            display: inline-block;
+        }
+        
+        input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        
+        input[type="number"], select {
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        
+        input[type="number"] {
+            width: 100px;
+        }
+        
+        select {
+            width: 200px;
+        }
+        
+        h1 {
+            color: #23282d;
+            margin-bottom: 10px;
+        }
+        
+        h3 {
+            color: #23282d;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        
+        ul li, ol li {
+            margin-bottom: 8px;
+        }
+        
+        .submit {
+            padding: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>WebP优化设置</h1>
+        <p>此插件可以自动将上传的JPEG和PNG图片转换为WebP格式，大幅减小文件大小并提高网站加载速度。</p>
+        
+        <!-- 系统信息 -->
+        <div class="card">
+            <h2>系统信息</h2>
+            <table class="form-table">
+                <tr>
+                    <th>GD库支持</th>
+                    <td><span class="status-success">✓ 已安装</span></td>
+                </tr>
+                <tr>
+                    <th>ImageMagick支持</th>
+                    <td><span class="status-success">✓ 已安装</span></td>
+                </tr>
+                <tr>
+                    <th>WebP支持</th>
+                    <td><span class="status-success">✓ 支持</span></td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- 推荐设置 -->
+        <div class="card recommendations">
+            <h2>推荐设置</h2>
+            <ul>
+                <li><strong>WebP质量：</strong>85（适合大多数网站，平衡质量和文件大小）</li>
+                <li><strong>转换格式：</strong>同时启用JPEG和PNG转换</li>
+                <li><strong>保留原图：</strong>建议不保留（节省存储空间）</li>
+                <li><strong>最大尺寸：</strong>根据网站需求设置，推荐宽度1920像素</li>
+                <li><strong>压缩方式：</strong>自动选择（系统会优先使用最佳方案）</li>
+            </ul>
+        </div>
+        
+        <form method="post" action="options.php">
+            <h2>基本设置</h2>
+            <p>配置WebP转换的基本参数</p>
+            
+            <table class="form-table">
+                <tr>
+                    <th>启用WebP转换</th>
+                    <td>
+                        <input type="checkbox" name="webp_optimizer_options[enable_webp_conversion]" value="1" checked />
+                        <p class="description">启用后，上传的JPEG和PNG图片将自动转换为WebP格式</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>WebP质量 (1-100)</th>
+                    <td>
+                        <input type="number" name="webp_optimizer_options[webp_quality]" value="85" min="1" max="100" />
+                        <p class="description">推荐值：85（高质量）、75（平衡）、65（高压缩）。数值越高质量越好但文件越大。</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>转换JPEG图片</th>
+                    <td>
+                        <input type="checkbox" name="webp_optimizer_options[convert_jpeg]" value="1" checked />
+                        <p class="description">将JPEG/JPG图片转换为WebP格式</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>转换PNG图片</th>
+                    <td>
+                        <input type="checkbox" name="webp_optimizer_options[convert_png]" value="1" checked />
+                        <p class="description">将PNG图片转换为WebP格式</p>
+                    </td>
+                </tr>
+            </table>
+            
+            <h2>高级设置</h2>
+            <p>高级优化选项，请根据您的需求进行配置</p>
+            
+            <table class="form-table">
+                <tr>
+                    <th>保留原图</th>
+                    <td>
+                        <input type="checkbox" name="webp_optimizer_options[keep_original]" value="1" />
+                        <p class="description">保留原始图片文件（将占用更多存储空间）</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>最大宽度 (像素)</th>
+                    <td>
+                        <input type="number" name="webp_optimizer_options[max_width]" value="1920" min="100" />
+                        <p class="description">如果图片宽度超过此值将被缩放（留空表示不限制）</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>最大高度 (像素)</th>
+                    <td>
+                        <input type="number" name="webp_optimizer_options[max_height]" value="" min="100" />
+                        <p class="description">如果图片高度超过此值将被缩放（留空表示不限制）</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th>压缩方式</th>
+                    <td>
+                        <select name="webp_optimizer_options[compression_method]">
+                            <option value="auto" selected>自动选择</option>
+                            <option value="gd">GD库（兼容性好）</option>
+                            <option value="imagick">ImageMagick（质量更好）</option>
+                        </select>
+                        <p class="description">选择图像处理库。自动模式将优先使用ImageMagick</p>
+                    </td>
+                </tr>
+            </table>
+            
+            <p class="submit">
+                <input type="submit" class="button-primary" value="保存设置">
+            </p>
+        </form>
+        
+        <!-- 使用说明 -->
+        <div class="card usage-notes">
+            <h2>使用说明</h2>
+            <ol>
+                <li><strong>启用插件：</strong>勾选"启用WebP转换"后插件开始工作</li>
+                <li><strong>自动转换：</strong>新上传的JPEG/PNG图片将自动转换为WebP</li>
+                <li><strong>质量控制：</strong>推荐质量值85，可根据需求调整</li>
+                <li><strong>兼容性：</strong>现代浏览器都支持WebP格式</li>
+                <li><strong>文件大小：</strong>WebP通常比JPEG小25-35%，比PNG小80%以上</li>
+            </ol>
+            
+            <h3>注意事项</h3>
+            <ul>
+                <li>转换仅对新上传的图片生效，不会影响已存在的文件</li>
+                <li>如果保留原图，将占用双倍存储空间</li>
+                <li>建议在启用前备份重要图片</li>
+                <li>转换过程可能稍微延长上传时间</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
