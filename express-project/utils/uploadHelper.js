@@ -6,15 +6,71 @@ const { HTTP_STATUS, RESPONSE_CODES } = require('../constants');
 const config = require('../config/config');
 const crypto = require('crypto');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { processImage, generateWebpFilename, shouldConvert } = require('./webpOptimizer');
+
+/**
+ * 处理图片文件（WebP转换和水印）
+ * @param {Buffer} fileBuffer - 文件缓冲区
+ * @param {string} filename - 文件名
+ * @param {string} mimetype - 文件MIME类型
+ * @param {Object} context - 上下文（包含用户信息等）
+ * @returns {Promise<{buffer: Buffer, filename: string, mimetype: string}>}
+ */
+async function processImageFile(fileBuffer, filename, mimetype, context = {}) {
+  try {
+    const result = await processImage(fileBuffer, mimetype, context);
+    
+    if (result.processed) {
+      // 如果处理成功且转换为WebP，更新文件名
+      let newFilename = filename;
+      if (result.mimetype === 'image/webp' && shouldConvert(mimetype)) {
+        newFilename = generateWebpFilename(filename);
+      }
+      
+      return {
+        buffer: result.buffer,
+        filename: newFilename,
+        mimetype: result.mimetype
+      };
+    }
+    
+    // 如果没有处理，返回原始数据
+    return {
+      buffer: fileBuffer,
+      filename: filename,
+      mimetype: mimetype
+    };
+  } catch (error) {
+    console.error('❌ 图片处理失败:', error.message);
+    // 处理失败时返回原始数据
+    return {
+      buffer: fileBuffer,
+      filename: filename,
+      mimetype: mimetype
+    };
+  }
+}
 
 /**
  * 保存图片文件到本地
  * @param {Buffer} fileBuffer - 文件缓冲区
  * @param {string} filename - 文件名
+ * @param {string} mimetype - 文件MIME类型（可选）
+ * @param {Object} context - 上下文（可选，包含用户信息等）
  * @returns {Promise<{success: boolean, url?: string, message?: string}>}
  */
-async function saveImageToLocal(fileBuffer, filename) {
+async function saveImageToLocal(fileBuffer, filename, mimetype = null, context = {}) {
   try {
+    // 如果提供了mimetype，先处理图片（WebP转换和水印）
+    let processedBuffer = fileBuffer;
+    let processedFilename = filename;
+    
+    if (mimetype && mimetype.startsWith('image/')) {
+      const processed = await processImageFile(fileBuffer, filename, mimetype, context);
+      processedBuffer = processed.buffer;
+      processedFilename = processed.filename;
+    }
+    
     // 确保上传目录存在
     const uploadDir = path.join(process.cwd(), config.upload.image.local.uploadDir);
     if (!fs.existsSync(uploadDir)) {
@@ -22,13 +78,13 @@ async function saveImageToLocal(fileBuffer, filename) {
     }
 
     // 生成唯一文件名
-    const ext = path.extname(filename);
-    const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
+    const ext = path.extname(processedFilename);
+    const hash = crypto.createHash('md5').update(processedBuffer).digest('hex');
     const uniqueFilename = `${Date.now()}_${hash}${ext}`;
     const filePath = path.join(uploadDir, uniqueFilename);
 
     // 保存文件
-    fs.writeFileSync(filePath, fileBuffer);
+    fs.writeFileSync(filePath, processedBuffer);
 
     // 返回访问URL
     const url = `${config.upload.image.local.baseUrl}/${config.upload.image.local.uploadDir}/${uniqueFilename}`;
@@ -89,9 +145,10 @@ async function saveVideoToLocal(fileBuffer, filename) {
  * @param {Buffer} fileBuffer - 文件缓冲区
  * @param {string} filename - 文件名
  * @param {string} mimetype - 文件MIME类型
+ * @param {Object} context - 上下文（可选，包含用户信息等）
  * @returns {Promise<{success: boolean, url?: string, message?: string}>}
  */
-async function uploadToImageHost(fileBuffer, filename, mimetype) {
+async function uploadToImageHost(fileBuffer, filename, mimetype, context = {}) {
   try {
     // 检查配置是否存在
     if (!config.upload || !config.upload.image || !config.upload.image.imagehost || !config.upload.image.imagehost.apiUrl) {
@@ -102,14 +159,26 @@ async function uploadToImageHost(fileBuffer, filename, mimetype) {
       };
     }
 
+    // 先处理图片（WebP转换和水印）
+    let processedBuffer = fileBuffer;
+    let processedFilename = filename;
+    let processedMimetype = mimetype;
+    
+    if (mimetype && mimetype.startsWith('image/')) {
+      const processed = await processImageFile(fileBuffer, filename, mimetype, context);
+      processedBuffer = processed.buffer;
+      processedFilename = processed.filename;
+      processedMimetype = processed.mimetype;
+    }
+
     // 构建multipart/form-data请求体
     const boundary = `----formdata-${Date.now()}`;
 
     const formDataBody = Buffer.concat([
       Buffer.from(`--${boundary}\r\n`),
-      Buffer.from(`Content-Disposition: form-data; name="file"; filename="${filename}"\r\n`),
-      Buffer.from(`Content-Type: ${mimetype}\r\n\r\n`),
-      fileBuffer,
+      Buffer.from(`Content-Disposition: form-data; name="file"; filename="${processedFilename}"\r\n`),
+      Buffer.from(`Content-Type: ${processedMimetype}\r\n\r\n`),
+      processedBuffer,
       Buffer.from(`\r\n--${boundary}--\r\n`)
     ]);
 
@@ -153,15 +222,28 @@ async function uploadToImageHost(fileBuffer, filename, mimetype) {
  * @param {Buffer} fileBuffer - 文件缓冲区
  * @param {string} filename - 文件名
  * @param {string} mimetype - 文件MIME类型
+ * @param {Object} context - 上下文（可选，包含用户信息等）
  * @returns {Promise<{success: boolean, url?: string, message?: string}>}
  */
-async function uploadImageToR2(fileBuffer, filename, mimetype) {
+async function uploadImageToR2(fileBuffer, filename, mimetype, context = {}) {
   try {
     const r2Config = config.upload.image.r2;
     
     // 验证必要的配置
     if (!r2Config.accessKeyId || !r2Config.secretAccessKey || !r2Config.bucketName || !r2Config.endpoint) {
       throw new Error('Cloudflare R2 配置不完整');
+    }
+
+    // 先处理图片（WebP转换和水印）
+    let processedBuffer = fileBuffer;
+    let processedFilename = filename;
+    let processedMimetype = mimetype;
+    
+    if (mimetype && mimetype.startsWith('image/')) {
+      const processed = await processImageFile(fileBuffer, filename, mimetype, context);
+      processedBuffer = processed.buffer;
+      processedFilename = processed.filename;
+      processedMimetype = processed.mimetype;
     }
 
     // 创建 S3 客户端（Cloudflare R2 兼容 S3 API）
@@ -175,16 +257,16 @@ async function uploadImageToR2(fileBuffer, filename, mimetype) {
     });
 
     // 生成唯一文件名
-    const ext = path.extname(filename);
-    const hash = crypto.createHash('md5').update(fileBuffer).digest('hex');
+    const ext = path.extname(processedFilename);
+    const hash = crypto.createHash('md5').update(processedBuffer).digest('hex');
     const uniqueFilename = `images/${Date.now()}_${hash}${ext}`;
 
     // 上传参数
     const uploadParams = {
       Bucket: r2Config.bucketName,
       Key: uniqueFilename,
-      Body: fileBuffer,
-      ContentType: mimetype,
+      Body: processedBuffer,
+      ContentType: processedMimetype,
     };
 
     // 执行上传
@@ -350,6 +432,7 @@ function adminAuth(req, res, next) {
  * @param {Buffer} fileBuffer - 文件缓冲区
  * @param {string} filename - 文件名
  * @param {string} mimetype - 文件MIME类型
+ * @param {Object} context - 上下文（可选，包含用户信息等）
  * @returns {Promise<{success: boolean, url?: string, message?: string}>}
  */
 /**
@@ -357,17 +440,18 @@ function adminAuth(req, res, next) {
  * @param {Buffer} fileBuffer - 文件缓冲区
  * @param {string} filename - 文件名
  * @param {string} mimetype - 文件MIME类型
+ * @param {Object} context - 上下文（可选，包含用户信息等）
  * @returns {Promise<{success: boolean, url?: string, message?: string}>}
  */
-async function uploadImage(fileBuffer, filename, mimetype) {
+async function uploadImage(fileBuffer, filename, mimetype, context = {}) {
   const strategy = config.upload.image.strategy;
   
   if (strategy === 'local') {
-    return await saveImageToLocal(fileBuffer, filename);
+    return await saveImageToLocal(fileBuffer, filename, mimetype, context);
   } else if (strategy === 'imagehost') {
-    return await uploadToImageHost(fileBuffer, filename, mimetype);
+    return await uploadToImageHost(fileBuffer, filename, mimetype, context);
   } else if (strategy === 'r2') {
-    return await uploadImageToR2(fileBuffer, filename, mimetype);
+    return await uploadImageToR2(fileBuffer, filename, mimetype, context);
   } else {
     return {
       success: false,
@@ -399,10 +483,10 @@ async function uploadVideo(fileBuffer, filename, mimetype) {
 }
 
 // 保持向后兼容的旧函数
-async function uploadFile(fileBuffer, filename, mimetype) {
+async function uploadFile(fileBuffer, filename, mimetype, context = {}) {
   // 根据文件类型判断是图片还是视频
   if (mimetype.startsWith('image/')) {
-    return await uploadImage(fileBuffer, filename, mimetype);
+    return await uploadImage(fileBuffer, filename, mimetype, context);
   } else if (mimetype.startsWith('video/')) {
     return await uploadVideo(fileBuffer, filename, mimetype);
   } else {
@@ -424,5 +508,6 @@ module.exports = {
   uploadImage,
   uploadVideo,
   uploadFile,
-  adminAuth
+  adminAuth,
+  processImageFile
 };

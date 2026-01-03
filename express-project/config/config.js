@@ -136,6 +136,82 @@ const config = {
     }
   },
 
+  // WebP图片优化配置
+  webp: {
+    // 是否启用WebP转换
+    enableConversion: process.env.WEBP_ENABLE_CONVERSION !== 'false', // 默认启用
+    // WebP质量 (1-100)
+    quality: parseInt(process.env.WEBP_QUALITY) || 85,
+    // 是否转换JPEG图片
+    convertJpeg: process.env.WEBP_CONVERT_JPEG !== 'false',
+    // 是否转换PNG图片
+    convertPng: process.env.WEBP_CONVERT_PNG !== 'false',
+    // 是否保留原图
+    keepOriginal: process.env.WEBP_KEEP_ORIGINAL === 'true',
+    // 最大宽度 (留空表示不限制)
+    maxWidth: process.env.WEBP_MAX_WIDTH ? parseInt(process.env.WEBP_MAX_WIDTH) : null,
+    // 最大高度 (留空表示不限制)
+    maxHeight: process.env.WEBP_MAX_HEIGHT ? parseInt(process.env.WEBP_MAX_HEIGHT) : null,
+    // 是否使用无损压缩
+    lossless: process.env.WEBP_LOSSLESS === 'true',
+    // 透明度质量 (0-100)
+    alphaQuality: parseInt(process.env.WEBP_ALPHA_QUALITY) || 100,
+    
+    // 水印设置
+    watermark: {
+      // 是否启用水印
+      enabled: process.env.WATERMARK_ENABLED === 'true',
+      // 水印类型: 'text' 或 'image'
+      type: process.env.WATERMARK_TYPE || 'text',
+      // 水印文字 (支持@username占位符)
+      text: process.env.WATERMARK_TEXT || '',
+      // 字体大小
+      fontSize: parseInt(process.env.WATERMARK_FONT_SIZE) || 24,
+      // 字体路径 (可选，用于支持中文字体)
+      fontPath: process.env.WATERMARK_FONT_PATH || null,
+      // 水印图片路径 (当type为image时使用)
+      imagePath: process.env.WATERMARK_IMAGE_PATH || null,
+      // 水印透明度 (0-100)
+      opacity: parseInt(process.env.WATERMARK_OPACITY) || 50,
+      // 水印位置 (九宫格: 1-9, 1=左上, 5=中心, 9=右下)
+      position: process.env.WATERMARK_POSITION || '9',
+      // 定位模式: 'grid' 或 'precise'
+      positionMode: process.env.WATERMARK_POSITION_MODE || 'grid',
+      // 精确X坐标 (当positionMode为precise时使用)
+      preciseX: parseInt(process.env.WATERMARK_PRECISE_X) || 0,
+      // 精确Y坐标 (当positionMode为precise时使用)
+      preciseY: parseInt(process.env.WATERMARK_PRECISE_Y) || 0,
+      // 图片水印比例 (1-10, 表示水印占原图的1/10到10/10)
+      imageRatio: parseInt(process.env.WATERMARK_IMAGE_RATIO) || 4,
+      // 水印颜色 (hex格式)
+      color: process.env.WATERMARK_COLOR || '#ffffff'
+    },
+    
+    // 用户名水印设置 (独立于主水印)
+    usernameWatermark: {
+      // 是否启用用户名水印
+      enabled: process.env.USERNAME_WATERMARK_ENABLED === 'true',
+      // 字体大小
+      fontSize: parseInt(process.env.USERNAME_WATERMARK_FONT_SIZE) || 20,
+      // 字体路径
+      fontPath: process.env.USERNAME_WATERMARK_FONT_PATH || null,
+      // 透明度 (0-100)
+      opacity: parseInt(process.env.USERNAME_WATERMARK_OPACITY) || 70,
+      // 位置 (九宫格: 1-9)
+      position: process.env.USERNAME_WATERMARK_POSITION || '7',
+      // 定位模式
+      positionMode: process.env.USERNAME_WATERMARK_POSITION_MODE || 'grid',
+      // 精确X坐标
+      preciseX: parseInt(process.env.USERNAME_WATERMARK_PRECISE_X) || 20,
+      // 精确Y坐标
+      preciseY: parseInt(process.env.USERNAME_WATERMARK_PRECISE_Y) || 20,
+      // 颜色
+      color: process.env.USERNAME_WATERMARK_COLOR || '#ffffff',
+      // 自定义文本 (支持@username占位符)
+      text: process.env.USERNAME_WATERMARK_TEXT || '@username'
+    }
+  },
+
   // 视频转码配置
   videoTranscoding: {
     // 是否启用视频转码

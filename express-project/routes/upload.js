@@ -87,11 +87,18 @@ router.post('/single', authenticateToken, upload.single('file'), async (req, res
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '没有上传文件' });
     }
 
+    // 准备用户上下文（用于水印）
+    const context = {
+      username: req.user?.username || 'guest',
+      userId: req.user?.id
+    };
+
     // 使用统一上传函数（根据配置选择策略）
     const result = await uploadFile(
       req.file.buffer,
       req.file.originalname,
-      req.file.mimetype
+      req.file.mimetype,
+      context
     );
 
     if (result.success) {
@@ -127,6 +134,12 @@ router.post('/multiple', authenticateToken, upload.array('files', 9), async (req
       });
     }
 
+    // 准备用户上下文（用于水印）
+    const context = {
+      username: req.user?.username || 'guest',
+      userId: req.user?.id
+    };
+
     const uploadResults = [];
     const errors = [];
 
@@ -134,7 +147,8 @@ router.post('/multiple', authenticateToken, upload.array('files', 9), async (req
       const result = await uploadFile(
         file.buffer,
         file.originalname,
-        file.mimetype
+        file.mimetype,
+        context
       );
 
       if (result.success) {
@@ -217,6 +231,12 @@ router.post('/video', authenticateToken, videoUpload.fields([
 
     let coverUrl = null;
 
+    // 准备用户上下文（用于缩略图水印）
+    const context = {
+      username: req.user?.username || 'guest',
+      userId: req.user?.id
+    };
+
     // 优先使用前端生成的缩略图
     if (thumbnailFile) {
       try {
@@ -224,7 +244,8 @@ router.post('/video', authenticateToken, videoUpload.fields([
         const thumbnailUploadResult = await uploadFile(
           thumbnailFile.buffer,
           thumbnailFile.originalname,
-          thumbnailFile.mimetype
+          thumbnailFile.mimetype,
+          context
         );
         
         if (thumbnailUploadResult.success) {
