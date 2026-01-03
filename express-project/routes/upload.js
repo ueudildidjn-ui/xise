@@ -19,6 +19,49 @@ const { validateVideoMedia, deleteInvalidVideo } = require('../utils/videoTransc
 
 const parseWatermarkFlag = (value) => value === true || value === 'true' || value === 1 || value === '1';
 
+/**
+ * 解析水印自定义设置参数
+ * @param {Object} body - 请求体
+ * @returns {Object} 包含解析后的水印设置
+ */
+const parseWatermarkSettings = (body) => {
+  const settings = {};
+  
+  // 解析水印透明度（10-100）
+  if (body.watermarkOpacity !== undefined) {
+    const opacity = parseInt(body.watermarkOpacity, 10);
+    if (!isNaN(opacity) && opacity >= 10 && opacity <= 100) {
+      settings.usernameOpacity = opacity;
+    }
+  }
+  
+  // 解析水印位置（九宫格 1-9）
+  if (body.watermarkPosition !== undefined) {
+    const position = body.watermarkPosition;
+    if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(position)) {
+      settings.usernamePosition = position;
+    }
+  }
+  
+  // 解析水印颜色（十六进制格式）
+  if (body.watermarkColor !== undefined) {
+    const color = body.watermarkColor;
+    if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
+      settings.usernameColor = color;
+    }
+  }
+  
+  // 解析水印字体大小（12-40px）
+  if (body.watermarkFontSize !== undefined) {
+    const fontSize = parseInt(body.watermarkFontSize, 10);
+    if (!isNaN(fontSize) && fontSize >= 12 && fontSize <= 40) {
+      settings.usernameFontSize = fontSize;
+    }
+  }
+  
+  return settings;
+};
+
 // 配置 multer 内存存储（用于云端图床）
 const storage = multer.memoryStorage();
 
@@ -90,47 +133,12 @@ router.post('/single', authenticateToken, upload.single('file'), async (req, res
     }
 
     // 解析用户是否希望添加水印（默认不添加，需显式传递 true）
-    // 用户可通过请求参数 watermark=true 来启用水印
     const watermarkParam = req.body.watermark;
     const applyWatermark = parseWatermarkFlag(watermarkParam);
     console.log(`水印参数解析 - 原始值: ${watermarkParam}, 类型: ${typeof watermarkParam}, 结果: ${applyWatermark}`);
     
-    // 解析用户自定义的水印设置（可选）
-    let customOpacity = null;
-    if (req.body.watermarkOpacity !== undefined) {
-      const opacity = parseInt(req.body.watermarkOpacity, 10);
-      if (!isNaN(opacity) && opacity >= 10 && opacity <= 100) {
-        customOpacity = opacity;
-      }
-    }
-    
-    // 解析水印位置（九宫格 1-9）
-    let customPosition = null;
-    if (req.body.watermarkPosition !== undefined) {
-      const position = req.body.watermarkPosition;
-      if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(position)) {
-        customPosition = position;
-      }
-    }
-    
-    // 解析水印颜色（十六进制格式）
-    let customColor = null;
-    if (req.body.watermarkColor !== undefined) {
-      const color = req.body.watermarkColor;
-      // 验证十六进制颜色格式
-      if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
-        customColor = color;
-      }
-    }
-    
-    // 解析水印字体大小（12-40px）
-    let customFontSize = null;
-    if (req.body.watermarkFontSize !== undefined) {
-      const fontSize = parseInt(req.body.watermarkFontSize, 10);
-      if (!isNaN(fontSize) && fontSize >= 12 && fontSize <= 40) {
-        customFontSize = fontSize;
-      }
-    }
+    // 解析用户自定义的水印设置
+    const watermarkSettings = parseWatermarkSettings(req.body);
 
     // 准备用户上下文（用于水印）
     // 格式: nickname @xise_id 或 nickname @user_id
@@ -140,11 +148,7 @@ router.post('/single', authenticateToken, upload.single('file'), async (req, res
       username: nickname ? `${nickname} @${userId}` : userId,
       userId: req.user?.id,
       applyWatermark: applyWatermark,
-      // 用户自定义水印设置
-      usernameOpacity: customOpacity,
-      usernamePosition: customPosition,
-      usernameColor: customColor,
-      usernameFontSize: customFontSize
+      ...watermarkSettings
     };
 
     // 使用统一上传函数（根据配置选择策略）
@@ -193,38 +197,8 @@ router.post('/multiple', authenticateToken, upload.array('files', 9), async (req
     const applyWatermark = parseWatermarkFlag(watermarkParamMultiple);
     console.log(`[多图上传] 水印参数解析 - 原始值: ${watermarkParamMultiple}, 类型: ${typeof watermarkParamMultiple}, 结果: ${applyWatermark}`);
     
-    // 解析用户自定义的水印设置（可选）
-    let customOpacity = null;
-    if (req.body.watermarkOpacity !== undefined) {
-      const opacity = parseInt(req.body.watermarkOpacity, 10);
-      if (!isNaN(opacity) && opacity >= 10 && opacity <= 100) {
-        customOpacity = opacity;
-      }
-    }
-    
-    let customPosition = null;
-    if (req.body.watermarkPosition !== undefined) {
-      const position = req.body.watermarkPosition;
-      if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(position)) {
-        customPosition = position;
-      }
-    }
-    
-    let customColor = null;
-    if (req.body.watermarkColor !== undefined) {
-      const color = req.body.watermarkColor;
-      if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
-        customColor = color;
-      }
-    }
-    
-    let customFontSize = null;
-    if (req.body.watermarkFontSize !== undefined) {
-      const fontSize = parseInt(req.body.watermarkFontSize, 10);
-      if (!isNaN(fontSize) && fontSize >= 12 && fontSize <= 40) {
-        customFontSize = fontSize;
-      }
-    }
+    // 解析用户自定义的水印设置
+    const watermarkSettings = parseWatermarkSettings(req.body);
 
     // 准备用户上下文（用于水印）
     // 格式: nickname @xise_id 或 nickname @user_id
@@ -234,10 +208,7 @@ router.post('/multiple', authenticateToken, upload.array('files', 9), async (req
       username: nicknameMultiple ? `${nicknameMultiple} @${odIdMultiple}` : odIdMultiple,
       userId: req.user?.id,
       applyWatermark: applyWatermark,
-      usernameOpacity: customOpacity,
-      usernamePosition: customPosition,
-      usernameColor: customColor,
-      usernameFontSize: customFontSize
+      ...watermarkSettings
     };
 
     const uploadResults = [];
@@ -558,34 +529,7 @@ router.post('/chunk/merge', authenticateToken, async (req, res) => {
       
       // 解析水印设置
       const applyWatermark = parseWatermarkFlag(req.body.watermark);
-      let customOpacity = null;
-      if (req.body.watermarkOpacity !== undefined) {
-        const opacity = parseInt(req.body.watermarkOpacity, 10);
-        if (!isNaN(opacity) && opacity >= 10 && opacity <= 100) {
-          customOpacity = opacity;
-        }
-      }
-      let customPosition = null;
-      if (req.body.watermarkPosition !== undefined) {
-        const position = req.body.watermarkPosition;
-        if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(position)) {
-          customPosition = position;
-        }
-      }
-      let customColor = null;
-      if (req.body.watermarkColor !== undefined) {
-        const color = req.body.watermarkColor;
-        if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
-          customColor = color;
-        }
-      }
-      let customFontSize = null;
-      if (req.body.watermarkFontSize !== undefined) {
-        const fontSize = parseInt(req.body.watermarkFontSize, 10);
-        if (!isNaN(fontSize) && fontSize >= 12 && fontSize <= 40) {
-          customFontSize = fontSize;
-        }
-      }
+      const watermarkSettings = parseWatermarkSettings(req.body);
       
       // 准备用户上下文
       const userId = req.user?.xise_id || req.user?.user_id || 'guest';
@@ -594,10 +538,7 @@ router.post('/chunk/merge', authenticateToken, async (req, res) => {
         username: nickname ? `${nickname} @${userId}` : userId,
         userId: req.user?.id,
         applyWatermark: applyWatermark,
-        usernameOpacity: customOpacity,
-        usernamePosition: customPosition,
-        usernameColor: customColor,
-        usernameFontSize: customFontSize
+        ...watermarkSettings
       };
       
       // 确定 mimetype
