@@ -57,8 +57,8 @@ export async function uploadImage(file, options = {}) {
     const filename = options.filename || (compressedFile instanceof File ? compressedFile.name : 'image.png')
     formData.append('file', compressedFile, filename)
     
-    // 添加水印选项（默认启用）
-    const applyWatermark = options.watermark !== false
+    // 添加水印选项（仅当显式开启时才应用）
+    const applyWatermark = options.watermark === true
     formData.append('watermark', applyWatermark.toString())
     
     // 添加水印透明度（如果用户指定）

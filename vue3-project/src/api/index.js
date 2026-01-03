@@ -301,11 +301,18 @@ export const uploadApi = {
   },
 
   // 批量上传图片（后端接口）
-  uploadImages(files) {
+  uploadImages(files, options = {}) {
     const formData = new FormData()
     files.forEach(file => {
       formData.append('files', file)
     })
+    // 传递水印参数（仅在显式开启时发送）
+    if (options.watermark === true) {
+      formData.append('watermark', 'true')
+    }
+    if (options.watermarkOpacity !== undefined) {
+      formData.append('watermarkOpacity', String(options.watermarkOpacity))
+    }
     return request.post('/upload/multiple', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'

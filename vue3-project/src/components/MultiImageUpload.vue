@@ -115,8 +115,8 @@ const error = ref('')
 const isDragOver = ref(false)
 const isUploading = ref(false)
 
-// 水印选项（默认启用）
-const enableWatermark = ref(true)
+// 水印选项（默认关闭，用户勾选后才添加水印）
+const enableWatermark = ref(false)
 // 水印透明度（默认50%）
 const watermarkOpacity = ref(50)
 
