@@ -150,7 +150,8 @@
     <!-- 附件上传模态框 -->
     <AttachmentUploadModal 
       v-model:visible="showAttachmentModal" 
-      v-model="form.attachment"
+      :modelValue="form.attachment"
+      @update:modelValue="form.attachment = $event"
       @confirm="handleAttachmentConfirm"
       @close="closeAttachmentModal"
     />

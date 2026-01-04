@@ -3,6 +3,8 @@ const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES } = require('../constants');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 const { authenticateToken } = require('../middleware/auth');
 const { uploadFile, uploadVideo, uploadImage } = require('../utils/uploadHelper');
 const transcodingQueue = require('../utils/transcodingQueue');
@@ -698,7 +700,6 @@ router.post('/attachment', authenticateToken, attachmentUpload.single('file'), a
     let result;
     if (strategy === 'local') {
       // 保存到本地
-      const fs = require('fs');
       const uploadDir = path.join(process.cwd(), config.upload.attachment?.local?.uploadDir || 'uploads/attachments');
       
       // 确保上传目录存在
@@ -708,7 +709,6 @@ router.post('/attachment', authenticateToken, attachmentUpload.single('file'), a
 
       // 生成唯一文件名
       const ext = path.extname(req.file.originalname);
-      const crypto = require('crypto');
       const hash = crypto.createHash('md5').update(req.file.buffer).digest('hex');
       const uniqueFilename = `${Date.now()}_${hash}${ext}`;
       const filePath = path.join(uploadDir, uniqueFilename);
