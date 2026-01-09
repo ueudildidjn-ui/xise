@@ -664,15 +664,28 @@ const showPaymentOverlay = computed(() => {
 
 // 是否有隐藏的付费图片（用于显示解锁提示）
 const hasHiddenPaidImages = computed(() => {
-  if (!isPaidContent.value || hasPurchased.value) return false
+  console.log('🔧 [DetailCard] hasHiddenPaidImages 计算:')
+  console.log('🔧 [DetailCard] isPaidContent:', isPaidContent.value)
+  console.log('🔧 [DetailCard] hasPurchased:', hasPurchased.value)
+  
+  if (!isPaidContent.value || hasPurchased.value) {
+    console.log('🔧 [DetailCard] hasHiddenPaidImages = false (不是付费内容或已购买)')
+    return false
+  }
   
   const hasIsFreePreviewProp = rawImages.value.some(img => typeof img === 'object' && img.isFreePreview !== undefined)
+  console.log('🔧 [DetailCard] hasIsFreePreviewProp:', hasIsFreePreviewProp)
+  
   if (hasIsFreePreviewProp) {
     // 新格式：检查是否有付费图片
-    return rawImages.value.some(img => typeof img === 'object' && img.isFreePreview === false)
+    const hasPaidImages = rawImages.value.some(img => typeof img === 'object' && img.isFreePreview === false)
+    console.log('🔧 [DetailCard] 新格式 - 有付费图片:', hasPaidImages)
+    return hasPaidImages
   } else {
     // 旧格式：检查是否有超过freePreviewCount的图片
-    return imageList.value.length > freePreviewCount.value
+    const hasMore = imageList.value.length > freePreviewCount.value
+    console.log('🔧 [DetailCard] 旧格式 - imageList.length:', imageList.value.length, 'freePreviewCount:', freePreviewCount.value, '有更多:', hasMore)
+    return hasMore
   }
 })
 
@@ -783,10 +796,16 @@ const displayImageList = computed(() => {
 // 显示图片列表（包含解锁占位图）
 const displayImageListWithUnlock = computed(() => {
   const images = [...displayImageList.value]
+  console.log('🔧 [DetailCard] displayImageListWithUnlock 计算:')
+  console.log('🔧 [DetailCard] displayImageList.length:', displayImageList.value.length)
+  console.log('🔧 [DetailCard] hasHiddenPaidImages:', hasHiddenPaidImages.value)
+  
   // 如果有隐藏的付费图片，在末尾添加一个解锁占位图标记
   if (hasHiddenPaidImages.value && images.length > 0) {
     images.push('__UNLOCK_PLACEHOLDER__')
-    console.log('🔧 [DetailCard] 添加解锁占位图，总共', images.length, '张')
+    console.log('🔧 [DetailCard] ✅ 添加解锁占位图，总共', images.length, '张')
+  } else {
+    console.log('🔧 [DetailCard] ❌ 不添加解锁占位图')
   }
   return images
 })
