@@ -126,6 +126,24 @@ const error = ref('')
 const isDragOver = ref(false)
 const isUploading = ref(false)
 
+// 调试：监听paymentEnabled变化
+watch(() => props.paymentEnabled, (newValue) => {
+  console.log('🔧 [MultiImageUpload] paymentEnabled 变化:', newValue)
+  console.log('🔧 [MultiImageUpload] 当前图片列表:', imageList.value.map(img => ({ 
+    id: img.id, 
+    isFreePreview: img.isFreePreview,
+    preview: img.preview?.substring(0, 50) + '...'
+  })))
+}, { immediate: true })
+
+// 调试：监听imageList变化
+watch(imageList, (newValue) => {
+  console.log('🔧 [MultiImageUpload] imageList 变化:', newValue.length, '张图片')
+  newValue.forEach((img, index) => {
+    console.log(`🔧 [MultiImageUpload] 图片${index + 1}: isFreePreview=${img.isFreePreview}`)
+  })
+}, { deep: true })
+
 // 水印选项（默认关闭，用户勾选后才添加水印）
 const enableWatermark = ref(false)
 // 水印透明度（默认50%）
@@ -193,8 +211,12 @@ const initializeImageList = (images) => {
 
 // 切换图片的免费预览状态
 const toggleFreePreview = (index) => {
+  console.log('🔧 [MultiImageUpload] toggleFreePreview 被调用, index:', index)
+  console.log('🔧 [MultiImageUpload] paymentEnabled:', props.paymentEnabled)
   if (imageList.value[index]) {
+    const oldValue = imageList.value[index].isFreePreview
     imageList.value[index].isFreePreview = !imageList.value[index].isFreePreview
+    console.log(`🔧 [MultiImageUpload] 图片${index + 1} isFreePreview: ${oldValue} -> ${imageList.value[index].isFreePreview}`)
     updateModelValue()
     showMessage(imageList.value[index].isFreePreview ? '已设为免费预览' : '已设为付费内容', 'success')
   }
