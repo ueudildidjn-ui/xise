@@ -340,17 +340,23 @@ const getVideoDuration = (videoUrl) => {
     const video = document.createElement('video')
     video.preload = 'metadata'
     
+    // 只有blob URL才需要revoke
+    const isBlobUrl = videoUrl && videoUrl.startsWith('blob:')
+    
     video.onloadedmetadata = () => {
       if (videoData.value) {
         videoData.value.duration = Math.floor(video.duration)
       }
-      URL.revokeObjectURL(video.src)
+      if (isBlobUrl) {
+        // 不要revoke，因为这个URL还在预览中使用
+      }
+      video.src = ''
       resolve()
     }
     
     video.onerror = () => {
       console.warn('获取视频时长失败')
-      URL.revokeObjectURL(video.src)
+      video.src = ''
       resolve()
     }
     

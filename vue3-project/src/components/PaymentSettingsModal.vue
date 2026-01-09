@@ -104,11 +104,12 @@
                 type="number" 
                 v-model.number="localSettings.previewDuration" 
                 min="0" 
+                max="3600"
                 step="1"
                 class="preview-duration-input"
                 placeholder="输入预览秒数"
               />
-              <span class="preview-duration-hint">秒</span>
+              <span class="preview-duration-hint">秒（最长1小时）</span>
             </div>
           </div>
 
