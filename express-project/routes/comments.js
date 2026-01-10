@@ -183,6 +183,7 @@ router.post('/', authenticateToken, async (req, res) => {
     let isPublic = isAuditEnabled() ? 0 : 1; // 启用审核时仅自己可见，否则公开
     let auditResult = null;
     let auditRecordStatus = 0; // 审核记录状态：0-待审核
+    let shouldDeleteComment = false; // 是否应该删除评论（AI拒绝时）
 
     if (isAuditEnabled()) {
       try {
@@ -214,10 +215,11 @@ router.post('/', authenticateToken, async (req, res) => {
               auditRecordStatus = 1; // 已通过
               detailedReason = `[AI自动审核通过] ${detailedReason}`;
             } else {
-              // AI判断不通过，自动审核拒绝
+              // AI判断不通过，自动审核拒绝，标记需要删除评论
               auditStatus = 2;
               isPublic = 0;
               auditRecordStatus = 2; // 已拒绝
+              shouldDeleteComment = true; // 拒绝的评论需要删除
               detailedReason = `[AI自动审核拒绝] ${detailedReason}`;
             }
           }
@@ -253,6 +255,18 @@ router.post('/', authenticateToken, async (req, res) => {
           ]
         );
       }
+    }
+
+    // 如果AI自动审核拒绝，不创建评论，直接返回被拒绝的提示
+    if (shouldDeleteComment) {
+      return res.status(HTTP_STATUS.OK).json({
+        code: RESPONSE_CODES.SUCCESS,
+        message: '评论已提交，但因内容违规被系统自动拒绝',
+        data: {
+          rejected: true,
+          reason: auditResult?.reason || '内容不符合社区规范'
+        }
+      });
     }
 
     // 插入评论
