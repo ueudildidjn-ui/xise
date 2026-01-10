@@ -86,15 +86,23 @@ const columns = [
   { key: 'nickname', label: '用户昵称', sortable: false },
   {
     key: 'type',
-    label: '认证类型',
+    label: '审核类型',
     type: 'status',
     sortable: false,
     statusMap: {
       1: { text: '官方认证', class: 'type-official' },
-      2: { text: '个人认证', class: 'type-personal' }
+      2: { text: '个人认证', class: 'type-personal' },
+      3: { text: '评论审核', class: 'type-comment' },
+      4: { text: '昵称审核', class: 'type-nickname' }
     }
   },
-  { key: 'content', label: '认证内容', type: 'content', sortable: false },
+  { key: 'content', label: '审核内容', type: 'content', sortable: false },
+  { key: 'risk_level', label: '风险等级', type: 'status', sortable: false, statusMap: {
+    'low': { text: '低风险', class: 'risk-low' },
+    'medium': { text: '中风险', class: 'risk-medium' },
+    'high': { text: '高风险', class: 'risk-high' }
+  }},
+  { key: 'reason', label: '审核原因', type: 'text', sortable: false },
   {
     key: 'status',
     label: '审核状态',
@@ -115,15 +123,17 @@ const formFields = computed(() => [
   { key: 'user_id', label: '用户ID', type: 'number', required: true, placeholder: '请输入用户ID' },
   {
     key: 'type',
-    label: '认证类型',
+    label: '审核类型',
     type: 'select',
     required: true,
     options: [
       { value: 1, label: '官方认证' },
-      { value: 2, label: '个人认证' }
+      { value: 2, label: '个人认证' },
+      { value: 3, label: '评论审核' },
+      { value: 4, label: '昵称审核' }
     ]
   },
-  { key: 'content', label: '认证内容', type: 'textarea', required: true, placeholder: '请输入认证相关内容' },
+  { key: 'content', label: '审核内容', type: 'textarea', required: true, placeholder: '请输入审核相关内容' },
   {
     key: 'status',
     label: '审核状态',
@@ -142,13 +152,15 @@ const searchFields = [
   { key: 'user_display_id', label: '用户汐社号', placeholder: '搜索用户汐社号' },
   {
     key: 'type',
-    label: '认证类型',
+    label: '审核类型',
     type: 'select',
-    placeholder: '选择认证类型',
+    placeholder: '选择审核类型',
     options: [
       { value: '', label: '全部类型' },
       { value: '1', label: '官方认证' },
-      { value: '2', label: '个人认证' }
+      { value: '2', label: '个人认证' },
+      { value: '3', label: '评论审核' },
+      { value: '4', label: '昵称审核' }
     ]
   },
   {
@@ -226,6 +238,36 @@ const handleCustomAction = async ({ action, item }) => {
 }
 
 :deep(.status-rejected) {
+  color: #e74c3c;
+}
+
+/* 类型样式 */
+:deep(.type-official) {
+  color: #3498db;
+}
+
+:deep(.type-personal) {
+  color: #9b59b6;
+}
+
+:deep(.type-comment) {
+  color: #1abc9c;
+}
+
+:deep(.type-nickname) {
+  color: #e67e22;
+}
+
+/* 风险等级样式 */
+:deep(.risk-low) {
+  color: #4caf50;
+}
+
+:deep(.risk-medium) {
+  color: #f39c12;
+}
+
+:deep(.risk-high) {
   color: #e74c3c;
 }
 </style>
