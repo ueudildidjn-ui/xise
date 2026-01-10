@@ -51,6 +51,10 @@ ADD COLUMN `categories` JSON NULL COMMENT '违规类别JSON数组' AFTER `risk_l
 ALTER TABLE `audit` 
 ADD COLUMN `reason` TEXT NULL COMMENT '审核原因' AFTER `categories`;
 
+-- 添加重试次数字段
+ALTER TABLE `audit` 
+ADD COLUMN `retry_count` INT NOT NULL DEFAULT 0 COMMENT 'AI审核重试次数' AFTER `reason`;
+
 -- 添加关联目标ID索引
 ALTER TABLE `audit` 
 ADD INDEX `idx_target_id` (`target_id` ASC);
@@ -84,4 +88,5 @@ MODIFY COLUMN `type` TINYINT NOT NULL COMMENT '审核类型：1-用户认证，2
 -- ALTER TABLE `audit` DROP COLUMN `risk_level`;
 -- ALTER TABLE `audit` DROP COLUMN `categories`;
 -- ALTER TABLE `audit` DROP COLUMN `reason`;
+-- ALTER TABLE `audit` DROP COLUMN `retry_count`;
 -- ALTER TABLE `audit` DROP INDEX `idx_target_id`;

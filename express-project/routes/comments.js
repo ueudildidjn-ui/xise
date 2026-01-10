@@ -207,21 +207,16 @@ router.post('/', authenticateToken, async (req, res) => {
           detailedReason = parts.join(' | ');
           
           // 根据AI审核结果设置状态
+          // AI返回passed:true时自动通过，passed:false时自动拒绝
           if (auditResult.passed !== undefined) {
             if (auditResult.passed === true) {
-              // AI判断通过
-              if (isAiAutoReviewEnabled()) {
-                // AI自动审核开启，自动通过
-                auditStatus = 1;
-                isPublic = 1;
-                auditRecordStatus = 1; // 已通过
-                detailedReason = `[AI自动审核通过] ${detailedReason}`;
-              } else {
-                // AI自动审核关闭，仍需人工确认
-                auditRecordStatus = 0; // 待审核
-              }
+              // AI判断通过，自动通过
+              auditStatus = 1;
+              isPublic = 1;
+              auditRecordStatus = 1; // 已通过
+              detailedReason = `[AI自动审核通过] ${detailedReason}`;
             } else {
-              // AI判断不通过，直接拒绝（无论AI自动审核开关状态）
+              // AI判断不通过，直接拒绝
               auditStatus = 2;
               isPublic = 0;
               auditRecordStatus = 2; // 已拒绝
@@ -233,8 +228,8 @@ router.post('/', authenticateToken, async (req, res) => {
         
         // 记录到audit表
         await pool.execute(
-          `INSERT INTO audit (user_id, type, target_id, content, audit_result, risk_level, categories, reason, status, audit_time) 
-           VALUES (?, 3, NULL, ?, ?, ?, ?, ?, ?, ${auditRecordStatus !== 0 ? 'NOW()' : 'NULL'})`,
+          `INSERT INTO audit (user_id, type, target_id, content, audit_result, risk_level, categories, reason, status, audit_time, retry_count) 
+           VALUES (?, 3, NULL, ?, ?, ?, ?, ?, ?, ${auditRecordStatus !== 0 ? 'NOW()' : 'NULL'}, 0)`,
           [
             userId.toString(),
             sanitizedContent,
@@ -249,8 +244,8 @@ router.post('/', authenticateToken, async (req, res) => {
         console.error('评论审核异常:', auditError);
         // 审核异常时仍然记录到audit表，让管理员手动审核
         await pool.execute(
-          `INSERT INTO audit (user_id, type, target_id, content, audit_result, risk_level, categories, reason, status) 
-           VALUES (?, 3, NULL, ?, ?, ?, ?, ?, 0)`,
+          `INSERT INTO audit (user_id, type, target_id, content, audit_result, risk_level, categories, reason, status, retry_count) 
+           VALUES (?, 3, NULL, ?, ?, ?, ?, ?, 0, 0)`,
           [
             userId.toString(),
             sanitizedContent,

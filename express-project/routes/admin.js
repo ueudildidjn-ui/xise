@@ -5,6 +5,7 @@ const { pool } = require('../config/config')
 const { createCrudHandlers } = require('../middleware/crudFactory')
 const { recordExists } = require('../utils/dbHelper')
 const { adminAuth } = require('../utils/uploadHelper')
+const { auditComment } = require('../utils/contentAudit')
 const {
   validateLikeOrFavoriteData,
   validateFollowData,
@@ -2654,6 +2655,132 @@ router.put('/content-review/settings', adminAuth, async (req, res) => {
 
 // 导出AI自动审核状态供其他模块使用
 const isAiAutoReviewEnabled = () => aiAutoReviewEnabled
+
+// ==================== 重试AI审核 ====================
+
+// 重试AI审核（最多5次）
+router.put('/content-review/:id/retry', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params
+
+    // 获取审核记录
+    const [auditResult] = await pool.query(
+      'SELECT id, user_id, type, target_id, content, status, retry_count FROM audit WHERE id = ? AND type IN (3, 4)',
+      [id]
+    )
+    if (auditResult.length === 0) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
+        code: RESPONSE_CODES.ERROR,
+        message: '审核记录不存在'
+      })
+    }
+
+    const auditRecord = auditResult[0]
+    const retryCount = auditRecord.retry_count || 0
+
+    // 检查重试次数是否已达上限
+    if (retryCount >= 5) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.ERROR,
+        message: '已达到最大重试次数（5次）'
+      })
+    }
+
+    // 只有待审核状态才能重试
+    if (auditRecord.status !== 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.ERROR,
+        message: '只有待审核状态的记录可以重试'
+      })
+    }
+
+    // 调用AI审核
+    const aiResult = await auditComment(auditRecord.content, auditRecord.user_id)
+    
+    // 构建详细的审核原因
+    let detailedReason = ''
+    let newStatus = 0
+    if (aiResult) {
+      const parts = []
+      if (aiResult.reason) parts.push(`AI审核结果: ${aiResult.reason}`)
+      if (aiResult.suggestion) parts.push(`建议: ${aiResult.suggestion}`)
+      if (aiResult.passed !== undefined) parts.push(`是否通过: ${aiResult.passed ? '是' : '否'}`)
+      if (aiResult.score !== undefined) parts.push(`风险分数: ${aiResult.score}`)
+      if (aiResult.matched_keywords && aiResult.matched_keywords.length > 0) {
+        parts.push(`匹配关键词: ${aiResult.matched_keywords.join(', ')}`)
+      }
+      if (aiResult.problem_sentences && aiResult.problem_sentences.length > 0) {
+        parts.push(`问题句子: ${aiResult.problem_sentences.join('; ')}`)
+      }
+      detailedReason = parts.join(' | ')
+
+      // 根据AI结果设置状态
+      if (aiResult.passed === true) {
+        newStatus = 1 // 通过
+        detailedReason = `[AI重试审核通过 第${retryCount + 1}次] ${detailedReason}`
+        
+        // 如果是评论审核，更新评论状态为公开
+        if (auditRecord.type === 3 && auditRecord.target_id) {
+          await pool.query('UPDATE comments SET audit_status = 1, is_public = 1 WHERE id = ?', [auditRecord.target_id])
+        }
+      } else if (aiResult.passed === false) {
+        newStatus = 2 // 拒绝
+        detailedReason = `[AI重试审核拒绝 第${retryCount + 1}次] ${detailedReason}`
+        
+        // 如果是评论审核，删除评论
+        if (auditRecord.type === 3 && auditRecord.target_id) {
+          await pool.query('DELETE FROM comments WHERE id = ?', [auditRecord.target_id])
+          // 清空target_id
+          await pool.query('UPDATE audit SET target_id = NULL WHERE id = ?', [id])
+        }
+      } else {
+        // AI结果不明确，保持待审核
+        detailedReason = `[AI重试审核 第${retryCount + 1}次] ${detailedReason}`
+      }
+    } else {
+      detailedReason = `[AI重试审核失败 第${retryCount + 1}次] AI服务无响应`
+    }
+
+    // 更新审核记录
+    await pool.query(
+      `UPDATE audit SET 
+        audit_result = ?, 
+        risk_level = ?, 
+        categories = ?, 
+        reason = ?, 
+        status = ?, 
+        retry_count = ?,
+        audit_time = ${newStatus !== 0 ? 'NOW()' : 'audit_time'}
+      WHERE id = ?`,
+      [
+        JSON.stringify(aiResult),
+        aiResult?.risk_level || 'unknown',
+        JSON.stringify(aiResult?.categories || []),
+        detailedReason,
+        newStatus,
+        retryCount + 1,
+        id
+      ]
+    )
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: newStatus === 1 ? 'AI重试审核通过' : (newStatus === 2 ? 'AI重试审核拒绝' : 'AI重试完成，仍待审核'),
+      data: {
+        status: newStatus,
+        retry_count: retryCount + 1,
+        ai_result: aiResult
+      }
+    })
+  } catch (error) {
+    console.error('重试AI审核失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      code: RESPONSE_CODES.ERROR,
+      message: '重试AI审核失败',
+      error: error.message
+    })
+  }
+})
 
 module.exports = router
 module.exports.isAiAutoReviewEnabled = isAiAutoReviewEnabled

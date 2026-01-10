@@ -214,6 +214,7 @@ const searchFields = [
 
 // 自定义操作按钮
 const customActions = [
+  { key: 'retry', icon: 'refresh', title: '重试AI审核', class: 'btn-primary' },
   { key: 'approve', icon: 'passed', title: '审核通过', class: 'btn-success' },
   { key: 'reject', icon: 'unpassed', title: '拒绝', class: 'btn-danger' },
   { key: 'delete', icon: 'delete', title: '删除', class: 'btn-outline' }
@@ -222,7 +223,25 @@ const customActions = [
 // 处理自定义操作
 const handleCustomAction = async ({ action, item }) => {
   try {
-    if (action === 'approve') {
+    if (action === 'retry') {
+      // 重试AI审核（仅待审核状态可用）
+      if (item.status !== 0) {
+        showMessage('只有待审核状态的记录可以重试', 'error')
+        return
+      }
+      const response = await fetch(`${apiConfig.baseURL}/admin/content-review/${item.id}/retry`, {
+        method: 'PUT',
+        headers: getAuthHeaders()
+      })
+      const result = await response.json()
+      if (result.code === 200) {
+        showMessage(`${result.message}（第${result.data.retry_count}次重试）`)
+        // 刷新页面数据
+        location.reload()
+      } else {
+        showMessage('重试失败: ' + result.message, 'error')
+      }
+    } else if (action === 'approve') {
       // 审核通过
       const response = await fetch(`${apiConfig.baseURL}/admin/content-review/${item.id}/approve`, {
         method: 'PUT',
