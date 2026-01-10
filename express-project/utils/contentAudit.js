@@ -4,8 +4,14 @@
  * @description 使用Dify API对评论、用户名称等内容进行审核
  */
 
-const config = require('../config/config');
-const auditConfig = config.contentAudit || { enabled: false, apiUrl: '', apiKey: '' };
+// 安全加载配置，防止配置模块加载失败导致应用崩溃
+let auditConfig = { enabled: false, apiUrl: '', apiKey: '' };
+try {
+  const config = require('../config/config');
+  auditConfig = config.contentAudit || { enabled: false, apiUrl: '', apiKey: '' };
+} catch (error) {
+  console.error('加载内容审核配置失败:', error.message);
+}
 
 /**
  * 默认的审核通过结果

@@ -218,7 +218,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const commentId = result.insertId;
     
     // 如果审核不通过，更新audit表中的target_id为评论ID
-    if (isAuditEnabled() && !auditResult?.passed) {
+    if (isAuditEnabled() && auditResult && auditResult.passed === false) {
       await pool.execute(
         'UPDATE audit SET target_id = ? WHERE user_id = ? AND type = 3 AND target_id IS NULL ORDER BY id DESC LIMIT 1',
         [commentId.toString(), userId.toString()]
