@@ -2613,4 +2613,47 @@ router.put('/content-review/:id/reject', adminAuth, async (req, res) => {
   }
 })
 
+// ==================== AI自动审核设置 ====================
+
+// 内存中存储AI自动审核设置（可以改为存储在数据库中）
+let aiAutoReviewEnabled = false
+
+// 获取AI自动审核设置
+router.get('/content-review/settings', adminAuth, async (req, res) => {
+  res.json({
+    code: RESPONSE_CODES.SUCCESS,
+    message: '获取设置成功',
+    data: {
+      ai_auto_review: aiAutoReviewEnabled
+    }
+  })
+})
+
+// 更新AI自动审核设置
+router.put('/content-review/settings', adminAuth, async (req, res) => {
+  try {
+    const { ai_auto_review } = req.body
+    aiAutoReviewEnabled = !!ai_auto_review
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: aiAutoReviewEnabled ? 'AI自动审核已开启' : 'AI自动审核已关闭',
+      data: {
+        ai_auto_review: aiAutoReviewEnabled
+      }
+    })
+  } catch (error) {
+    console.error('更新设置失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      code: RESPONSE_CODES.ERROR,
+      message: '更新设置失败',
+      error: error.message
+    })
+  }
+})
+
+// 导出AI自动审核状态供其他模块使用
+const isAiAutoReviewEnabled = () => aiAutoReviewEnabled
+
 module.exports = router
+module.exports.isAiAutoReviewEnabled = isAiAutoReviewEnabled

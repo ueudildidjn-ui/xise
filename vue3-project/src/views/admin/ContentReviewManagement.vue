@@ -1,18 +1,31 @@
 <template>
-  <CrudTable title="审核管理" entity-name="内容审核" api-endpoint="/admin/content-review" :columns="columns" :form-fields="formFields"
-    :search-fields="searchFields" :custom-actions="customActions" @custom-action="handleCustomAction" />
+  <div class="content-review-page">
+    <!-- AI自动审核开关 -->
+    <div class="ai-auto-review-toggle">
+      <label class="toggle-label">
+        <span class="toggle-text">AI自动审核</span>
+        <div class="toggle-switch" :class="{ active: aiAutoReview }" @click="toggleAiAutoReview">
+          <div class="toggle-slider"></div>
+        </div>
+        <span class="toggle-hint">{{ aiAutoReview ? '开启：由AI自动决定通过或拒绝' : '关闭：需人工审核' }}</span>
+      </label>
+    </div>
+    
+    <CrudTable title="审核管理" entity-name="内容审核" api-endpoint="/admin/content-review" :columns="columns" :form-fields="formFields"
+      :search-fields="searchFields" :custom-actions="customActions" @custom-action="handleCustomAction" />
 
-  <!-- 消息提示 -->
-  <MessageToast v-if="showToast" :message="toastMessage" :type="toastType" @close="handleToastClose" />
+    <!-- 消息提示 -->
+    <MessageToast v-if="showToast" :message="toastMessage" :type="toastType" @close="handleToastClose" />
 
-  <!-- 删除确认弹窗 -->
-  <ConfirmDialog v-model:visible="showDeleteModal" title="确认删除"
-    :message="`确定要删除此审核记录吗？此操作不可撤销。`" type="warning"
-    confirm-text="删除" cancel-text="取消" @confirm="handleConfirmDelete" @cancel="showDeleteModal = false" />
+    <!-- 删除确认弹窗 -->
+    <ConfirmDialog v-model:visible="showDeleteModal" title="确认删除"
+      :message="`确定要删除此审核记录吗？此操作不可撤销。`" type="warning"
+      confirm-text="删除" cancel-text="取消" @confirm="handleConfirmDelete" @cancel="showDeleteModal = false" />
+  </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import CrudTable from './components/CrudTable.vue'
 import MessageToast from '@/components/MessageToast.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -20,6 +33,34 @@ import { apiConfig } from '@/config/api'
 
 // 声明组件事件
 const emit = defineEmits(['closeFilter'])
+
+// AI自动审核开关状态
+const aiAutoReview = ref(false)
+
+// 初始化时从localStorage读取开关状态
+onMounted(() => {
+  const saved = localStorage.getItem('ai_auto_review')
+  aiAutoReview.value = saved === 'true'
+})
+
+// 切换AI自动审核开关
+const toggleAiAutoReview = async () => {
+  const newValue = !aiAutoReview.value
+  aiAutoReview.value = newValue
+  localStorage.setItem('ai_auto_review', newValue.toString())
+  
+  // 调用后端API更新设置
+  try {
+    await fetch(`${apiConfig.baseURL}/admin/content-review/settings`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ai_auto_review: newValue })
+    })
+    showMessage(newValue ? 'AI自动审核已开启' : 'AI自动审核已关闭')
+  } catch (error) {
+    console.error('更新设置失败:', error)
+  }
+}
 
 // 消息提示状态
 const showToast = ref(false)
@@ -255,5 +296,65 @@ const handleCustomAction = async ({ action, item }) => {
 
 :deep(.risk-high) {
   color: #e74c3c;
+}
+
+/* AI自动审核开关样式 */
+.content-review-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ai-auto-review-toggle {
+  padding: 16px 24px;
+  background: var(--bg-color-primary);
+  border-bottom: 1px solid var(--border-color-primary);
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-text {
+  font-weight: 600;
+  color: var(--text-color-primary);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 24px;
+  background: var(--border-color-primary);
+  border-radius: 12px;
+  transition: background 0.3s ease;
+}
+
+.toggle-switch.active {
+  background: var(--primary-color);
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch.active .toggle-slider {
+  transform: translateX(24px);
+}
+
+.toggle-hint {
+  font-size: 13px;
+  color: var(--text-color-secondary);
 }
 </style>

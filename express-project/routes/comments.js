@@ -8,6 +8,20 @@ const { extractMentionedUsers, hasMentions } = require('../utils/mentionParser')
 const { sanitizeContent } = require('../utils/contentSecurity');
 const { auditComment, isAuditEnabled } = require('../utils/contentAudit');
 
+// 获取AI自动审核状态（延迟加载以避免循环依赖）
+let getAiAutoReviewStatus = null;
+const isAiAutoReviewEnabled = () => {
+  if (!getAiAutoReviewStatus) {
+    try {
+      const adminRoutes = require('./admin');
+      getAiAutoReviewStatus = adminRoutes.isAiAutoReviewEnabled || (() => false);
+    } catch (e) {
+      return false;
+    }
+  }
+  return getAiAutoReviewStatus();
+};
+
 // 递归删除评论及其子评论，返回删除的评论总数
 async function deleteCommentRecursive(commentId) {
   let deletedCount = 0;
@@ -168,6 +182,7 @@ router.post('/', authenticateToken, async (req, res) => {
     let auditStatus = isAuditEnabled() ? 0 : 1; // 启用审核时默认待审核，否则直接通过
     let isPublic = isAuditEnabled() ? 0 : 1; // 启用审核时仅自己可见，否则公开
     let auditResult = null;
+    let auditRecordStatus = 0; // 审核记录状态：0-待审核
 
     if (isAuditEnabled()) {
       try {
@@ -189,19 +204,37 @@ router.post('/', authenticateToken, async (req, res) => {
             parts.push(`问题句子: ${auditResult.problem_sentences.join('; ')}`);
           }
           detailedReason = parts.join(' | ');
+          
+          // 检查是否启用AI自动审核
+          if (isAiAutoReviewEnabled() && auditResult.passed !== undefined) {
+            if (auditResult.passed === true) {
+              // AI判断通过，自动审核通过
+              auditStatus = 1;
+              isPublic = 1;
+              auditRecordStatus = 1; // 已通过
+              detailedReason = `[AI自动审核通过] ${detailedReason}`;
+            } else {
+              // AI判断不通过，自动审核拒绝
+              auditStatus = 2;
+              isPublic = 0;
+              auditRecordStatus = 2; // 已拒绝
+              detailedReason = `[AI自动审核拒绝] ${detailedReason}`;
+            }
+          }
         }
         
-        // 无论API返回什么结果，都记录到audit表，由管理员人工审核决定
+        // 记录到audit表
         await pool.execute(
-          `INSERT INTO audit (user_id, type, target_id, content, audit_result, risk_level, categories, reason, status) 
-           VALUES (?, 3, NULL, ?, ?, ?, ?, ?, 0)`,
+          `INSERT INTO audit (user_id, type, target_id, content, audit_result, risk_level, categories, reason, status, audit_time) 
+           VALUES (?, 3, NULL, ?, ?, ?, ?, ?, ?, ${auditRecordStatus !== 0 ? 'NOW()' : 'NULL'})`,
           [
             userId.toString(),
             sanitizedContent,
             JSON.stringify(auditResult),
             auditResult?.risk_level || 'low',
             JSON.stringify(auditResult?.categories || []),
-            detailedReason || 'AI审核完成，等待人工确认'
+            detailedReason || 'AI审核完成，等待人工确认',
+            auditRecordStatus.toString()
           ]
         );
       } catch (auditError) {
