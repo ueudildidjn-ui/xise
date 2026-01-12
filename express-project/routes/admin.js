@@ -397,7 +397,7 @@ router.get('/comments', adminAuth, async (req, res) => {
     if (user_display_id) where.user = { user_id: { contains: user_display_id } }
     if (post_id) where.post_id = BigInt(post_id)
     if (content) where.content = { contains: content }
-    if (audit_status !== undefined) where.audit_status = parseInt(audit_status)
+    if (audit_status !== undefined && audit_status !== '') where.audit_status = parseInt(audit_status)
 
     const [total, comments] = await Promise.all([
       prisma.comment.count({ where }),
@@ -792,8 +792,8 @@ router.put('/likes/:id', adminAuth, async (req, res) => {
     }
 
     const updateData = {}
-    if (target_type !== undefined) updateData.target_type = parseInt(target_type)
-    if (target_id !== undefined) updateData.target_id = BigInt(target_id)
+    if (target_type !== undefined && target_type !== '') updateData.target_type = parseInt(target_type)
+    if (target_id !== undefined && target_id !== '') updateData.target_id = BigInt(target_id)
 
     await prisma.like.update({ where: { id: likeId }, data: updateData })
     res.json({ code: RESPONSE_CODES.SUCCESS, message: '更新成功' })
@@ -1161,8 +1161,8 @@ router.get('/notifications', adminAuth, async (req, res) => {
 
     const where = {}
     if (user_display_id) where.user = { user_id: { contains: user_display_id } }
-    if (type !== undefined) where.type = parseInt(type)
-    if (is_read !== undefined) where.is_read = is_read === 'true' || is_read === '1'
+    if (type !== undefined && type !== '') where.type = parseInt(type)
+    if (is_read !== undefined && is_read !== '') where.is_read = is_read === 'true' || is_read === '1'
 
     const [total, notifications] = await Promise.all([
       prisma.notification.count({ where }),
@@ -1265,13 +1265,13 @@ router.put('/notifications/:id', adminAuth, async (req, res) => {
     }
 
     const updateData = {}
-    if (user_id !== undefined) updateData.user_id = BigInt(user_id)
-    if (sender_id !== undefined) updateData.sender_id = BigInt(sender_id)
-    if (type !== undefined) updateData.type = parseInt(type)
-    if (title !== undefined) updateData.title = title
+    if (user_id !== undefined && user_id !== '') updateData.user_id = BigInt(user_id)
+    if (sender_id !== undefined && sender_id !== '') updateData.sender_id = BigInt(sender_id)
+    if (type !== undefined && type !== '') updateData.type = parseInt(type)
+    if (title !== undefined && title !== '') updateData.title = title
     if (target_id !== undefined) updateData.target_id = target_id ? BigInt(target_id) : null
     if (comment_id !== undefined) updateData.comment_id = comment_id ? BigInt(comment_id) : null
-    if (is_read !== undefined) updateData.is_read = Boolean(is_read)
+    if (is_read !== undefined && is_read !== '') updateData.is_read = Boolean(is_read)
 
     await prisma.notification.update({ where: { id: notificationId }, data: updateData })
     res.json({ code: RESPONSE_CODES.SUCCESS, message: '更新成功' })
@@ -1471,7 +1471,7 @@ router.get('/users', adminAuth, async (req, res) => {
     if (user_id) where.user_id = { contains: user_id }
     if (nickname) where.nickname = { contains: nickname }
     if (location) where.location = { contains: location }
-    if (is_active !== undefined) where.is_active = parseInt(is_active) === 1
+    if (is_active !== undefined && is_active !== '') where.is_active = parseInt(is_active) === 1
 
     const [total, users] = await Promise.all([
       prisma.user.count({ where }),
@@ -1967,10 +1967,10 @@ router.put('/audit/:id', adminAuth, async (req, res) => {
     }
 
     const updateData = {}
-    if (type !== undefined) updateData.type = parseInt(type)
-    if (content !== undefined) updateData.content = content
-    if (status !== undefined) updateData.status = parseInt(status)
-    if (audit_time !== undefined) updateData.audit_time = new Date(audit_time)
+    if (type !== undefined && type !== '') updateData.type = parseInt(type)
+    if (content !== undefined && content !== '') updateData.content = content
+    if (status !== undefined && status !== '') updateData.status = parseInt(status)
+    if (audit_time !== undefined && audit_time !== '') updateData.audit_time = new Date(audit_time)
 
     await prisma.audit.update({ where: { id: auditId }, data: updateData })
     res.json({ code: RESPONSE_CODES.SUCCESS, message: '更新成功' })
@@ -2350,10 +2350,10 @@ router.put('/content-review/:id', adminAuth, async (req, res) => {
     }
 
     const updateData = {}
-    if (type !== undefined) updateData.type = parseInt(type)
-    if (content !== undefined) updateData.content = content
-    if (status !== undefined) updateData.status = parseInt(status)
-    if (audit_time !== undefined) updateData.audit_time = new Date(audit_time)
+    if (type !== undefined && type !== '') updateData.type = parseInt(type)
+    if (content !== undefined && content !== '') updateData.content = content
+    if (status !== undefined && status !== '') updateData.status = parseInt(status)
+    if (audit_time !== undefined && audit_time !== '') updateData.audit_time = new Date(audit_time)
 
     await prisma.audit.update({ where: { id: auditId }, data: updateData })
     res.json({ code: RESPONSE_CODES.SUCCESS, message: '更新成功' })
