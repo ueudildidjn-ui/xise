@@ -72,9 +72,23 @@ router.get('/', optionalAuth, async (req, res) => {
     const skip = (page - 1) * limit;
     const category = req.query.category ? parseInt(req.query.category) : null;
     const isDraft = req.query.is_draft !== undefined ? parseInt(req.query.is_draft) === 1 : false;
-    const userId = req.query.user_id ? BigInt(req.query.user_id) : null;
     const type = req.query.type ? parseInt(req.query.type) : null;
     const currentUserId = req.user ? BigInt(req.user.id) : null;
+
+    // Handle user_id which can be a numeric ID or a string username
+    let userId = null;
+    if (req.query.user_id) {
+      if (/^\d+$/.test(req.query.user_id)) {
+        // user_id is a numeric string, convert directly to BigInt
+        userId = BigInt(req.query.user_id);
+      } else {
+        // user_id is a string username, look up the numeric ID
+        const user = await prisma.user.findUnique({ where: { user_id: req.query.user_id }, select: { id: true } });
+        if (user) {
+          userId = user.id;
+        }
+      }
+    }
 
     const where = {};
     where.is_draft = isDraft;
@@ -174,6 +188,99 @@ router.get('/', optionalAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('获取笔记列表失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 获取笔记评论列表 (兼容路由 /posts/:id/comments)
+// 注意：此路由必须在 /:id 之前定义，否则会被 /:id 捕获
+router.get('/:id/comments', optionalAuth, async (req, res) => {
+  try {
+    const postId = BigInt(req.params.id);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
+
+    // 验证笔记是否存在
+    const postExists = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } });
+    if (!postExists) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '笔记不存在' });
+    }
+
+    // 构建查询条件 - 只获取顶级评论
+    const where = { post_id: postId, parent_id: null };
+    if (currentUserId) {
+      where.OR = [{ is_public: true }, { user_id: currentUserId }];
+    } else {
+      where.is_public = true;
+    }
+
+    const comments = await prisma.comment.findMany({
+      where,
+      include: {
+        user: { select: { id: true, nickname: true, avatar: true, user_id: true, location: true, verified: true } }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
+    });
+
+    // 格式化评论并添加额外信息
+    const formattedComments = await Promise.all(comments.map(async (comment) => {
+      const formatted = {
+        id: Number(comment.id),
+        post_id: Number(comment.post_id),
+        user_id: Number(comment.user_id),
+        parent_id: comment.parent_id ? Number(comment.parent_id) : null,
+        content: comment.content,
+        like_count: comment.like_count,
+        audit_status: comment.audit_status,
+        is_public: comment.is_public,
+        audit_result: comment.audit_result,
+        created_at: comment.created_at,
+        nickname: comment.user?.nickname,
+        user_avatar: comment.user?.avatar,
+        user_auto_id: comment.user ? Number(comment.user.id) : null,
+        user_display_id: comment.user?.user_id,
+        user_location: comment.user?.location,
+        verified: comment.user?.verified
+      };
+
+      // 检查点赞状态
+      if (currentUserId) {
+        const likeExists = await prisma.like.findUnique({
+          where: { uk_user_target: { user_id: currentUserId, target_type: 2, target_id: comment.id } }
+        });
+        formatted.liked = !!likeExists;
+      } else {
+        formatted.liked = false;
+      }
+
+      // 获取子评论数量
+      const childCountWhere = { parent_id: comment.id };
+      if (currentUserId) {
+        childCountWhere.OR = [{ is_public: true }, { user_id: currentUserId }];
+      } else {
+        childCountWhere.is_public = true;
+      }
+      formatted.reply_count = await prisma.comment.count({ where: childCountWhere });
+
+      return formatted;
+    }));
+
+    const total = await prisma.comment.count({ where });
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success',
+      data: {
+        comments: formattedComments,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+      }
+    });
+  } catch (error) {
+    console.error('获取笔记评论列表失败:', error);
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
   }
 });
@@ -399,7 +506,7 @@ router.post('/', authenticateToken, async (req, res) => {
               type: NotificationHelper.TYPES.MENTION,
               targetId: Number(postId)
             });
-            await NotificationHelper.insertNotificationPrisma(prisma, notificationData);
+            await NotificationHelper.insertNotification(prisma, notificationData);
           }
         } catch (error) {
           console.error(`处理@用户通知失败:`, error);
@@ -587,7 +694,7 @@ router.post('/:id/collect', authenticateToken, async (req, res) => {
       await prisma.post.update({ where: { id: postId }, data: { collect_count: { increment: 1 } } });
       if (post.user_id !== userId) {
         const notificationData = NotificationHelper.createCollectPostNotification(Number(post.user_id), Number(userId), Number(postId));
-        await NotificationHelper.insertNotificationPrisma(prisma, notificationData);
+        await NotificationHelper.insertNotification(prisma, notificationData);
       }
       res.json({ code: RESPONSE_CODES.SUCCESS, message: '收藏成功', data: { collected: true } });
     }
