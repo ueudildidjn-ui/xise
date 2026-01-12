@@ -49,9 +49,24 @@ const PAID_CONTENT = {
   CONTENT_PREVIEW_LENGTH: 100 // 付费内容预览的文本长度限制
 };
 
+// 审核类型常量
+const AUDIT_TYPES = {
+  PERSONAL: 1,  // 个人认证
+  BUSINESS: 2   // 企业认证
+};
+
+// 审核状态常量
+const AUDIT_STATUS = {
+  PENDING: 0,   // 待审核
+  APPROVED: 1,  // 已通过
+  REJECTED: 2   // 已拒绝
+};
+
 module.exports = {
   HTTP_STATUS,
   RESPONSE_CODES,
   ERROR_MESSAGES,
-  PAID_CONTENT
+  PAID_CONTENT,
+  AUDIT_TYPES,
+  AUDIT_STATUS
 };
