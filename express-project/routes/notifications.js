@@ -1,67 +1,145 @@
 const express = require('express');
 const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
-const { pool } = require('../config/config');
+const { prisma } = require('../config/config');
 const { authenticateToken } = require('../middleware/auth');
+
+// Helper function to format notification with related data
+async function formatNotification(notification) {
+  const result = {
+    ...notification,
+    id: Number(notification.id),
+    user_id: Number(notification.user_id),
+    sender_id: Number(notification.sender_id),
+    target_id: notification.target_id ? Number(notification.target_id) : null,
+    comment_id: notification.comment_id ? Number(notification.comment_id) : null
+  };
+  return result;
+}
 
 // 获取评论通知
 router.get('/comments', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = BigInt(req.user.id);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const query = `
-      SELECT n.*, 
-             u.id as from_user_auto_id,
-             u.nickname as from_nickname, 
-             u.avatar as from_avatar, 
-             u.user_id as from_user_id,
-             u.verified as from_verified,
-             p.title as post_title,
-             p.type as post_type,
-             p.user_id as post_author_id,
-             CASE 
-               WHEN p.type = 2 THEN (SELECT pv.cover_url FROM post_videos pv WHERE pv.post_id = p.id ORDER BY pv.id LIMIT 1)
-               ELSE (SELECT pi.image_url FROM post_images pi WHERE pi.post_id = p.id ORDER BY pi.id LIMIT 1)
-             END as post_image,
-             c.content as comment_content,
-             c.created_at as comment_created_at,
-             c.like_count as comment_like_count,
-             CASE 
-               WHEN n.comment_id IS NOT NULL THEN 
-                 CASE WHEN EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND target_type = 2 AND target_id = n.comment_id) 
-                      THEN 1 ELSE 0 END
-               ELSE 0
-             END as comment_is_liked,
-             CASE 
-               WHEN n.type = 5 AND c.parent_id IS NOT NULL THEN 
-                 (SELECT content FROM comments WHERE id = c.parent_id)
-               ELSE NULL 
-             END as parent_comment_content
-      FROM notifications n
-      LEFT JOIN users u ON n.sender_id = u.id
-      LEFT JOIN posts p ON n.target_id = p.id
-      LEFT JOIN comments c ON n.comment_id = c.id
-      WHERE n.user_id = ? AND n.type IN (4, 5, 7, 8)
-      ORDER BY n.created_at DESC LIMIT ? OFFSET ?
-    `;
+    const notifications = await prisma.notification.findMany({
+      where: {
+        user_id: userId,
+        type: { in: [4, 5, 7, 8] }
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            nickname: true,
+            avatar: true,
+            user_id: true,
+            verified: true
+          }
+        },
+        comment: {
+          select: {
+            id: true,
+            content: true,
+            created_at: true,
+            like_count: true,
+            parent_id: true
+          }
+        }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
+    });
 
-    const [rows] = await pool.execute(query, [userId.toString(), userId.toString(), limit.toString(), offset.toString()]);
+    // Get post info for each notification
+    const formattedNotifications = await Promise.all(notifications.map(async (n) => {
+      const formatted = {
+        id: Number(n.id),
+        user_id: Number(n.user_id),
+        sender_id: Number(n.sender_id),
+        type: n.type,
+        title: n.title,
+        target_id: n.target_id ? Number(n.target_id) : null,
+        comment_id: n.comment_id ? Number(n.comment_id) : null,
+        is_read: n.is_read,
+        created_at: n.created_at,
+        from_user_auto_id: n.sender ? Number(n.sender.id) : null,
+        from_nickname: n.sender?.nickname,
+        from_avatar: n.sender?.avatar,
+        from_user_id: n.sender?.user_id,
+        from_verified: n.sender?.verified
+      };
 
-    // 获取总数
-    const [countResult] = await pool.execute(
-      'SELECT COUNT(*) as total FROM notifications WHERE user_id = ? AND type IN (4, 5, 7, 8)',
-      [userId.toString()]
-    );
-    const total = countResult[0].total;
+      // Get post info if target_id exists
+      if (n.target_id) {
+        const post = await prisma.post.findUnique({
+          where: { id: n.target_id },
+          select: {
+            title: true,
+            type: true,
+            user_id: true,
+            images: { select: { image_url: true }, take: 1 },
+            videos: { select: { cover_url: true }, take: 1 }
+          }
+        });
+        if (post) {
+          formatted.post_title = post.title;
+          formatted.post_type = post.type;
+          formatted.post_author_id = Number(post.user_id);
+          formatted.post_image = post.type === 2 
+            ? (post.videos[0]?.cover_url || null)
+            : (post.images[0]?.image_url || null);
+        }
+      }
+
+      // Get comment info
+      if (n.comment) {
+        formatted.comment_content = n.comment.content;
+        formatted.comment_created_at = n.comment.created_at;
+        formatted.comment_like_count = n.comment.like_count;
+
+        // Check if user liked the comment
+        const likeExists = await prisma.like.findUnique({
+          where: {
+            uk_user_target: {
+              user_id: userId,
+              target_type: 2,
+              target_id: n.comment_id
+            }
+          }
+        });
+        formatted.comment_is_liked = likeExists ? 1 : 0;
+
+        // Get parent comment content if this is a reply
+        if (n.type === 5 && n.comment.parent_id) {
+          const parentComment = await prisma.comment.findUnique({
+            where: { id: n.comment.parent_id },
+            select: { content: true }
+          });
+          formatted.parent_comment_content = parentComment?.content || null;
+        }
+      }
+
+      return formatted;
+    }));
+
+    // Get total count
+    const total = await prisma.notification.count({
+      where: {
+        user_id: userId,
+        type: { in: [4, 5, 7, 8] }
+      }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
       data: {
-        notifications: rows,
+        notifications: formattedNotifications,
         pagination: {
           page,
           limit,
@@ -79,55 +157,90 @@ router.get('/comments', authenticateToken, async (req, res) => {
 // 获取点赞通知
 router.get('/likes', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = BigInt(req.user.id);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const query = `
-      SELECT n.*, 
-             u.id as from_user_auto_id,
-             u.nickname as from_nickname, 
-             u.avatar as from_avatar, 
-             u.user_id as from_user_id,
-             u.verified as from_verified,
-             p.title as post_title,
-             p.type as post_type,
-             p.user_id as post_author_id,
-             CASE 
-               WHEN p.type = 2 THEN (SELECT pv.cover_url FROM post_videos pv WHERE pv.post_id = p.id ORDER BY pv.id LIMIT 1)
-               ELSE (SELECT pi.image_url FROM post_images pi WHERE pi.post_id = p.id ORDER BY pi.id LIMIT 1)
-             END as post_image,
-             CASE 
-               WHEN n.type = 1 THEN 1
-               WHEN n.type = 2 THEN 2
-               ELSE 1
-             END as target_type,
-             CASE 
-               WHEN n.type = 2 THEN n.comment_id
-               ELSE NULL
-             END as comment_id
-      FROM notifications n
-      LEFT JOIN users u ON n.sender_id = u.id
-      LEFT JOIN posts p ON n.target_id = p.id
-      WHERE n.user_id = ? AND n.type IN (1, 2)
-      ORDER BY n.created_at DESC LIMIT ? OFFSET ?
-    `;
+    const notifications = await prisma.notification.findMany({
+      where: {
+        user_id: userId,
+        type: { in: [1, 2] }
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            nickname: true,
+            avatar: true,
+            user_id: true,
+            verified: true
+          }
+        }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
+    });
 
-    const [rows] = await pool.execute(query, [userId.toString(), limit.toString(), offset.toString()]);
+    // Get post info for each notification
+    const formattedNotifications = await Promise.all(notifications.map(async (n) => {
+      const formatted = {
+        id: Number(n.id),
+        user_id: Number(n.user_id),
+        sender_id: Number(n.sender_id),
+        type: n.type,
+        title: n.title,
+        target_id: n.target_id ? Number(n.target_id) : null,
+        comment_id: n.comment_id ? Number(n.comment_id) : null,
+        is_read: n.is_read,
+        created_at: n.created_at,
+        from_user_auto_id: n.sender ? Number(n.sender.id) : null,
+        from_nickname: n.sender?.nickname,
+        from_avatar: n.sender?.avatar,
+        from_user_id: n.sender?.user_id,
+        from_verified: n.sender?.verified,
+        target_type: n.type === 1 ? 1 : (n.type === 2 ? 2 : 1)
+      };
 
-    // 获取总数
-    const [countResult] = await pool.execute(
-      'SELECT COUNT(*) as total FROM notifications WHERE user_id = ? AND type IN (1, 2)',
-      [userId.toString()]
-    );
-    const total = countResult[0].total;
+      // Get post info if target_id exists
+      if (n.target_id) {
+        const post = await prisma.post.findUnique({
+          where: { id: n.target_id },
+          select: {
+            title: true,
+            type: true,
+            user_id: true,
+            images: { select: { image_url: true }, take: 1 },
+            videos: { select: { cover_url: true }, take: 1 }
+          }
+        });
+        if (post) {
+          formatted.post_title = post.title;
+          formatted.post_type = post.type;
+          formatted.post_author_id = Number(post.user_id);
+          formatted.post_image = post.type === 2 
+            ? (post.videos[0]?.cover_url || null)
+            : (post.images[0]?.image_url || null);
+        }
+      }
+
+      return formatted;
+    }));
+
+    // Get total count
+    const total = await prisma.notification.count({
+      where: {
+        user_id: userId,
+        type: { in: [1, 2] }
+      }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
       data: {
-        notifications: rows,
+        notifications: formattedNotifications,
         pagination: {
           page,
           limit,
@@ -145,38 +258,62 @@ router.get('/likes', authenticateToken, async (req, res) => {
 // 获取关注通知
 router.get('/follows', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = BigInt(req.user.id);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const query = `
-      SELECT n.*, 
-             u.id as from_user_auto_id,
-             u.nickname as from_nickname, 
-             u.avatar as from_avatar, 
-             u.user_id as from_user_id,
-             u.verified as from_verified
-      FROM notifications n
-      LEFT JOIN users u ON n.sender_id = u.id
-      WHERE n.user_id = ? AND n.type = 6
-      ORDER BY n.created_at DESC LIMIT ? OFFSET ?
-    `;
+    const notifications = await prisma.notification.findMany({
+      where: {
+        user_id: userId,
+        type: 6
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            nickname: true,
+            avatar: true,
+            user_id: true,
+            verified: true
+          }
+        }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
+    });
 
-    const [rows] = await pool.execute(query, [userId.toString(), limit.toString(), offset.toString()]);
+    const formattedNotifications = notifications.map(n => ({
+      id: Number(n.id),
+      user_id: Number(n.user_id),
+      sender_id: Number(n.sender_id),
+      type: n.type,
+      title: n.title,
+      target_id: n.target_id ? Number(n.target_id) : null,
+      comment_id: n.comment_id ? Number(n.comment_id) : null,
+      is_read: n.is_read,
+      created_at: n.created_at,
+      from_user_auto_id: n.sender ? Number(n.sender.id) : null,
+      from_nickname: n.sender?.nickname,
+      from_avatar: n.sender?.avatar,
+      from_user_id: n.sender?.user_id,
+      from_verified: n.sender?.verified
+    }));
 
-    // 获取总数
-    const [countResult] = await pool.execute(
-      'SELECT COUNT(*) as total FROM notifications WHERE user_id = ? AND type = ?',
-      [userId.toString(), '6']
-    );
-    const total = countResult[0].total;
+    // Get total count
+    const total = await prisma.notification.count({
+      where: {
+        user_id: userId,
+        type: 6
+      }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
       data: {
-        notifications: rows,
+        notifications: formattedNotifications,
         pagination: {
           page,
           limit,
@@ -194,45 +331,87 @@ router.get('/follows', authenticateToken, async (req, res) => {
 // 获取收藏通知
 router.get('/collections', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = BigInt(req.user.id);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const query = `
-      SELECT n.*, 
-             u.id as from_user_auto_id,
-             u.nickname as from_nickname, 
-             u.avatar as from_avatar, 
-             u.user_id as from_user_id,
-             u.verified as from_verified,
-             p.title as post_title,
-             p.type as post_type,
-             CASE 
-               WHEN p.type = 2 THEN (SELECT pv.cover_url FROM post_videos pv WHERE pv.post_id = p.id ORDER BY pv.id LIMIT 1)
-               ELSE (SELECT pi.image_url FROM post_images pi WHERE pi.post_id = p.id ORDER BY pi.id LIMIT 1)
-             END as post_image
-      FROM notifications n
-      LEFT JOIN users u ON n.sender_id = u.id
-      LEFT JOIN posts p ON n.target_id = p.id
-      WHERE n.user_id = ? AND n.type = 3
-      ORDER BY n.created_at DESC LIMIT ? OFFSET ?
-    `;
+    const notifications = await prisma.notification.findMany({
+      where: {
+        user_id: userId,
+        type: 3
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            nickname: true,
+            avatar: true,
+            user_id: true,
+            verified: true
+          }
+        }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
+    });
 
-    const [rows] = await pool.execute(query, [userId.toString(), limit.toString(), offset.toString()]);
+    // Get post info for each notification
+    const formattedNotifications = await Promise.all(notifications.map(async (n) => {
+      const formatted = {
+        id: Number(n.id),
+        user_id: Number(n.user_id),
+        sender_id: Number(n.sender_id),
+        type: n.type,
+        title: n.title,
+        target_id: n.target_id ? Number(n.target_id) : null,
+        comment_id: n.comment_id ? Number(n.comment_id) : null,
+        is_read: n.is_read,
+        created_at: n.created_at,
+        from_user_auto_id: n.sender ? Number(n.sender.id) : null,
+        from_nickname: n.sender?.nickname,
+        from_avatar: n.sender?.avatar,
+        from_user_id: n.sender?.user_id,
+        from_verified: n.sender?.verified
+      };
 
-    // 获取总数
-    const [countResult] = await pool.execute(
-      'SELECT COUNT(*) as total FROM notifications WHERE user_id = ? AND type = ?',
-      [userId.toString(), '3']
-    );
-    const total = countResult[0].total;
+      // Get post info if target_id exists
+      if (n.target_id) {
+        const post = await prisma.post.findUnique({
+          where: { id: n.target_id },
+          select: {
+            title: true,
+            type: true,
+            images: { select: { image_url: true }, take: 1 },
+            videos: { select: { cover_url: true }, take: 1 }
+          }
+        });
+        if (post) {
+          formatted.post_title = post.title;
+          formatted.post_type = post.type;
+          formatted.post_image = post.type === 2 
+            ? (post.videos[0]?.cover_url || null)
+            : (post.images[0]?.image_url || null);
+        }
+      }
+
+      return formatted;
+    }));
+
+    // Get total count
+    const total = await prisma.notification.count({
+      where: {
+        user_id: userId,
+        type: 3
+      }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
       data: {
-        notifications: rows,
+        notifications: formattedNotifications,
         pagination: {
           page,
           limit,
@@ -250,58 +429,65 @@ router.get('/collections', authenticateToken, async (req, res) => {
 // 获取通知列表（通用接口）
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const type = req.query.type; // comment, like, follow
+    const userId = BigInt(req.user.id);
+    const type = req.query.type ? parseInt(req.query.type) : undefined;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    let query = `
-      SELECT n.*, 
-             u.id as from_user_auto_id,
-             u.nickname as from_nickname, 
-             u.avatar as from_avatar, 
-             u.user_id as from_user_id,
-             u.verified
-      FROM notifications n
-      LEFT JOIN users u ON n.sender_id = u.id
-      WHERE n.user_id = ?
-    `;
-    let queryParams = [userId.toString()];
-
-    if (type) {
-      query += ` AND n.type = ?`;
-      queryParams.push(type.toString());
+    const where = { user_id: userId };
+    if (type !== undefined) {
+      where.type = type;
     }
 
-    query += ` ORDER BY n.created_at DESC LIMIT ? OFFSET ?`;
-    queryParams.push(limit.toString(), offset.toString());
+    const notifications = await prisma.notification.findMany({
+      where,
+      include: {
+        sender: {
+          select: {
+            id: true,
+            nickname: true,
+            avatar: true,
+            user_id: true,
+            verified: true
+          }
+        }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
+    });
 
-    const [rows] = await pool.execute(query, queryParams);
+    const formattedNotifications = notifications.map(n => ({
+      id: Number(n.id),
+      user_id: Number(n.user_id),
+      sender_id: Number(n.sender_id),
+      type: n.type,
+      title: n.title,
+      target_id: n.target_id ? Number(n.target_id) : null,
+      comment_id: n.comment_id ? Number(n.comment_id) : null,
+      is_read: n.is_read,
+      created_at: n.created_at,
+      from_user_auto_id: n.sender ? Number(n.sender.id) : null,
+      from_nickname: n.sender?.nickname,
+      from_avatar: n.sender?.avatar,
+      from_user_id: n.sender?.user_id,
+      verified: n.sender?.verified
+    }));
 
-    // 获取总数
-    let countQuery = 'SELECT COUNT(*) as total FROM notifications WHERE user_id = ?';
-    let countParams = [userId.toString()];
-    if (type) {
-      countQuery += ' AND type = ?';
-      countParams.push(type.toString());
-    }
+    // Get total count
+    const total = await prisma.notification.count({ where });
 
-    const [countResult] = await pool.execute(countQuery, countParams);
-    const total = countResult[0].total;
-
-    // 获取未读数量
-    const [unreadResult] = await pool.execute(
-      'SELECT COUNT(*) as unread FROM notifications WHERE user_id = ? AND is_read = 0',
-      [userId.toString()]
-    );
-    const unread = unreadResult[0].unread;
+    // Get unread count
+    const unread = await prisma.notification.count({
+      where: { user_id: userId, is_read: false }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
       data: {
-        notifications: rows,
+        notifications: formattedNotifications,
         pagination: {
           page,
           limit,
@@ -320,24 +506,23 @@ router.get('/', authenticateToken, async (req, res) => {
 // 标记通知为已读
 router.put('/:id/read', authenticateToken, async (req, res) => {
   try {
-    const notificationId = req.params.id;
-    const userId = req.user.id;
+    const notificationId = BigInt(req.params.id);
+    const userId = BigInt(req.user.id);
 
     // 验证通知是否属于当前用户
-    const [notificationRows] = await pool.execute(
-      'SELECT id FROM notifications WHERE id = ? AND user_id = ?',
-      [notificationId.toString(), userId.toString()]
-    );
+    const notification = await prisma.notification.findFirst({
+      where: { id: notificationId, user_id: userId }
+    });
 
-    if (notificationRows.length === 0) {
+    if (!notification) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '通知不存在' });
     }
 
     // 标记为已读
-    await pool.execute(
-      'UPDATE notifications SET is_read = 1 WHERE id = ?',
-      [notificationId.toString()]
-    );
+    await prisma.notification.update({
+      where: { id: notificationId },
+      data: { is_read: true }
+    });
 
     res.json({ code: RESPONSE_CODES.SUCCESS, message: '标记成功' });
   } catch (error) {
@@ -349,14 +534,13 @@ router.put('/:id/read', authenticateToken, async (req, res) => {
 // 标记所有通知为已读
 router.put('/read-all', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = BigInt(req.user.id);
 
     // 标记所有通知为已读
-    await pool.execute(
-      'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0',
-      [userId.toString()]
-    );
-
+    await prisma.notification.updateMany({
+      where: { user_id: userId, is_read: false },
+      data: { is_read: true }
+    });
 
     res.json({ code: RESPONSE_CODES.SUCCESS, message: '全部标记成功' });
   } catch (error) {
@@ -368,16 +552,15 @@ router.put('/read-all', authenticateToken, async (req, res) => {
 // 删除通知
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const notificationId = req.params.id;
-    const userId = req.user.id;
+    const notificationId = BigInt(req.params.id);
+    const userId = BigInt(req.user.id);
 
-    // 验证通知是否属于当前用户
-    const [result] = await pool.execute(
-      'DELETE FROM notifications WHERE id = ? AND user_id = ?',
-      [notificationId.toString(), userId.toString()]
-    );
+    // 验证通知是否属于当前用户并删除
+    const result = await prisma.notification.deleteMany({
+      where: { id: notificationId, user_id: userId }
+    });
 
-    if (result.affectedRows === 0) {
+    if (result.count === 0) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '通知不存在' });
     }
 
@@ -391,31 +574,36 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // 获取按类型分组的未读通知数量
 router.get('/unread-count-by-type', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = BigInt(req.user.id);
 
-    // 按类型统计未读通知数量
-    const [result] = await pool.execute(
-      `SELECT 
-        SUM(CASE WHEN type IN (4, 5, 7, 8) THEN 1 ELSE 0 END) as comments,
-        SUM(CASE WHEN type IN (1, 2) THEN 1 ELSE 0 END) as likes,
-        SUM(CASE WHEN type = 3 THEN 1 ELSE 0 END) as collections,
-        SUM(CASE WHEN type = 6 THEN 1 ELSE 0 END) as follows,
-        COUNT(*) as total
-      FROM notifications 
-      WHERE user_id = ? AND is_read = 0`,
-      [userId.toString()]
-    );
+    // Get counts for each notification type group
+    const [comments, likes, collections, follows, total] = await Promise.all([
+      prisma.notification.count({
+        where: { user_id: userId, is_read: false, type: { in: [4, 5, 7, 8] } }
+      }),
+      prisma.notification.count({
+        where: { user_id: userId, is_read: false, type: { in: [1, 2] } }
+      }),
+      prisma.notification.count({
+        where: { user_id: userId, is_read: false, type: 3 }
+      }),
+      prisma.notification.count({
+        where: { user_id: userId, is_read: false, type: 6 }
+      }),
+      prisma.notification.count({
+        where: { user_id: userId, is_read: false }
+      })
+    ]);
 
-    const counts = result[0];
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
       data: {
-        comments: parseInt(counts.comments || 0),
-        likes: parseInt(counts.likes || 0),
-        collections: parseInt(counts.collections || 0),
-        follows: parseInt(counts.follows || 0),
-        total: parseInt(counts.total || 0)
+        comments,
+        likes,
+        collections,
+        follows,
+        total
       }
     });
   } catch (error) {
@@ -427,17 +615,16 @@ router.get('/unread-count-by-type', authenticateToken, async (req, res) => {
 // 获取未读通知数量
 router.get('/unread-count', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = BigInt(req.user.id);
 
-    const [result] = await pool.execute(
-      'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0',
-      [userId.toString()]
-    );
+    const count = await prisma.notification.count({
+      where: { user_id: userId, is_read: false }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
-      data: { count: result[0].count }
+      data: { count }
     });
   } catch (error) {
     console.error('获取未读通知数量失败:', error);
