@@ -337,6 +337,14 @@ router.get('/:id', optionalAuth, async (req, res) => {
       tags: post.tags.map(pt => ({ id: pt.tag.id, name: pt.tag.name }))
     };
 
+    // Add flattened video fields for video posts (type === 2)
+    if (post.type === 2 && post.videos.length > 0) {
+      const firstVideo = post.videos[0];
+      formatted.video_url = firstVideo.video_url;
+      formatted.cover_url = firstVideo.cover_url;
+      formatted.preview_video_url = firstVideo.preview_video_url;
+    }
+
     // Check payment and purchase status
     const isAuthor = currentUserId && post.user_id === currentUserId;
     let hasPurchased = false;
@@ -434,7 +442,7 @@ router.post('/', authenticateToken, async (req, res) => {
         data: {
           post_id: postId,
           video_url: video.url,
-          cover_url: video.cover_url || null
+          cover_url: video.coverUrl || video.cover_url || null
         }
       });
     }
@@ -465,22 +473,28 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Handle payment settings
     if (paymentSettings && paymentSettings.enabled) {
+      // Support both camelCase (from frontend) and snake_case (legacy)
+      const paymentType = paymentSettings.paymentType || paymentSettings.payment_type || 'single';
+      const freePreviewCount = paymentSettings.freePreviewCount || paymentSettings.free_preview_count || 0;
+      const previewDuration = paymentSettings.previewDuration || paymentSettings.preview_duration || 0;
+      const hideAll = paymentSettings.hideAll || paymentSettings.hide_all || false;
+
       await prisma.postPaymentSetting.create({
         data: {
           post_id: postId,
           enabled: true,
-          payment_type: paymentSettings.payment_type || 'single',
+          payment_type: paymentType,
           price: paymentSettings.price || 0,
-          free_preview_count: paymentSettings.free_preview_count || 0,
-          preview_duration: paymentSettings.preview_duration || 0,
-          hide_all: paymentSettings.hide_all || false
+          free_preview_count: freePreviewCount,
+          preview_duration: previewDuration,
+          hide_all: hideAll
         }
       });
 
       // Generate preview video if needed
-      if (type === 2 && video && video.url && paymentSettings.preview_duration > 0) {
+      if (parseInt(type) === 2 && video && video.url && previewDuration > 0) {
         try {
-          const previewUrl = await generatePreviewVideo(video.url, paymentSettings.preview_duration, Number(postId));
+          const previewUrl = await generatePreviewVideo(video.url, previewDuration, Number(postId));
           if (previewUrl) {
             await prisma.postVideo.updateMany({
               where: { post_id: postId },
@@ -568,7 +582,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       await prisma.postVideo.deleteMany({ where: { post_id: postId } });
       if (video && video.url) {
         await prisma.postVideo.create({
-          data: { post_id: postId, video_url: video.url, cover_url: video.cover_url || null }
+          data: { post_id: postId, video_url: video.url, cover_url: video.coverUrl || video.cover_url || null }
         });
       }
     }
@@ -604,15 +618,21 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (paymentSettings !== undefined) {
       await prisma.postPaymentSetting.deleteMany({ where: { post_id: postId } });
       if (paymentSettings && paymentSettings.enabled) {
+        // Support both camelCase (from frontend) and snake_case (legacy)
+        const paymentType = paymentSettings.paymentType || paymentSettings.payment_type || 'single';
+        const freePreviewCount = paymentSettings.freePreviewCount || paymentSettings.free_preview_count || 0;
+        const previewDuration = paymentSettings.previewDuration || paymentSettings.preview_duration || 0;
+        const hideAll = paymentSettings.hideAll || paymentSettings.hide_all || false;
+
         await prisma.postPaymentSetting.create({
           data: {
             post_id: postId,
             enabled: true,
-            payment_type: paymentSettings.payment_type || 'single',
+            payment_type: paymentType,
             price: paymentSettings.price || 0,
-            free_preview_count: paymentSettings.free_preview_count || 0,
-            preview_duration: paymentSettings.preview_duration || 0,
-            hide_all: paymentSettings.hide_all || false
+            free_preview_count: freePreviewCount,
+            preview_duration: previewDuration,
+            hide_all: hideAll
           }
         });
       }
