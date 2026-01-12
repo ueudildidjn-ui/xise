@@ -7,6 +7,20 @@
 
 const { PrismaClient } = require('@prisma/client');
 
+// Add BigInt serialization support for JSON.stringify
+// This is needed because Prisma returns BigInt for BIGINT columns
+// and JavaScript's JSON.stringify doesn't know how to serialize BigInt
+if (typeof BigInt.prototype.toJSON !== 'function') {
+  BigInt.prototype.toJSON = function() {
+    // Convert to number if it's safe, otherwise to string
+    const num = Number(this);
+    if (Number.isSafeInteger(num)) {
+      return num;
+    }
+    return this.toString();
+  };
+}
+
 // Create a singleton instance of PrismaClient
 const prisma = global.prisma || new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
