@@ -1,94 +1,102 @@
 const express = require('express');
 const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
-const { pool } = require('../config/config');
+const { prisma } = require('../config/config');
 const { optionalAuth, authenticateToken } = require('../middleware/auth');
 const NotificationHelper = require('../utils/notificationHelper');
 const { protectPostListItem } = require('../utils/paidContentHelper');
 
-// 搜索用户（必须放在 /:id 之前）
+// 搜索用户
 router.get('/search', optionalAuth, async (req, res) => {
   try {
     const keyword = req.query.keyword;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
-    const currentUserId = req.user ? req.user.id : null;
+    const skip = (page - 1) * limit;
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
 
     if (!keyword) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '请输入搜索关键词' });
     }
 
-    // 搜索用户：支持昵称和汐社号搜索
-    const [rows] = await pool.execute(
-      `SELECT u.id, u.user_id, u.nickname, u.avatar, u.bio, u.location, u.follow_count, u.fans_count, u.like_count, u.created_at, u.verified,
-              (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND is_draft = 0) as post_count
-       FROM users u
-       WHERE u.nickname LIKE ? OR u.user_id LIKE ? 
-       ORDER BY u.created_at DESC 
-       LIMIT ? OFFSET ?`,
-      [`%${keyword}%`, `%${keyword}%`, limit.toString(), offset.toString()]
-    );
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { nickname: { contains: keyword } },
+          { user_id: { contains: keyword } }
+        ]
+      },
+      select: {
+        id: true, user_id: true, nickname: true, avatar: true, bio: true,
+        location: true, follow_count: true, fans_count: true, like_count: true,
+        created_at: true, verified: true,
+        _count: { select: { posts: { where: { is_draft: false } } } }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
+    });
 
-    // 检查关注状态（仅在用户已登录时）
+    let formattedUsers = users.map(u => ({
+      id: Number(u.id),
+      user_id: u.user_id,
+      nickname: u.nickname,
+      avatar: u.avatar,
+      bio: u.bio,
+      location: u.location,
+      follow_count: u.follow_count,
+      fans_count: u.fans_count,
+      like_count: u.like_count,
+      created_at: u.created_at,
+      verified: u.verified,
+      post_count: u._count.posts,
+      isFollowing: false,
+      isMutual: false,
+      buttonType: 'follow'
+    }));
+
     if (currentUserId) {
-      for (let user of rows) {
-        // 检查是否已关注
-        const [followResult] = await pool.execute(
-          'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-          [currentUserId.toString(), user.id.toString()]
-        );
-        user.isFollowing = followResult.length > 0;
+      const userIds = users.map(u => u.id);
+      const following = await prisma.follow.findMany({
+        where: { follower_id: currentUserId, following_id: { in: userIds } },
+        select: { following_id: true }
+      });
+      const followingSet = new Set(following.map(f => f.following_id));
+      const followers = await prisma.follow.findMany({
+        where: { follower_id: { in: userIds }, following_id: currentUserId },
+        select: { follower_id: true }
+      });
+      const followersSet = new Set(followers.map(f => f.follower_id));
 
-        // 检查是否互相关注
-        const [mutualResult] = await pool.execute(
-          'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-          [user.id.toString(), currentUserId.toString()]
-        );
-        user.isMutual = user.isFollowing && mutualResult.length > 0;
-
-        // 设置按钮类型
-        if (user.id === currentUserId) {
+      formattedUsers = formattedUsers.map(user => {
+        const userId = BigInt(user.id);
+        const isFollowing = followingSet.has(userId);
+        const isFollower = followersSet.has(userId);
+        user.isFollowing = isFollowing;
+        if (userId === currentUserId) {
           user.buttonType = 'self';
-        } else if (user.isMutual) {
+        } else if (isFollowing && isFollower) {
           user.buttonType = 'mutual';
-        } else if (user.isFollowing) {
+          user.isMutual = true;
+        } else if (isFollowing) {
           user.buttonType = 'unfollow';
-        } else if (mutualResult.length > 0) {
+        } else if (isFollower) {
           user.buttonType = 'back';
-        } else {
-          user.buttonType = 'follow';
         }
-      }
-    } else {
-      // 未登录用户，所有用户都显示为未关注状态
-      for (let user of rows) {
-        user.isFollowing = false;
-        user.isMutual = false;
-        user.buttonType = 'follow';
-      }
+        return user;
+      });
     }
 
-    // 获取总数
-    const [countResult] = await pool.execute(
-      `SELECT COUNT(*) as total FROM users 
-       WHERE nickname LIKE ? OR user_id LIKE ?`,
-      [`%${keyword}%`, `%${keyword}%`]
-    );
-    const total = countResult[0].total;
+    const total = await prisma.user.count({
+      where: { OR: [{ nickname: { contains: keyword } }, { user_id: { contains: keyword } }] }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
       data: {
-        users: rows,
-        keyword,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
+        users: formattedUsers,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) }
       }
     });
   } catch (error) {
@@ -97,773 +105,137 @@ router.get('/search', optionalAuth, async (req, res) => {
   }
 });
 
-// 获取用户信息
-// 获取用户个性标签
-router.get('/:id/personality-tags', async (req, res) => {
+// 获取用户主页信息
+router.get('/:id', optionalAuth, async (req, res) => {
   try {
-    const userIdParam = req.params.id;
-    // 始终通过汐社号查找用户信息
-    const query = 'SELECT gender, zodiac_sign, mbti, education, major, interests FROM users WHERE user_id = ?';
-    const params = [userIdParam];
+    const userId = req.params.id;
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
 
-    const [rows] = await pool.execute(query, params);
+    let user;
+    if (isNaN(userId)) {
+      user = await prisma.user.findUnique({ where: { user_id: userId } });
+    } else {
+      user = await prisma.user.findUnique({ where: { id: BigInt(userId) } });
+    }
 
-    if (rows.length === 0) {
-      console.log('❌ 用户不存在:', userIdParam);
-      return res.status(HTTP_STATUS.NOT_FOUND).json({
-        code: RESPONSE_CODES.NOT_FOUND,
-        message: '用户不存在',
-        data: null
+    if (!user) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
+    }
+
+    const postCount = await prisma.post.count({ where: { user_id: user.id, is_draft: false } });
+
+    const userData = {
+      id: Number(user.id),
+      user_id: user.user_id,
+      nickname: user.nickname,
+      avatar: user.avatar,
+      bio: user.bio,
+      location: user.location,
+      follow_count: user.follow_count,
+      fans_count: user.fans_count,
+      like_count: user.like_count,
+      created_at: user.created_at,
+      verified: user.verified,
+      gender: user.gender,
+      zodiac_sign: user.zodiac_sign,
+      mbti: user.mbti,
+      education: user.education,
+      major: user.major,
+      interests: user.interests,
+      post_count: postCount
+    };
+
+    if (currentUserId) {
+      const isFollowing = await prisma.follow.findUnique({
+        where: { uk_follow: { follower_id: currentUserId, following_id: user.id } }
       });
-    }
-
-    const personalityTags = rows[0];
-
-    // 处理interests字段（如果是JSON字符串则解析）
-    if (personalityTags.interests) {
-      try {
-        personalityTags.interests = typeof personalityTags.interests === 'string'
-          ? JSON.parse(personalityTags.interests)
-          : personalityTags.interests;
-      } catch (e) {
-        personalityTags.interests = null;
-      }
-    }
-
-    res.json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: 'success',
-      data: personalityTags
-    });
-  } catch (error) {
-    console.error('获取用户个性标签失败:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
-  }
-});
-
-router.get('/:id', async (req, res) => {
-  try {
-    const userIdParam = req.params.id;
-    // 只通过汐社号(user_id)进行查找
-    const [rows] = await pool.execute(
-      'SELECT * FROM users WHERE user_id = ?',
-      [userIdParam]
-    );
-
-    if (rows.length === 0) {
-      console.log('❌ 用户不存在:', userIdParam);
-      return res.status(HTTP_STATUS.NOT_FOUND).json({
-        code: RESPONSE_CODES.NOT_FOUND,
-        message: '用户不存在',
-        data: null
+      const isFollower = await prisma.follow.findUnique({
+        where: { uk_follow: { follower_id: user.id, following_id: currentUserId } }
       });
+      userData.isFollowing = !!isFollowing;
+      userData.isMutual = !!isFollowing && !!isFollower;
+      userData.isSelf = currentUserId === user.id;
+    } else {
+      userData.isFollowing = false;
+      userData.isMutual = false;
+      userData.isSelf = false;
     }
 
-    const user = rows[0];
-
-    // 处理interests字段（如果是JSON字符串则解析）
-    if (user.interests) {
-      try {
-        user.interests = typeof user.interests === 'string'
-          ? JSON.parse(user.interests)
-          : user.interests;
-      } catch (e) {
-        user.interests = null;
-      }
-    }
-
-    res.json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: 'success',
-      data: user
-    });
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: 'success', data: userData });
   } catch (error) {
     console.error('获取用户信息失败:', error);
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
   }
 });
 
-// 获取用户列表
-router.get('/', async (req, res) => {
+// 更新用户资料
+router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
+    const userId = BigInt(req.user.id);
+    const { nickname, avatar, bio, gender, zodiac_sign, mbti, education, major, interests } = req.body;
+    const updateData = {};
+    if (nickname !== undefined) updateData.nickname = nickname;
+    if (avatar !== undefined) updateData.avatar = avatar;
+    if (bio !== undefined) updateData.bio = bio;
+    if (gender !== undefined) updateData.gender = gender;
+    if (zodiac_sign !== undefined) updateData.zodiac_sign = zodiac_sign;
+    if (mbti !== undefined) updateData.mbti = mbti;
+    if (education !== undefined) updateData.education = education;
+    if (major !== undefined) updateData.major = major;
+    if (interests !== undefined) updateData.interests = interests;
 
-    const [rows] = await pool.execute(
-      `SELECT id, user_id, nickname, avatar, bio, location, follow_count, fans_count, like_count, created_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      [limit.toString(), offset.toString()]
-    );
+    await prisma.user.update({ where: { id: userId }, data: updateData });
 
-    const [countResult] = await pool.execute('SELECT COUNT(*) as total FROM users');
-    const total = countResult[0].total;
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, user_id: true, nickname: true, avatar: true, bio: true, location: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, verified: true }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
-      message: 'success',
-      data: {
-        users: rows,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
+      message: '更新成功',
+      data: { ...updatedUser, id: Number(updatedUser.id) }
     });
   } catch (error) {
-    console.error('获取用户列表失败:', error);
+    console.error('更新用户资料失败:', error);
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
   }
 });
 
-// 获取用户发布的笔记列表
-router.get('/:id/posts', optionalAuth, async (req, res) => {
-  try {
-    const userIdParam = req.params.id;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
-    const currentUserId = req.user ? req.user.id : null;
-    const category = req.query.category;
-    const keyword = req.query.keyword;
-    const sort = req.query.sort || 'created_at';
-
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const userId = userRows[0].id;
-
-    // 构建查询条件
-    let whereConditions = ['p.user_id = ?', 'p.is_draft = 0'];
-    let queryParams = [userId.toString()];
-
-    if (category) {
-      whereConditions.push('p.category_id = ?');
-      queryParams.push(category);
-    }
-
-    if (keyword) {
-      whereConditions.push('(p.title LIKE ? OR p.content LIKE ?)');
-      queryParams.push(`%${keyword}%`, `%${keyword}%`);
-    }
-
-    // 构建排序条件
-    const allowedSortFields = ['created_at', 'view_count', 'like_count', 'collect_count', 'comment_count'];
-    const sortField = allowedSortFields.includes(sort) ? sort : 'created_at';
-    const orderBy = `ORDER BY p.${sortField} DESC`;
-
-    // 查询用户发布的笔记
-    const query = `
-      SELECT p.*, u.nickname, u.avatar as user_avatar, u.user_id as author_account, u.location, c.name as category
-      FROM posts p
-      LEFT JOIN users u ON p.user_id = u.id
-      LEFT JOIN categories c ON p.category_id = c.id
-      WHERE ${whereConditions.join(' AND ')}
-      ${orderBy}
-      LIMIT ? OFFSET ?
-    `;
-    queryParams.push(limit.toString(), offset.toString());
-
-    const [rows] = await pool.execute(query, queryParams);
-    
-    // 使用批量查询优化性能，避免N+1查询问题
-    if (rows.length > 0) {
-      const postIds = rows.map(post => post.id);
-      const placeholders = postIds.map(() => '?').join(',');
-      
-      // 批量获取所有图片
-      const [allImages] = await pool.execute(
-        `SELECT post_id, image_url FROM post_images WHERE post_id IN (${placeholders})`,
-        postIds
-      );
-      const imagesByPostId = {};
-      allImages.forEach(img => {
-        if (!imagesByPostId[img.post_id]) {
-          imagesByPostId[img.post_id] = [];
-        }
-        imagesByPostId[img.post_id].push(img.image_url);
-      });
-      
-      // 批量获取所有视频
-      const [allVideos] = await pool.execute(
-        `SELECT post_id, video_url, cover_url FROM post_videos WHERE post_id IN (${placeholders})`,
-        postIds
-      );
-      const videosByPostId = {};
-      allVideos.forEach(video => {
-        videosByPostId[video.post_id] = video;
-      });
-      
-      // 批量获取所有标签
-      const [allTags] = await pool.execute(
-        `SELECT pt.post_id, t.id, t.name FROM tags t 
-         JOIN post_tags pt ON t.id = pt.tag_id 
-         WHERE pt.post_id IN (${placeholders})`,
-        postIds
-      );
-      const tagsByPostId = {};
-      allTags.forEach(tag => {
-        if (!tagsByPostId[tag.post_id]) {
-          tagsByPostId[tag.post_id] = [];
-        }
-        tagsByPostId[tag.post_id].push({ id: tag.id, name: tag.name });
-      });
-      
-      // 批量获取付费设置
-      const [allPaymentSettings] = await pool.execute(
-        `SELECT post_id, enabled, free_preview_count, preview_duration FROM post_payment_settings WHERE post_id IN (${placeholders})`,
-        postIds
-      );
-      const paymentSettingsByPostId = {};
-      allPaymentSettings.forEach(ps => {
-        paymentSettingsByPostId[ps.post_id] = ps;
-      });
-      
-      // 批量获取用户已购买的内容（仅在用户登录时）
-      let purchasedPostIds = new Set();
-      if (currentUserId) {
-        const [allPurchases] = await pool.execute(
-          `SELECT post_id FROM user_purchased_content WHERE user_id = ? AND post_id IN (${placeholders})`,
-          [currentUserId, ...postIds]
-        );
-        purchasedPostIds = new Set(allPurchases.map(p => p.post_id));
-      }
-      
-      // 批量获取点赞和收藏状态（仅在用户登录时）
-      let likedPostIds = new Set();
-      let collectedPostIds = new Set();
-      if (currentUserId) {
-        const [allLikes] = await pool.execute(
-          `SELECT target_id FROM likes WHERE user_id = ? AND target_type = 1 AND target_id IN (${placeholders})`,
-          [currentUserId, ...postIds]
-        );
-        likedPostIds = new Set(allLikes.map(like => like.target_id));
-        
-        const [allCollections] = await pool.execute(
-          `SELECT post_id FROM collections WHERE user_id = ? AND post_id IN (${placeholders})`,
-          [currentUserId, ...postIds]
-        );
-        collectedPostIds = new Set(allCollections.map(c => c.post_id));
-      }
-      
-      // 为每个笔记填充数据
-      for (let post of rows) {
-        // 使用助手函数处理付费内容保护
-        const paymentSetting = paymentSettingsByPostId[post.id];
-        const isAuthor = currentUserId && post.user_id === currentUserId;
-        const hasPurchased = purchasedPostIds.has(post.id);
-        
-        protectPostListItem(post, {
-          paymentSetting,
-          isAuthor,
-          hasPurchased,
-          videoData: videosByPostId[post.id],
-          imageUrls: imagesByPostId[post.id]
-        });
-        
-        post.tags = tagsByPostId[post.id] || [];
-        post.liked = likedPostIds.has(post.id);
-        post.collected = collectedPostIds.has(post.id);
-      }
-    }
-
-    // 计算总数时也要考虑筛选条件
-    const countQuery = `SELECT COUNT(*) as total FROM posts p WHERE ${whereConditions.join(' AND ')}`;
-    const countParams = queryParams.slice(0, -2); // 移除limit和offset参数
-    const [countResult] = await pool.execute(countQuery, countParams);
-    const total = countResult[0].total;
-
-
-    res.json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: 'success',
-      data: {
-        posts: rows,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
-    });
-  } catch (error) {
-    console.error('获取用户笔记列表失败:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
-  }
-});
-
-// 获取用户收藏列表
-router.get('/:id/collections', optionalAuth, async (req, res) => {
-  try {
-    const userIdParam = req.params.id;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
-    const currentUserId = req.user ? req.user.id : null;
-
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const userId = userRows[0].id;
-
-    const [rows] = await pool.execute(
-      `SELECT p.*, u.nickname, u.avatar as user_avatar, u.user_id as author_account, u.location, c.created_at as collected_at
-       FROM collections c
-       LEFT JOIN posts p ON c.post_id = p.id
-       LEFT JOIN users u ON p.user_id = u.id
-       WHERE c.user_id = ? AND p.is_draft = 0
-       ORDER BY c.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [userId.toString(), limit.toString(), offset.toString()]
-    );
-
-    // 使用批量查询优化性能，避免N+1查询问题
-    if (rows.length > 0) {
-      const postIds = rows.map(post => post.id);
-      const placeholders = postIds.map(() => '?').join(',');
-      
-      // 批量获取所有图片
-      const [allImages] = await pool.execute(
-        `SELECT post_id, image_url FROM post_images WHERE post_id IN (${placeholders})`,
-        postIds
-      );
-      const imagesByPostId = {};
-      allImages.forEach(img => {
-        if (!imagesByPostId[img.post_id]) {
-          imagesByPostId[img.post_id] = [];
-        }
-        imagesByPostId[img.post_id].push(img.image_url);
-      });
-      
-      // 批量获取所有视频
-      const [allVideos] = await pool.execute(
-        `SELECT post_id, video_url, cover_url FROM post_videos WHERE post_id IN (${placeholders})`,
-        postIds
-      );
-      const videosByPostId = {};
-      allVideos.forEach(video => {
-        videosByPostId[video.post_id] = video;
-      });
-      
-      // 批量获取所有标签
-      const [allTags] = await pool.execute(
-        `SELECT pt.post_id, t.id, t.name FROM tags t 
-         JOIN post_tags pt ON t.id = pt.tag_id 
-         WHERE pt.post_id IN (${placeholders})`,
-        postIds
-      );
-      const tagsByPostId = {};
-      allTags.forEach(tag => {
-        if (!tagsByPostId[tag.post_id]) {
-          tagsByPostId[tag.post_id] = [];
-        }
-        tagsByPostId[tag.post_id].push({ id: tag.id, name: tag.name });
-      });
-      
-      // 批量获取付费设置
-      const [allPaymentSettings] = await pool.execute(
-        `SELECT post_id, enabled, free_preview_count, preview_duration FROM post_payment_settings WHERE post_id IN (${placeholders})`,
-        postIds
-      );
-      const paymentSettingsByPostId = {};
-      allPaymentSettings.forEach(ps => {
-        paymentSettingsByPostId[ps.post_id] = ps;
-      });
-      
-      // 批量获取用户已购买的内容（仅在用户登录时）
-      let purchasedPostIds = new Set();
-      if (currentUserId) {
-        const [allPurchases] = await pool.execute(
-          `SELECT post_id FROM user_purchased_content WHERE user_id = ? AND post_id IN (${placeholders})`,
-          [currentUserId, ...postIds]
-        );
-        purchasedPostIds = new Set(allPurchases.map(p => p.post_id));
-      }
-      
-      // 批量获取点赞和收藏状态（仅在用户登录时）
-      let likedPostIds = new Set();
-      let collectedPostIds = new Set();
-      if (currentUserId) {
-        const [allLikes] = await pool.execute(
-          `SELECT target_id FROM likes WHERE user_id = ? AND target_type = 1 AND target_id IN (${placeholders})`,
-          [currentUserId, ...postIds]
-        );
-        likedPostIds = new Set(allLikes.map(like => like.target_id));
-        
-        const [allCollections] = await pool.execute(
-          `SELECT post_id FROM collections WHERE user_id = ? AND post_id IN (${placeholders})`,
-          [currentUserId, ...postIds]
-        );
-        collectedPostIds = new Set(allCollections.map(c => c.post_id));
-      }
-      
-      // 为每个笔记填充数据
-      for (let post of rows) {
-        // 使用助手函数处理付费内容保护
-        const paymentSetting = paymentSettingsByPostId[post.id];
-        const isAuthor = currentUserId && post.user_id === currentUserId;
-        const hasPurchased = purchasedPostIds.has(post.id);
-        
-        protectPostListItem(post, {
-          paymentSetting,
-          isAuthor,
-          hasPurchased,
-          videoData: videosByPostId[post.id],
-          imageUrls: imagesByPostId[post.id]
-        });
-        
-        post.tags = tagsByPostId[post.id] || [];
-        post.liked = likedPostIds.has(post.id);
-        post.collected = collectedPostIds.has(post.id);
-      }
-    }
-
-    const [countResult] = await pool.execute(
-      'SELECT COUNT(*) as total FROM collections c LEFT JOIN posts p ON c.post_id = p.id WHERE c.user_id = ? AND p.is_draft = 0',
-      [userId.toString()]
-    );
-    const total = countResult[0].total;
-
-    res.json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: 'success',
-      data: {
-        collections: rows,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
-    });
-  } catch (error) {
-    console.error('获取收藏列表失败:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
-  }
-});
-
-// 获取用户点赞列表
-router.get('/:id/likes', optionalAuth, async (req, res) => {
-  try {
-    const userIdParam = req.params.id;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
-    const currentUserId = req.user ? req.user.id : null;
-
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const userId = userRows[0].id;
-
-    // 查询笔记列表
-    const [rows] = await pool.execute(
-      `SELECT p.*, u.nickname, u.avatar as user_avatar, u.user_id as author_account, u.location, l.created_at as liked_at
-       FROM likes l
-       LEFT JOIN posts p ON l.target_id = p.id
-       LEFT JOIN users u ON p.user_id = u.id
-       WHERE l.user_id = ? AND l.target_type = 1 AND p.is_draft = 0
-       ORDER BY l.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [userId.toString(), limit.toString(), offset.toString()]
-    );
-
-    // 使用批量查询优化性能，避免N+1查询问题
-    if (rows.length > 0) {
-      const postIds = rows.map(post => post.id);
-      const placeholders = postIds.map(() => '?').join(',');
-      
-      // 批量获取所有图片
-      const [allImages] = await pool.execute(
-        `SELECT post_id, image_url FROM post_images WHERE post_id IN (${placeholders})`,
-        postIds
-      );
-      const imagesByPostId = {};
-      allImages.forEach(img => {
-        if (!imagesByPostId[img.post_id]) {
-          imagesByPostId[img.post_id] = [];
-        }
-        imagesByPostId[img.post_id].push(img.image_url);
-      });
-      
-      // 批量获取所有视频
-      const [allVideos] = await pool.execute(
-        `SELECT post_id, video_url, cover_url FROM post_videos WHERE post_id IN (${placeholders})`,
-        postIds
-      );
-      const videosByPostId = {};
-      allVideos.forEach(video => {
-        videosByPostId[video.post_id] = video;
-      });
-      
-      // 批量获取所有标签
-      const [allTags] = await pool.execute(
-        `SELECT pt.post_id, t.id, t.name FROM tags t 
-         JOIN post_tags pt ON t.id = pt.tag_id 
-         WHERE pt.post_id IN (${placeholders})`,
-        postIds
-      );
-      const tagsByPostId = {};
-      allTags.forEach(tag => {
-        if (!tagsByPostId[tag.post_id]) {
-          tagsByPostId[tag.post_id] = [];
-        }
-        tagsByPostId[tag.post_id].push({ id: tag.id, name: tag.name });
-      });
-      
-      // 批量获取付费设置
-      const [allPaymentSettings] = await pool.execute(
-        `SELECT post_id, enabled, free_preview_count, preview_duration FROM post_payment_settings WHERE post_id IN (${placeholders})`,
-        postIds
-      );
-      const paymentSettingsByPostId = {};
-      allPaymentSettings.forEach(ps => {
-        paymentSettingsByPostId[ps.post_id] = ps;
-      });
-      
-      // 批量获取用户已购买的内容（仅在用户登录时）
-      let purchasedPostIds = new Set();
-      if (currentUserId) {
-        const [allPurchases] = await pool.execute(
-          `SELECT post_id FROM user_purchased_content WHERE user_id = ? AND post_id IN (${placeholders})`,
-          [currentUserId, ...postIds]
-        );
-        purchasedPostIds = new Set(allPurchases.map(p => p.post_id));
-      }
-      
-      // 批量获取点赞和收藏状态（仅在用户登录时）
-      let likedPostIds = new Set();
-      let collectedPostIds = new Set();
-      if (currentUserId) {
-        const [allLikes] = await pool.execute(
-          `SELECT target_id FROM likes WHERE user_id = ? AND target_type = 1 AND target_id IN (${placeholders})`,
-          [currentUserId, ...postIds]
-        );
-        likedPostIds = new Set(allLikes.map(like => like.target_id));
-        
-        const [allCollections] = await pool.execute(
-          `SELECT post_id FROM collections WHERE user_id = ? AND post_id IN (${placeholders})`,
-          [currentUserId, ...postIds]
-        );
-        collectedPostIds = new Set(allCollections.map(c => c.post_id));
-      }
-      
-      // 为每个笔记填充数据
-      for (let post of rows) {
-        // 使用助手函数处理付费内容保护
-        const paymentSetting = paymentSettingsByPostId[post.id];
-        const isAuthor = currentUserId && post.user_id === currentUserId;
-        const hasPurchased = purchasedPostIds.has(post.id);
-        
-        protectPostListItem(post, {
-          paymentSetting,
-          isAuthor,
-          hasPurchased,
-          videoData: videosByPostId[post.id],
-          imageUrls: imagesByPostId[post.id]
-        });
-        
-        post.tags = tagsByPostId[post.id] || [];
-        post.liked = likedPostIds.has(post.id);
-        post.collected = collectedPostIds.has(post.id);
-      }
-    }
-
-    const [countResult] = await pool.execute(
-      'SELECT COUNT(*) as total FROM likes l LEFT JOIN posts p ON l.target_id = p.id WHERE l.user_id = ? AND l.target_type = 1 AND p.is_draft = 0',
-      [userId.toString()]
-    );
-    const total = countResult[0].total;
-
-    res.json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: 'success',
-      data: {
-        posts: rows,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
-    });
-  } catch (error) {
-    console.error('获取点赞列表失败:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
-  }
-});
-
-// 关注用户
+// 关注/取消关注用户
 router.post('/:id/follow', authenticateToken, async (req, res) => {
   try {
-    const userIdParam = req.params.id;
-    const followerId = req.user.id;
+    const targetId = BigInt(req.params.id);
+    const followerId = BigInt(req.user.id);
 
-    // 获取被关注用户的数字ID
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const userId = userRows[0].id;
-
-    // 不能关注自己
-    if (followerId == userId) {
+    if (targetId === followerId) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '不能关注自己' });
     }
 
-    // 检查是否已经关注
-    const [existingFollow] = await pool.execute(
-      'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-      [followerId.toString(), userId.toString()]
-    );
-
-    if (existingFollow.length > 0) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '已经关注了该用户' });
-    }
-
-    // 添加关注记录
-    await pool.execute(
-      'INSERT INTO follows (follower_id, following_id) VALUES (?, ?)',
-      [followerId.toString(), userId.toString()]
-    );
-
-    // 更新关注者的关注数
-    await pool.execute('UPDATE users SET follow_count = follow_count + 1 WHERE id = ?', [followerId.toString()]);
-
-    // 更新被关注者的粉丝数
-    await pool.execute('UPDATE users SET fans_count = fans_count + 1 WHERE id = ?', [userId.toString()]);
-
-    // 创建关注通知
-    try {
-      const notificationData = NotificationHelper.createFollowNotification(userId, followerId);
-      await NotificationHelper.insertNotification(pool, notificationData);
-    } catch (notificationError) {
-      console.error('关注通知创建失败:', notificationError);
-    }
-
-    console.log(`关注成功 - 用户ID: ${followerId}, 目标用户ID: ${userId}`);
-    res.json({ code: RESPONSE_CODES.SUCCESS, message: '关注成功' });
-  } catch (error) {
-    console.error('关注失败:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
-  }
-});
-
-// 取消关注用户
-router.delete('/:id/follow', authenticateToken, async (req, res) => {
-  try {
-    const userIdParam = req.params.id;
-    const followerId = req.user.id;
-
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
+    const targetUser = await prisma.user.findUnique({ where: { id: targetId } });
+    if (!targetUser) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
     }
-    const userId = userRows[0].id;
 
-    // 删除关注记录
-    const [result] = await pool.execute(
-      'DELETE FROM follows WHERE follower_id = ? AND following_id = ?',
-      [followerId.toString(), userId.toString()]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '关注记录不存在' });
-    }
-
-    // 更新关注者的关注数
-    await pool.execute('UPDATE users SET follow_count = follow_count - 1 WHERE id = ?', [followerId.toString()]);
-
-    // 更新被关注者的粉丝数
-    await pool.execute('UPDATE users SET fans_count = fans_count - 1 WHERE id = ?', [userId.toString()]);
-
-    // 删除相关的关注通知
-    // 删除关注者发给被关注者的关注通知
-    await pool.execute(
-      'DELETE FROM notifications WHERE user_id = ? AND sender_id = ? AND type = ?',
-      [userId.toString(), followerId.toString(), NotificationHelper.TYPES.FOLLOW.toString()]
-    );
-
-    console.log(`取消关注成功 - 用户ID: ${followerId}, 目标用户ID: ${userId}`);
-    console.log(`已删除相关关注通知 - 接收者: ${userId}, 发送者: ${followerId}`);
-    res.json({ code: RESPONSE_CODES.SUCCESS, message: '取消关注成功' });
-  } catch (error) {
-    console.error('取消关注失败:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
-  }
-});
-
-// 获取关注状态
-router.get('/:id/follow-status', optionalAuth, async (req, res) => {
-  try {
-    const userIdParam = req.params.id;
-    const followerId = req.user ? req.user.id : null;
-
-    // 获取用户的数字ID
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const userId = userRows[0].id;
-
-    let isFollowing = false;
-    let isMutual = false;
-    let buttonType = 'follow';
-
-    // 如果用户已登录，检查关注状态
-    if (followerId) {
-      // 检查关注状态
-      const [followResult] = await pool.execute(
-        'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-        [followerId.toString(), userId.toString()]
-      );
-      isFollowing = followResult.length > 0;
-
-      // 检查是否互相关注
-      const [mutualResult] = await pool.execute(
-        'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-        [userId.toString(), followerId.toString()]
-      );
-      isMutual = isFollowing && mutualResult.length > 0;
-
-      // 确定按钮类型
-      if (userId == followerId) {
-        buttonType = 'self';
-      } else if (isMutual) {
-        buttonType = 'mutual';
-      } else if (isFollowing) {
-        buttonType = 'unfollow';
-      } else if (mutualResult.length > 0) {
-        buttonType = 'back';
-      }
-    }
-    // 如果用户未登录，保持默认值：isFollowing = false, isMutual = false, buttonType = 'follow'
-
-    res.json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: 'success',
-      data: {
-        followed: isFollowing,
-        isFollowing,
-        isMutual,
-        buttonType
-      }
+    const existingFollow = await prisma.follow.findUnique({
+      where: { uk_follow: { follower_id: followerId, following_id: targetId } }
     });
+
+    if (existingFollow) {
+      await prisma.follow.delete({ where: { id: existingFollow.id } });
+      await prisma.user.update({ where: { id: followerId }, data: { follow_count: { decrement: 1 } } });
+      await prisma.user.update({ where: { id: targetId }, data: { fans_count: { decrement: 1 } } });
+      res.json({ code: RESPONSE_CODES.SUCCESS, message: '取消关注成功', data: { isFollowing: false } });
+    } else {
+      await prisma.follow.create({ data: { follower_id: followerId, following_id: targetId } });
+      await prisma.user.update({ where: { id: followerId }, data: { follow_count: { increment: 1 } } });
+      await prisma.user.update({ where: { id: targetId }, data: { fans_count: { increment: 1 } } });
+      const notificationData = NotificationHelper.createFollowNotification(Number(targetId), Number(followerId));
+      await NotificationHelper.insertNotificationPrisma(prisma, notificationData);
+      res.json({ code: RESPONSE_CODES.SUCCESS, message: '关注成功', data: { isFollowing: true } });
+    }
   } catch (error) {
-    console.error('获取关注状态失败:', error);
+    console.error('关注操作失败:', error);
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
   }
 });
@@ -871,90 +243,62 @@ router.get('/:id/follow-status', optionalAuth, async (req, res) => {
 // 获取用户关注列表
 router.get('/:id/following', optionalAuth, async (req, res) => {
   try {
-    const userIdParam = req.params.id;
+    const userId = BigInt(req.params.id);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
-    const currentUserId = req.user ? req.user.id : null;
+    const skip = (page - 1) * limit;
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
 
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const userId = userRows[0].id;
-
-    // 查询所有关注的用户（包括互相关注）
-    const [rows] = await pool.execute(
-      `SELECT u.id, u.user_id, u.nickname, u.avatar, u.bio, u.location, u.follow_count, u.fans_count, u.like_count, u.created_at, u.verified,
-              f.created_at as followed_at,
-              (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND is_draft = 0) as post_count
-       FROM follows f
-       LEFT JOIN users u ON f.following_id = u.id
-       WHERE f.follower_id = ?
-       ORDER BY f.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [userId.toString(), limit.toString(), offset.toString()]
-    );
-
-    // 检查当前用户与这些用户的关注状态
-    if (currentUserId) {
-      for (let user of rows) {
-        // 检查是否已关注
-        const [followResult] = await pool.execute(
-          'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-          [currentUserId.toString(), user.id.toString()]
-        );
-        user.isFollowing = followResult.length > 0;
-
-        // 检查是否互相关注
-        const [mutualResult] = await pool.execute(
-          'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-          [user.id.toString(), currentUserId.toString()]
-        );
-        user.isMutual = user.isFollowing && mutualResult.length > 0;
-
-        // 设置按钮类型
-        if (user.id == currentUserId) {
-          user.buttonType = 'self';
-        } else if (user.isMutual) {
-          user.buttonType = 'mutual';
-        } else if (user.isFollowing) {
-          user.buttonType = 'unfollow';
-        } else if (mutualResult.length > 0) {
-          user.buttonType = 'back';
-        } else {
-          user.buttonType = 'follow';
+    const follows = await prisma.follow.findMany({
+      where: { follower_id: userId },
+      include: {
+        following: {
+          select: { id: true, user_id: true, nickname: true, avatar: true, bio: true, fans_count: true, verified: true }
         }
-      }
-    } else {
-      for (let user of rows) {
-        user.isFollowing = false;
-        user.isMutual = false;
-        user.buttonType = 'follow';
-      }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
+    });
+
+    let users = follows.map(f => ({
+      id: Number(f.following.id),
+      user_id: f.following.user_id,
+      nickname: f.following.nickname,
+      avatar: f.following.avatar,
+      bio: f.following.bio,
+      fans_count: f.following.fans_count,
+      verified: f.following.verified,
+      isFollowing: false,
+      isMutual: false
+    }));
+
+    if (currentUserId && users.length > 0) {
+      const targetIds = users.map(u => BigInt(u.id));
+      const myFollowing = await prisma.follow.findMany({
+        where: { follower_id: currentUserId, following_id: { in: targetIds } },
+        select: { following_id: true }
+      });
+      const myFollowingSet = new Set(myFollowing.map(f => f.following_id));
+      const theyFollowMe = await prisma.follow.findMany({
+        where: { follower_id: { in: targetIds }, following_id: currentUserId },
+        select: { follower_id: true }
+      });
+      const theyFollowMeSet = new Set(theyFollowMe.map(f => f.follower_id));
+
+      users = users.map(u => {
+        u.isFollowing = myFollowingSet.has(BigInt(u.id));
+        u.isMutual = u.isFollowing && theyFollowMeSet.has(BigInt(u.id));
+        return u;
+      });
     }
 
-    // 计算所有关注的总数（包括互相关注）
-    const [countResult] = await pool.execute(
-      `SELECT COUNT(*) as total FROM follows f
-       WHERE f.follower_id = ?`,
-      [userId.toString()]
-    );
-    const total = countResult[0].total;
+    const total = await prisma.follow.count({ where: { follower_id: userId } });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
-      data: {
-        following: rows,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
+      data: { users, pagination: { page, limit, total, pages: Math.ceil(total / limit) } }
     });
   } catch (error) {
     console.error('获取关注列表失败:', error);
@@ -965,86 +309,62 @@ router.get('/:id/following', optionalAuth, async (req, res) => {
 // 获取用户粉丝列表
 router.get('/:id/followers', optionalAuth, async (req, res) => {
   try {
-    const userIdParam = req.params.id;
+    const userId = BigInt(req.params.id);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
-    const currentUserId = req.user ? req.user.id : null;
+    const skip = (page - 1) * limit;
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
 
-    console.log(`获取粉丝列表 - 用户ID: ${userIdParam}, 当前用户ID: ${currentUserId}`);
-
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const userId = userRows[0].id;
-
-    const [rows] = await pool.execute(
-      `SELECT u.id, u.user_id, u.nickname, u.avatar, u.bio, u.location, u.follow_count, u.fans_count, u.like_count, u.created_at, u.verified,
-              f.created_at as followed_at,
-              (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND is_draft = 0) as post_count
-       FROM follows f
-       LEFT JOIN users u ON f.follower_id = u.id
-       WHERE f.following_id = ?
-       ORDER BY f.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [userId.toString(), limit.toString(), offset.toString()]
-    );
-
-    // 检查当前用户与这些用户的关注状态
-    if (currentUserId) {
-      for (let user of rows) {
-        // 检查是否已关注
-        const [followResult] = await pool.execute(
-          'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-          [currentUserId.toString(), user.id.toString()]
-        );
-        user.isFollowing = followResult.length > 0;
-
-        // 检查是否互相关注
-        const [mutualResult] = await pool.execute(
-          'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-          [user.id.toString(), currentUserId.toString()]
-        );
-        user.isMutual = user.isFollowing && mutualResult.length > 0;
-
-        // 设置按钮类型
-        if (user.id == currentUserId) {
-          user.buttonType = 'self';
-        } else if (user.isMutual) {
-          user.buttonType = 'mutual';
-        } else if (user.isFollowing) {
-          user.buttonType = 'unfollow';
-        } else if (mutualResult.length > 0) {
-          user.buttonType = 'back';
-        } else {
-          user.buttonType = 'follow';
+    const follows = await prisma.follow.findMany({
+      where: { following_id: userId },
+      include: {
+        follower: {
+          select: { id: true, user_id: true, nickname: true, avatar: true, bio: true, fans_count: true, verified: true }
         }
-      }
-    } else {
-      for (let user of rows) {
-        user.isFollowing = false;
-        user.isMutual = false;
-        user.buttonType = 'follow';
-      }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
+    });
+
+    let users = follows.map(f => ({
+      id: Number(f.follower.id),
+      user_id: f.follower.user_id,
+      nickname: f.follower.nickname,
+      avatar: f.follower.avatar,
+      bio: f.follower.bio,
+      fans_count: f.follower.fans_count,
+      verified: f.follower.verified,
+      isFollowing: false,
+      isMutual: false
+    }));
+
+    if (currentUserId && users.length > 0) {
+      const targetIds = users.map(u => BigInt(u.id));
+      const myFollowing = await prisma.follow.findMany({
+        where: { follower_id: currentUserId, following_id: { in: targetIds } },
+        select: { following_id: true }
+      });
+      const myFollowingSet = new Set(myFollowing.map(f => f.following_id));
+      const theyFollowMe = await prisma.follow.findMany({
+        where: { follower_id: { in: targetIds }, following_id: currentUserId },
+        select: { follower_id: true }
+      });
+      const theyFollowMeSet = new Set(theyFollowMe.map(f => f.follower_id));
+
+      users = users.map(u => {
+        u.isFollowing = myFollowingSet.has(BigInt(u.id));
+        u.isMutual = u.isFollowing && theyFollowMeSet.has(BigInt(u.id));
+        return u;
+      });
     }
 
-    const [countResult] = await pool.execute('SELECT COUNT(*) as total FROM follows WHERE following_id = ?', [userId.toString()]);
-    const total = countResult[0].total;
+    const total = await prisma.follow.count({ where: { following_id: userId } });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
-      data: {
-        followers: rows,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
+      data: { users, pagination: { page, limit, total, pages: Math.ceil(total / limit) } }
     });
   } catch (error) {
     console.error('获取粉丝列表失败:', error);
@@ -1052,512 +372,282 @@ router.get('/:id/followers', optionalAuth, async (req, res) => {
   }
 });
 
-// 获取互相关注列表
-router.get('/:id/mutual-follows', optionalAuth, async (req, res) => {
+// 获取用户笔记列表
+router.get('/:id/posts', optionalAuth, async (req, res) => {
   try {
-    const userIdParam = req.params.id;
+    const userId = req.params.id;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
-    const currentUserId = req.user ? req.user.id : null;
+    const skip = (page - 1) * limit;
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
 
-    console.log(`获取互关列表 - 用户ID: ${userIdParam}, 当前用户ID: ${currentUserId}`);
-
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const userId = userRows[0].id;
-
-    // 查询互关用户
-    const [rows] = await pool.execute(
-      `SELECT u.id, u.user_id, u.nickname, u.avatar, u.bio, u.location, u.follow_count, u.fans_count, u.like_count, u.created_at, u.verified,
-              (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND is_draft = 0) as post_count
-       FROM users u
-       WHERE u.id IN (
-         SELECT f1.following_id 
-         FROM follows f1
-         WHERE f1.follower_id = ? 
-         AND EXISTS (
-           SELECT 1 FROM follows f2 
-           WHERE f2.follower_id = f1.following_id 
-           AND f2.following_id = ?
-         )
-       )
-       ORDER BY u.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [userId.toString(), userId.toString(), limit.toString(), offset.toString()]
-    );
-
-    // 检查当前用户与这些用户的关注状态
-    if (currentUserId) {
-      for (let user of rows) {
-        // 检查是否已关注
-        const [followResult] = await pool.execute(
-          'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-          [currentUserId.toString(), user.id.toString()]
-        );
-        user.isFollowing = followResult.length > 0;
-
-        // 检查是否互相关注
-        const [mutualResult] = await pool.execute(
-          'SELECT id FROM follows WHERE follower_id = ? AND following_id = ?',
-          [user.id.toString(), currentUserId.toString()]
-        );
-        user.isMutual = user.isFollowing && mutualResult.length > 0;
-
-        // 设置按钮类型
-        if (user.id == currentUserId) {
-          user.buttonType = 'self';
-        } else if (user.isMutual) {
-          user.buttonType = 'mutual';
-        } else if (user.isFollowing) {
-          user.buttonType = 'unfollow';
-        } else if (mutualResult.length > 0) {
-          user.buttonType = 'back';
-        } else {
-          user.buttonType = 'follow';
-        }
-      }
+    let targetUserId;
+    if (isNaN(userId)) {
+      const user = await prisma.user.findUnique({ where: { user_id: userId }, select: { id: true } });
+      if (!user) return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
+      targetUserId = user.id;
     } else {
-      for (let user of rows) {
-        user.isFollowing = false;
-        user.isMutual = false;
-        user.buttonType = 'follow';
-      }
+      targetUserId = BigInt(userId);
     }
 
-    // 获取互关总数
-    const [countResult] = await pool.execute(
-      `SELECT COUNT(*) as total FROM users u
-       WHERE u.id IN (
-         SELECT f1.following_id 
-         FROM follows f1
-         WHERE f1.follower_id = ? 
-         AND EXISTS (
-           SELECT 1 FROM follows f2 
-           WHERE f2.follower_id = f1.following_id 
-           AND f2.following_id = ?
-         )
-       )`,
-      [userId, userId]
-    );
-    const total = countResult[0].total;
+    const posts = await prisma.post.findMany({
+      where: { user_id: targetUserId, is_draft: false },
+      include: {
+        user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true } },
+        images: { select: { image_url: true, is_free_preview: true } },
+        videos: { select: { video_url: true, cover_url: true }, take: 1 },
+        tags: { include: { tag: { select: { id: true, name: true } } } },
+        paymentSettings: true
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
+    });
+
+    let purchasedPostIds = new Set();
+    let likedPostIds = new Set();
+    let collectedPostIds = new Set();
+    if (currentUserId && posts.length > 0) {
+      const postIds = posts.map(p => p.id);
+      const purchases = await prisma.userPurchasedContent.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } });
+      purchasedPostIds = new Set(purchases.map(p => p.post_id));
+      const likes = await prisma.like.findMany({ where: { user_id: currentUserId, target_type: 1, target_id: { in: postIds } }, select: { target_id: true } });
+      likedPostIds = new Set(likes.map(l => l.target_id));
+      const collections = await prisma.collection.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } });
+      collectedPostIds = new Set(collections.map(c => c.post_id));
+    }
+
+    const formattedPosts = posts.map(post => {
+      const formatted = {
+        id: Number(post.id),
+        user_id: Number(post.user_id),
+        title: post.title,
+        content: post.content,
+        category_id: post.category_id,
+        type: post.type,
+        view_count: Number(post.view_count),
+        like_count: post.like_count,
+        collect_count: post.collect_count,
+        comment_count: post.comment_count,
+        created_at: post.created_at,
+        nickname: post.user?.nickname,
+        user_avatar: post.user?.avatar,
+        avatar: post.user?.avatar,
+        author: post.user?.nickname,
+        location: post.user?.location
+      };
+
+      const isAuthor = currentUserId && post.user_id === currentUserId;
+      const hasPurchased = purchasedPostIds.has(post.id);
+      const paymentSetting = post.paymentSettings;
+      const imageUrls = post.images.map(img => ({ url: img.image_url, isFreePreview: img.is_free_preview }));
+      const videoData = post.videos[0] || null;
+
+      protectPostListItem(formatted, {
+        paymentSetting: paymentSetting ? { enabled: paymentSetting.enabled ? 1 : 0, free_preview_count: paymentSetting.free_preview_count, preview_duration: paymentSetting.preview_duration, price: paymentSetting.price, hide_all: paymentSetting.hide_all } : null,
+        isAuthor,
+        hasPurchased,
+        videoData: videoData ? { video_url: videoData.video_url, cover_url: videoData.cover_url } : null,
+        imageUrls
+      });
+
+      formatted.tags = post.tags.map(pt => ({ id: pt.tag.id, name: pt.tag.name }));
+      formatted.liked = likedPostIds.has(post.id);
+      formatted.collected = collectedPostIds.has(post.id);
+      return formatted;
+    });
+
+    const total = await prisma.post.count({ where: { user_id: targetUserId, is_draft: false } });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
-      data: {
-        mutualFollows: rows,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
+      data: { posts: formattedPosts, pagination: { page, limit, total, pages: Math.ceil(total / limit) } }
+    });
+  } catch (error) {
+    console.error('获取用户笔记列表失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 获取用户收藏列表
+router.get('/:id/collections', optionalAuth, async (req, res) => {
+  try {
+    const userId = BigInt(req.params.id);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
+
+    const collections = await prisma.collection.findMany({
+      where: { user_id: userId },
+      include: {
+        post: {
+          include: {
+            user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true } },
+            images: { select: { image_url: true, is_free_preview: true } },
+            videos: { select: { video_url: true, cover_url: true }, take: 1 },
+            tags: { include: { tag: { select: { id: true, name: true } } } },
+            paymentSettings: true
+          }
         }
-      }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
     });
-  } catch (error) {
-    console.error('获取互关列表失败:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
-  }
-});
 
-// 获取用户统计信息
-router.get('/:id/stats', async (req, res) => {
-  try {
-    const userIdParam = req.params.id;
-    console.log(`获取用户统计信息 - 用户ID: ${userIdParam}`);
-
-    // 通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const userId = userRows[0].id;
-
-    // 获取用户基本统计信息
-    const [userStats] = await pool.execute(
-      'SELECT follow_count, fans_count, like_count FROM users WHERE id = ?',
-      [userId.toString()]
-    );
-
-    if (userStats.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
+    const posts = collections.map(c => c.post);
+    let purchasedPostIds = new Set();
+    let likedPostIds = new Set();
+    if (currentUserId && posts.length > 0) {
+      const postIds = posts.map(p => p.id);
+      const purchases = await prisma.userPurchasedContent.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } });
+      purchasedPostIds = new Set(purchases.map(p => p.post_id));
+      const likes = await prisma.like.findMany({ where: { user_id: currentUserId, target_type: 1, target_id: { in: postIds } }, select: { target_id: true } });
+      likedPostIds = new Set(likes.map(l => l.target_id));
     }
 
-    // 获取笔记数量
-    const [postCount] = await pool.execute(
-      'SELECT COUNT(*) as count FROM posts WHERE user_id = ? AND is_draft = 0',
-      [userId.toString()]
-    );
+    const formattedPosts = posts.map(post => {
+      const formatted = {
+        id: Number(post.id),
+        user_id: Number(post.user_id),
+        title: post.title,
+        content: post.content,
+        category_id: post.category_id,
+        type: post.type,
+        view_count: Number(post.view_count),
+        like_count: post.like_count,
+        collect_count: post.collect_count,
+        comment_count: post.comment_count,
+        created_at: post.created_at,
+        nickname: post.user?.nickname,
+        user_avatar: post.user?.avatar,
+        avatar: post.user?.avatar,
+        author: post.user?.nickname,
+        location: post.user?.location
+      };
 
-    // 获取该用户发布的笔记被收藏的总数量
-    const [collectCount] = await pool.execute(
-      'SELECT COUNT(*) as count FROM collections c JOIN posts p ON c.post_id = p.id WHERE p.user_id = ? AND p.is_draft = 0',
-      [userId.toString()]
-    );
+      const isAuthor = currentUserId && post.user_id === currentUserId;
+      const hasPurchased = purchasedPostIds.has(post.id);
+      const paymentSetting = post.paymentSettings;
+      const imageUrls = post.images.map(img => ({ url: img.image_url, isFreePreview: img.is_free_preview }));
+      const videoData = post.videos[0] || null;
 
-    // 计算获赞与收藏总数
-    const likesAndCollects = userStats[0].like_count + collectCount[0].count;
+      protectPostListItem(formatted, {
+        paymentSetting: paymentSetting ? { enabled: paymentSetting.enabled ? 1 : 0, free_preview_count: paymentSetting.free_preview_count, preview_duration: paymentSetting.preview_duration, price: paymentSetting.price, hide_all: paymentSetting.hide_all } : null,
+        isAuthor,
+        hasPurchased,
+        videoData: videoData ? { video_url: videoData.video_url, cover_url: videoData.cover_url } : null,
+        imageUrls
+      });
 
-    const stats = {
-      follow_count: userStats[0].follow_count,
-      fans_count: userStats[0].fans_count,
-      post_count: postCount[0].count,
-      like_count: userStats[0].like_count,
-      collect_count: collectCount[0].count,
-      likes_and_collects: likesAndCollects
-    };
+      formatted.tags = post.tags.map(pt => ({ id: pt.tag.id, name: pt.tag.name }));
+      formatted.liked = likedPostIds.has(post.id);
+      formatted.collected = true;
+      return formatted;
+    });
 
+    const total = await prisma.collection.count({ where: { user_id: userId } });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
-      data: stats
+      data: { posts: formattedPosts, pagination: { page, limit, total, pages: Math.ceil(total / limit) } }
     });
   } catch (error) {
-    console.error('获取用户统计信息失败:', error);
+    console.error('获取收藏列表失败:', error);
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
   }
 });
 
-// 更新用户资料（用户自己）
-router.put('/:id', authenticateToken, async (req, res) => {
+// 获取用户点赞列表
+router.get('/:id/likes', optionalAuth, async (req, res) => {
   try {
-    const userIdParam = req.params.id;
-    const currentUserId = req.user.id;
-    const { nickname, avatar, bio, location, gender, zodiac_sign, mbti, education, major, interests } = req.body;
+    const userId = BigInt(req.params.id);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
 
-    console.log(`用户更新资料 - 目标用户ID: ${userIdParam}, 当前用户ID: ${currentUserId}`);
-
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const targetUserId = userRows[0].id;
-
-    // 检查是否是用户本人
-    if (currentUserId !== targetUserId) {
-      return res.status(HTTP_STATUS.FORBIDDEN).json({ code: RESPONSE_CODES.FORBIDDEN, message: '只能修改自己的资料' });
-    }
-
-    // 验证必填字段
-    if (!nickname || !nickname.trim()) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '昵称不能为空' });
-    }
-
-    // 构建更新SQL
-    let updateFields = [];
-    let updateValues = [];
-
-    updateFields.push('nickname = ?');
-    updateValues.push(nickname.trim());
-
-    if (avatar !== undefined) {
-      updateFields.push('avatar = ?');
-      updateValues.push(avatar || '');
-    }
-
-    if (bio !== undefined) {
-      updateFields.push('bio = ?');
-      updateValues.push(bio || '');
-    }
-
-    if (location !== undefined) {
-      updateFields.push('location = ?');
-      updateValues.push(location || '');
-    }
-
-    if (gender !== undefined) {
-      updateFields.push('gender = ?');
-      updateValues.push(gender || null);
-    }
-
-    if (zodiac_sign !== undefined) {
-      updateFields.push('zodiac_sign = ?');
-      updateValues.push(zodiac_sign || null);
-    }
-
-    if (mbti !== undefined) {
-      updateFields.push('mbti = ?');
-      updateValues.push(mbti || null);
-    }
-
-    if (education !== undefined) {
-      updateFields.push('education = ?');
-      updateValues.push(education || null);
-    }
-
-    if (major !== undefined) {
-      updateFields.push('major = ?');
-      updateValues.push(major || null);
-    }
-
-    if (interests !== undefined) {
-      // 处理兴趣爱好数组，转换为JSON字符串
-      const processedInterests = interests ? (Array.isArray(interests) ? JSON.stringify(interests) : interests) : null;
-      updateFields.push('interests = ?');
-      updateValues.push(processedInterests);
-    }
-
-    updateValues.push(targetUserId);
-
-    // 更新用户资料
-    await pool.execute(
-      `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`,
-      updateValues
-    );
-
-    // 获取更新后的用户信息
-    const [updatedUser] = await pool.execute(
-      'SELECT id, user_id, nickname, avatar, bio, location, email, gender, zodiac_sign, mbti, education, major, interests, follow_count, fans_count, like_count FROM users WHERE id = ?',
-      [targetUserId.toString()]
-    );
-
-    res.json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: '资料更新成功',
-      success: true,
-      data: updatedUser[0]
+    const likes = await prisma.like.findMany({
+      where: { user_id: userId, target_type: 1 },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: skip
     });
-  } catch (error) {
-    console.error('更新用户资料失败:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
-  }
-});
 
-// 修改密码
-router.put('/:id/password', authenticateToken, async (req, res) => {
-  try {
-    const userIdParam = req.params.id;
-    const currentUserId = req.user.id;
-    const { currentPassword, newPassword } = req.body;
-
-    console.log(`用户修改密码 - 目标用户ID: ${userIdParam}, 当前用户ID: ${currentUserId}`);
-
-    // 验证必填字段
-    if (!currentPassword || !newPassword) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '当前密码和新密码不能为空' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '新密码长度不能少于6位' });
-    }
-
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await pool.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const targetUserId = userRows[0].id;
-
-    // 检查是否是用户本人
-    if (currentUserId !== targetUserId) {
-      return res.status(HTTP_STATUS.FORBIDDEN).json({ code: RESPONSE_CODES.FORBIDDEN, message: '只能修改自己的密码' });
-    }
-
-    // 验证当前密码（使用SHA2哈希比较）
-    const [passwordRows] = await pool.execute(
-      'SELECT password FROM users WHERE id = ? AND password = SHA2(?, 256)',
-      [targetUserId.toString(), currentPassword]
-    );
-
-    if (passwordRows.length === 0) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '当前密码错误' });
-    }
-
-    // 更新密码（使用SHA2哈希加密）
-    await pool.execute(
-      'UPDATE users SET password = SHA2(?, 256) WHERE id = ?',
-      [newPassword, targetUserId.toString()]
-    );
-
-    res.json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: '密码修改成功',
-      success: true
-    });
-  } catch (error) {
-    console.error('修改密码失败:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
-  }
-});
-
-// 删除账号
-router.delete('/:id', authenticateToken, async (req, res) => {
-  const connection = await pool.getConnection();
-  try {
-    const userIdParam = req.params.id;
-    const currentUserId = req.user.id;
-    // 始终通过汐社号查找对应的数字ID
-    const [userRows] = await connection.execute('SELECT id FROM users WHERE user_id = ?', [userIdParam]);
-    if (userRows.length === 0) {
-      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
-    }
-    const targetUserId = userRows[0].id;
-
-    // 检查是否是用户本人
-    if (currentUserId !== targetUserId) {
-      return res.status(HTTP_STATUS.FORBIDDEN).json({ code: RESPONSE_CODES.FORBIDDEN, message: '只能删除自己的账号' });
-    }
-
-    // 开始事务
-    await connection.beginTransaction();
-    // 删除用户相关的所有数据
-    await connection.execute('DELETE FROM comments WHERE user_id = ?', [targetUserId]);
-    await connection.execute('DELETE FROM likes WHERE user_id = ?', [targetUserId]);
-    await connection.execute('DELETE FROM collections WHERE user_id = ?', [targetUserId]);
-    await connection.execute('DELETE FROM follows WHERE follower_id = ? OR following_id = ?', [targetUserId, targetUserId]);
-    await connection.execute('DELETE FROM notifications WHERE user_id = ? OR sender_id = ?', [targetUserId, targetUserId]);
-    await connection.execute('DELETE FROM posts WHERE user_id = ?', [targetUserId]);
-    await connection.execute('DELETE FROM users WHERE id = ?', [targetUserId]);
-    // 提交事务
-    await connection.commit();
-
-    res.json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: '账号删除成功',
-      success: true
-    });
-  } catch (error) {
-    // 回滚事务
-    await connection.rollback();
-    console.error('删除账号失败:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
-  } finally {
-    connection.release();
-  }
-});
-
-// 提交认证申请
-router.post('/verification', authenticateToken, async (req, res) => {
-  try {
-    const { type, content } = req.body;
-    const userId = req.user.id;
-
-    // 验证输入
-    if (!type || !content) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        code: RESPONSE_CODES.VALIDATION_ERROR,
-        message: '认证类型和认证内容都是必填项'
-      });
-    }
-
-    // 验证认证类型
-    if (type !== 1 && type !== 2) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        code: RESPONSE_CODES.VALIDATION_ERROR,
-        message: '无效的认证类型'
-      });
-    }
-
-    // 检查是否已有待审核的认证申请
-    const [existingAudit] = await pool.execute(
-      'SELECT id FROM audit WHERE user_id = ? AND type = ? AND status = 0',
-      [userId.toString(), type.toString()]
-    );
-
-    if (existingAudit.length > 0) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        code: RESPONSE_CODES.VALIDATION_ERROR,
-        message: '您已有相同类型的认证申请正在审核中，请耐心等待'
-      });
-    }
-
-    // 插入审核记录
-    const [result] = await pool.execute(
-      'INSERT INTO audit (user_id, type, content, status, created_at) VALUES (?, ?, ?, 0, NOW())',
-      [userId.toString(), type.toString(), content]
-    );
-
-    res.status(HTTP_STATUS.CREATED).json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: '认证申请提交成功，请耐心等待审核',
-      data: {
-        auditId: result.insertId
+    const postIds = likes.map(l => l.target_id);
+    const posts = await prisma.post.findMany({
+      where: { id: { in: postIds } },
+      include: {
+        user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true } },
+        images: { select: { image_url: true, is_free_preview: true } },
+        videos: { select: { video_url: true, cover_url: true }, take: 1 },
+        tags: { include: { tag: { select: { id: true, name: true } } } },
+        paymentSettings: true
       }
     });
-  } catch (error) {
-    console.error('提交认证申请错误:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      code: RESPONSE_CODES.SERVER_ERROR,
-      message: ERROR_MESSAGES.SERVER_ERROR
-    });
-  }
-});
 
-// 获取用户认证状态
-router.get('/verification/status', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
+    let purchasedPostIds = new Set();
+    let collectedPostIds = new Set();
+    if (currentUserId && posts.length > 0) {
+      const purchases = await prisma.userPurchasedContent.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } });
+      purchasedPostIds = new Set(purchases.map(p => p.post_id));
+      const collections = await prisma.collection.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } });
+      collectedPostIds = new Set(collections.map(c => c.post_id));
+    }
 
-    // 获取用户的认证申请记录
-    const [audits] = await pool.execute(
-      'SELECT id, type, status, created_at, audit_time FROM audit WHERE user_id = ? ORDER BY created_at DESC',
-      [userId.toString()]
-    );
+    const formattedPosts = posts.map(post => {
+      const formatted = {
+        id: Number(post.id),
+        user_id: Number(post.user_id),
+        title: post.title,
+        content: post.content,
+        category_id: post.category_id,
+        type: post.type,
+        view_count: Number(post.view_count),
+        like_count: post.like_count,
+        collect_count: post.collect_count,
+        comment_count: post.comment_count,
+        created_at: post.created_at,
+        nickname: post.user?.nickname,
+        user_avatar: post.user?.avatar,
+        avatar: post.user?.avatar,
+        author: post.user?.nickname,
+        location: post.user?.location
+      };
 
-    res.json({
-      code: RESPONSE_CODES.SUCCESS,
-      message: '获取认证状态成功',
-      data: audits
-    });
-  } catch (error) {
-    console.error('获取认证状态错误:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      code: RESPONSE_CODES.SERVER_ERROR,
-      message: ERROR_MESSAGES.SERVER_ERROR
-    });
-  }
-});
+      const isAuthor = currentUserId && post.user_id === currentUserId;
+      const hasPurchased = purchasedPostIds.has(post.id);
+      const paymentSetting = post.paymentSettings;
+      const imageUrls = post.images.map(img => ({ url: img.image_url, isFreePreview: img.is_free_preview }));
+      const videoData = post.videos[0] || null;
 
-// 撤回认证申请
-router.delete('/verification/revoke', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    // 查找用户的认证申请（包括待审核、已通过和已拒绝的）
-    const [existingAudits] = await pool.execute(
-      'SELECT id, status FROM audit WHERE user_id = ? AND status IN (0, 1, 2)',
-      [userId.toString()]
-    );
-
-    if (existingAudits.length === 0) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        code: RESPONSE_CODES.VALIDATION_ERROR,
-        message: '没有找到可撤回的认证申请'
+      protectPostListItem(formatted, {
+        paymentSetting: paymentSetting ? { enabled: paymentSetting.enabled ? 1 : 0, free_preview_count: paymentSetting.free_preview_count, preview_duration: paymentSetting.preview_duration, price: paymentSetting.price, hide_all: paymentSetting.hide_all } : null,
+        isAuthor,
+        hasPurchased,
+        videoData: videoData ? { video_url: videoData.video_url, cover_url: videoData.cover_url } : null,
+        imageUrls
       });
-    }
 
-    // 删除认证申请记录
-    await pool.execute(
-      'DELETE FROM audit WHERE user_id = ? AND status IN (0, 1, 2)',
-      [userId.toString()]
-    );
+      formatted.tags = post.tags.map(pt => ({ id: pt.tag.id, name: pt.tag.name }));
+      formatted.liked = true;
+      formatted.collected = collectedPostIds.has(post.id);
+      return formatted;
+    });
 
-    // 如果撤回的是已通过的认证，需要将用户的verified字段重置为0
-    const hasApprovedAudit = existingAudits.some(audit => audit.status === 1);
-    if (hasApprovedAudit) {
-      await pool.execute(
-        'UPDATE users SET verified = 0 WHERE id = ?',
-        [userId.toString()]
-      );
-    }
+    const total = await prisma.like.count({ where: { user_id: userId, target_type: 1 } });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
-      message: '认证申请已撤回',
-      success: true
+      message: 'success',
+      data: { posts: formattedPosts, pagination: { page, limit, total, pages: Math.ceil(total / limit) } }
     });
   } catch (error) {
-    console.error('撤回认证申请错误:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      code: RESPONSE_CODES.SERVER_ERROR,
-      message: ERROR_MESSAGES.SERVER_ERROR
-    });
+    console.error('获取点赞列表失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
   }
 });
 
