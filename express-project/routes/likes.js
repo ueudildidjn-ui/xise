@@ -124,7 +124,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
         // 插入通知到数据库
         if (notificationData) {
-          await NotificationHelper.insertNotificationPrisma(prisma, notificationData);
+          await NotificationHelper.insertNotification(prisma, notificationData);
         }
       }
       console.log(`点赞成功 - 用户ID: ${userId}`);

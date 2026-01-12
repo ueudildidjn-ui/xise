@@ -356,7 +356,7 @@ router.post('/', authenticateToken, async (req, res) => {
         const notificationData = NotificationHelper.createReplyCommentNotification(
           Number(parentComment.user_id), Number(userId), Number(post_id), Number(commentId)
         );
-        await NotificationHelper.insertNotificationPrisma(prisma, notificationData);
+        await NotificationHelper.insertNotification(prisma, notificationData);
       }
     } else {
       // 评论笔记，给笔记作者发通知
@@ -364,7 +364,7 @@ router.post('/', authenticateToken, async (req, res) => {
         const notificationData = NotificationHelper.createCommentPostNotification(
           Number(post.user_id), Number(userId), Number(post_id), Number(commentId)
         );
-        await NotificationHelper.insertNotificationPrisma(prisma, notificationData);
+        await NotificationHelper.insertNotification(prisma, notificationData);
       }
     }
 
@@ -388,7 +388,7 @@ router.post('/', authenticateToken, async (req, res) => {
               commentId: Number(commentId)
             });
 
-            await NotificationHelper.insertNotificationPrisma(prisma, mentionNotificationData);
+            await NotificationHelper.insertNotification(prisma, mentionNotificationData);
           }
         } catch (error) {
           console.error(`处理@用户通知失败 - 用户: ${mentionedUser.userId}:`, error);

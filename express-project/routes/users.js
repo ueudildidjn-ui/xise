@@ -231,7 +231,7 @@ router.post('/:id/follow', authenticateToken, async (req, res) => {
       await prisma.user.update({ where: { id: followerId }, data: { follow_count: { increment: 1 } } });
       await prisma.user.update({ where: { id: targetId }, data: { fans_count: { increment: 1 } } });
       const notificationData = NotificationHelper.createFollowNotification(Number(targetId), Number(followerId));
-      await NotificationHelper.insertNotificationPrisma(prisma, notificationData);
+      await NotificationHelper.insertNotification(prisma, notificationData);
       res.json({ code: RESPONSE_CODES.SUCCESS, message: '关注成功', data: { isFollowing: true } });
     }
   } catch (error) {
