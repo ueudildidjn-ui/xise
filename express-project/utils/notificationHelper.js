@@ -239,34 +239,12 @@ class NotificationHelper {
   }
 
   /**
-   * 插入通知到数据库
-   * @param {Object} pool 数据库连接池
-   * @param {Object} notificationData 通知数据
-   * @returns {Promise<Object>} 插入结果
-   */
-  static async insertNotification(pool, notificationData) {
-    const [result] = await pool.execute(
-      'INSERT INTO notifications (user_id, sender_id, type, title, target_id, comment_id, is_read) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [
-        notificationData.user_id,
-        notificationData.sender_id,
-        notificationData.type,
-        notificationData.title,
-        notificationData.target_id,
-        notificationData.comment_id,
-        notificationData.is_read
-      ]
-    );
-    return result;
-  }
-
-  /**
-   * 使用 Prisma 插入通知到数据库
+   * 插入通知到数据库 (使用 Prisma)
    * @param {Object} prisma Prisma客户端实例
    * @param {Object} notificationData 通知数据
    * @returns {Promise<Object>} 插入结果
    */
-  static async insertNotificationPrisma(prisma, notificationData) {
+  static async insertNotification(prisma, notificationData) {
     const result = await prisma.notification.create({
       data: {
         user_id: BigInt(notificationData.user_id),
@@ -283,28 +261,11 @@ class NotificationHelper {
 
   /**
    * 创建并插入通知（便捷方法）
-   * @param {Object} pool 数据库连接池
-   * @param {Object} params 通知参数
-   * @returns {Promise<Object>} 插入结果
-   */
-  static async createAndInsertNotification(pool, params) {
-    // 检查是否给自己发通知
-    if (params.userId === params.senderId) {
-      console.log('⚠️ 不给自己发通知');
-      return null;
-    }
-
-    const notificationData = this.createNotificationData(params);
-    return await this.insertNotification(pool, notificationData);
-  }
-
-  /**
-   * 使用 Prisma 创建并插入通知（便捷方法）
    * @param {Object} prisma Prisma客户端实例
    * @param {Object} params 通知参数
    * @returns {Promise<Object>} 插入结果
    */
-  static async createAndInsertNotificationPrisma(prisma, params) {
+  static async createAndInsertNotification(prisma, params) {
     // 检查是否给自己发通知
     if (params.userId === params.senderId) {
       console.log('⚠️ 不给自己发通知');
@@ -312,36 +273,11 @@ class NotificationHelper {
     }
 
     const notificationData = this.createNotificationData(params);
-    return await this.insertNotificationPrisma(prisma, notificationData);
+    return await this.insertNotification(prisma, notificationData);
   }
 
   /**
-   * 删除指定条件的通知
-   * @param {Object} pool 数据库连接池
-   * @param {Object} conditions 删除条件
-   * @param {number} conditions.type 通知类型
-   * @param {number} conditions.targetId 目标ID
-   * @param {number} conditions.senderId 发送者ID
-   * @param {number} conditions.userId 接收者ID（可选）
-   * @returns {Promise<Object>} 删除结果
-   */
-  static async deleteNotifications(pool, conditions) {
-    const { type, targetId, senderId, userId } = conditions;
-    
-    let query = 'DELETE FROM notifications WHERE type = ? AND target_id = ? AND sender_id = ?';
-    let params = [type, targetId, senderId];
-    
-    if (userId) {
-      query += ' AND user_id = ?';
-      params.push(userId);
-    }
-    
-    const [result] = await pool.execute(query, params);
-    return result;
-  }
-
-  /**
-   * 使用 Prisma 删除指定条件的通知
+   * 删除指定条件的通知 (使用 Prisma)
    * @param {Object} prisma Prisma客户端实例
    * @param {Object} conditions 删除条件
    * @param {number} conditions.type 通知类型
@@ -350,7 +286,7 @@ class NotificationHelper {
    * @param {number} conditions.userId 接收者ID（可选）
    * @returns {Promise<Object>} 删除结果
    */
-  static async deleteNotificationsPrisma(prisma, conditions) {
+  static async deleteNotifications(prisma, conditions) {
     const { type, targetId, senderId, userId } = conditions;
     
     const where = {
@@ -368,23 +304,28 @@ class NotificationHelper {
   }
 
   /**
-   * 获取指定条件的通知接收者列表
-   * @param {Object} pool 数据库连接池
+   * 获取指定条件的通知接收者列表 (使用 Prisma)
+   * @param {Object} prisma Prisma客户端实例
    * @param {Object} conditions 查询条件
    * @param {number} conditions.type 通知类型
    * @param {number} conditions.targetId 目标ID
    * @param {number} conditions.senderId 发送者ID
    * @returns {Promise<Array>} 接收者ID列表
    */
-  static async getNotificationReceivers(pool, conditions) {
+  static async getNotificationReceivers(prisma, conditions) {
     const { type, targetId, senderId } = conditions;
     
-    const [rows] = await pool.execute(
-      'SELECT DISTINCT user_id FROM notifications WHERE type = ? AND target_id = ? AND sender_id = ?',
-      [type, targetId, senderId]
-    );
+    const notifications = await prisma.notification.findMany({
+      where: {
+        type: type,
+        target_id: BigInt(targetId),
+        sender_id: BigInt(senderId)
+      },
+      select: { user_id: true },
+      distinct: ['user_id']
+    });
     
-    return rows.map(row => row.user_id);
+    return notifications.map(n => n.user_id);
   }
 }
 
