@@ -1203,11 +1203,13 @@ const imageList = computed(() => {
   
   // 提取URL（兼容字符串和对象格式）
   return sortedImages.map(img => {
-    if (typeof img === 'object' && img.url) {
-      return img.url
+    if (typeof img === 'object' && img !== null) {
+      // 支持多种属性名：url, image_url，并确保值是字符串
+      if (typeof img.url === 'string' && img.url) return img.url
+      if (typeof img.image_url === 'string' && img.image_url) return img.image_url
     }
-    return img
-  })
+    return typeof img === 'string' ? img : ''
+  }).filter(url => url) // 过滤掉空值
 })
 
 const hasMultipleImages = computed(() => imageList.value.length > 1)
