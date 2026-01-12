@@ -150,6 +150,30 @@ router.get('/', optionalAuth, async (req, res) => {
 
     const where = {};
     where.is_draft = isDraft;
+    
+    // Get mutual followers for friends_only visibility filtering
+    let mutualFollowerIds = new Set();
+    if (currentUserId) {
+      // Get users who the current user follows
+      const following = await prisma.follow.findMany({
+        where: { follower_id: currentUserId },
+        select: { following_id: true }
+      });
+      const followingIds = following.map(f => f.following_id);
+      
+      // Get users who follow the current user back (mutual followers)
+      if (followingIds.length > 0) {
+        const mutualFollows = await prisma.follow.findMany({
+          where: {
+            follower_id: { in: followingIds },
+            following_id: currentUserId
+          },
+          select: { follower_id: true }
+        });
+        mutualFollowerIds = new Set(mutualFollows.map(f => f.follower_id));
+      }
+    }
+    
     if (isDraft) {
       if (!currentUserId) {
         return res.status(HTTP_STATUS.UNAUTHORIZED).json({ code: RESPONSE_CODES.UNAUTHORIZED, message: '查看草稿需要登录' });
@@ -157,14 +181,33 @@ router.get('/', optionalAuth, async (req, res) => {
       where.user_id = currentUserId;
     } else if (userId) {
       where.user_id = userId;
-      // When viewing specific user's posts, only show public posts to others
-      // Authors can see all their own posts
-      if (!currentUserId || currentUserId !== userId) {
+      // When viewing specific user's posts
+      if (currentUserId && currentUserId === userId) {
+        // Author can see all their own posts (no visibility filter)
+      } else if (currentUserId && mutualFollowerIds.has(userId)) {
+        // Mutual follower can see public and friends_only posts
+        where.visibility = { in: [VISIBILITY_PUBLIC, VISIBILITY_FRIENDS_ONLY] };
+      } else {
+        // Others can only see public posts
         where.visibility = VISIBILITY_PUBLIC;
       }
     } else {
-      // When browsing all posts (no specific user), only show public posts
-      where.visibility = VISIBILITY_PUBLIC;
+      // When browsing all posts (no specific user)
+      // Show public posts + friends_only posts from mutual followers
+      if (currentUserId && mutualFollowerIds.size > 0) {
+        where.OR = [
+          { visibility: VISIBILITY_PUBLIC },
+          { visibility: VISIBILITY_FRIENDS_ONLY, user_id: { in: Array.from(mutualFollowerIds) } },
+          { user_id: currentUserId } // User's own posts
+        ];
+      } else if (currentUserId) {
+        where.OR = [
+          { visibility: VISIBILITY_PUBLIC },
+          { user_id: currentUserId } // User's own posts
+        ];
+      } else {
+        where.visibility = VISIBILITY_PUBLIC;
+      }
     }
     if (category) where.category_id = category;
     if (type) where.type = type;
@@ -184,20 +227,12 @@ router.get('/', optionalAuth, async (req, res) => {
       skip: skip
     });
 
-    // For friends_only posts, we need to filter them based on mutual follow status
-    // This is done after fetching if we're viewing a specific user's posts as the author
-    let filteredPosts = posts;
-    if (userId && currentUserId && currentUserId === userId) {
-      // Author is viewing their own posts, show all
-      filteredPosts = posts;
-    }
-
     // Batch fetch purchase, like, collect status
     let purchasedPostIds = new Set();
     let likedPostIds = new Set();
     let collectedPostIds = new Set();
-    if (currentUserId && filteredPosts.length > 0) {
-      const postIds = filteredPosts.map(p => p.id);
+    if (currentUserId && posts.length > 0) {
+      const postIds = posts.map(p => p.id);
       const [purchases, likes, collections] = await Promise.all([
         prisma.userPurchasedContent.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } }),
         prisma.like.findMany({ where: { user_id: currentUserId, target_type: 1, target_id: { in: postIds } }, select: { target_id: true } }),
@@ -208,7 +243,7 @@ router.get('/', optionalAuth, async (req, res) => {
       collectedPostIds = new Set(collections.map(c => c.post_id));
     }
 
-    const formattedPosts = filteredPosts.map(post => {
+    const formattedPosts = posts.map(post => {
       const formatted = {
         id: Number(post.id),
         user_id: Number(post.user_id),
