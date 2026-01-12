@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
-const { pool } = require('../config/config');
+const { prisma } = require('../config/config');
 
 // 获取所有标签
 router.get('/', async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      'SELECT * FROM tags ORDER BY name ASC'
-    );
+    const rows = await prisma.tag.findMany({
+      orderBy: { name: 'asc' }
+    });
 
 
     res.json({
@@ -27,13 +27,14 @@ router.get('/hot', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
     // 直接使用 use_count 字段获取热门标签
-    const [rows] = await pool.execute(
-      `SELECT * FROM tags
-       WHERE use_count > 0
-       ORDER BY use_count DESC, name ASC
-       LIMIT ?`,
-      [String(limit)]
-    );
+    const rows = await prisma.tag.findMany({
+      where: { use_count: { gt: 0 } },
+      orderBy: [
+        { use_count: 'desc' },
+        { name: 'asc' }
+      ],
+      take: limit
+    });
 
 
     res.json({

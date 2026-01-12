@@ -8,11 +8,26 @@
  * @license GPLv3
  */
 
+// Add BigInt serialization support for JSON.stringify BEFORE any other imports
+// This is critical because Prisma returns BigInt for BIGINT columns
+// and JavaScript's JSON.stringify doesn't know how to serialize BigInt
+if (typeof BigInt.prototype.toJSON !== 'function') {
+  BigInt.prototype.toJSON = function() {
+    // Convert to number if it's safe, otherwise to string
+    const num = Number(this);
+    if (Number.isSafeInteger(num)) {
+      return num;
+    }
+    return this.toString();
+  };
+}
+
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const config = require('./config/config');
 const { HTTP_STATUS, RESPONSE_CODES } = require('./constants');
+const prisma = require('./utils/prisma');
 
 // 加载环境变量
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
@@ -90,11 +105,69 @@ app.use('*', (req, res) => {
   res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '接口不存在' });
 });
 
+/**
+ * Prisma 数据库连接验证和表结构检查
+ * 在程序启动时自动验证数据库连接和表结构
+ */
+async function validatePrismaConnection() {
+  try {
+    // 测试数据库连接
+    await prisma.$connect();
+    console.log('● Prisma ORM 数据库连接成功');
+    
+    // 验证核心表结构是否存在（通过简单查询验证）
+    const tables = [
+      { name: 'users', model: prisma.user },
+      { name: 'posts', model: prisma.post },
+      { name: 'comments', model: prisma.comment },
+      { name: 'notifications', model: prisma.notification },
+      { name: 'admin', model: prisma.admin }
+    ];
+    
+    let validTables = 0;
+    for (const table of tables) {
+      try {
+        await table.model.count();
+        validTables++;
+      } catch (error) {
+        console.warn(`  ⚠️ 表 ${table.name} 可能不存在或结构不匹配`);
+      }
+    }
+    
+    if (validTables === tables.length) {
+      console.log(`● Prisma 表结构验证通过 (${validTables}/${tables.length} 核心表)`);
+    } else {
+      console.warn(`● Prisma 表结构部分验证 (${validTables}/${tables.length} 核心表)`);
+      console.log('  提示: 运行 "npx prisma db push" 同步表结构');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('● Prisma 数据库连接失败:', error.message);
+    console.log('  提示: 请检查 DATABASE_URL 环境变量配置');
+    console.log('  提示: 运行 "npx prisma generate" 生成 Prisma Client');
+    console.log('  提示: 运行 "npx prisma db push" 同步表结构');
+    return false;
+  }
+}
+
 // 启动服务器
 const PORT = config.server.port;
-app.listen(PORT, () => {
-  console.log(`● 服务器运行在端口 ${PORT}`);
-  console.log(`● 环境: ${config.server.env}`);
+
+// 先验证 Prisma 连接，然后启动服务器
+validatePrismaConnection().then((connected) => {
+  app.listen(PORT, () => {
+    console.log(`● 服务器运行在端口 ${PORT}`);
+    console.log(`● 环境: ${config.server.env}`);
+    if (!connected) {
+      console.warn('● 警告: 数据库连接失败，部分功能可能不可用');
+    }
+  });
+});
+
+// 优雅关闭 - 断开 Prisma 连接
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
 });
 
 module.exports = app;

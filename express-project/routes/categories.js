@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../config/config');
+const { prisma } = require('../config/config');
 const { success, error } = require('../utils/responseHelper');
 
 /**
@@ -36,49 +36,49 @@ router.get('/', async (req, res) => {
   try {
     const { sortField = 'id', sortOrder = 'asc', name, category_title } = req.query;
 
-    const allowedSortFields = {
-      'id': 'c.id',
-      'name': 'c.name',
-      'created_at': 'c.created_at',
-      'post_count': 'post_count'
-    };
-    const allowedSortOrders = {
-      'asc': 'ASC',
-      'desc': 'DESC'
-    };
-    const validSortField = allowedSortFields[sortField] || allowedSortFields['id'];
-    const validSortOrder = allowedSortOrders[sortOrder?.toLowerCase()] || allowedSortOrders['asc'];
+    const allowedSortFields = ['id', 'name', 'created_at'];
+    const validSortField = allowedSortFields.includes(sortField) ? sortField : 'id';
+    const validSortOrder = sortOrder?.toLowerCase() === 'desc' ? 'desc' : 'asc';
 
     // 构建WHERE条件
-    const queryParams = [];
-    const conditions = [];
+    const where = {};
 
     if (name && typeof name === 'string' && name.trim()) {
-      conditions.push('c.name LIKE ?');
-      queryParams.push(`%${name.trim()}%`);
+      where.name = { contains: name.trim() };
     }
 
     if (category_title && typeof category_title === 'string' && category_title.trim()) {
-      conditions.push('c.category_title LIKE ?');
-      queryParams.push(`%${category_title.trim()}%`);
+      where.category_title = { contains: category_title.trim() };
     }
 
-    const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
-    const [categories] = await pool.execute(`
-      SELECT 
-        c.id, 
-        c.name, 
-        c.category_title,
-        c.created_at,
-        COUNT(p.id) as post_count
-      FROM categories c
-      LEFT JOIN posts p ON c.id = p.category_id
-      ${whereClause}
-      GROUP BY c.id, c.name, c.category_title, c.created_at
-      ORDER BY ${validSortField} ${validSortOrder}
-    `, queryParams)
+    const categories = await prisma.category.findMany({
+      where,
+      orderBy: { [validSortField]: validSortOrder },
+      include: {
+        _count: {
+          select: { posts: true }
+        }
+      }
+    });
 
-    success(res, categories, '获取成功');
+    // 转换为前端期望的格式
+    const result = categories.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      category_title: cat.category_title,
+      created_at: cat.created_at,
+      post_count: cat._count.posts
+    }));
+
+    // 如果需要按 post_count 排序
+    if (sortField === 'post_count') {
+      result.sort((a, b) => {
+        const diff = a.post_count - b.post_count;
+        return validSortOrder === 'desc' ? -diff : diff;
+      });
+    }
+
+    success(res, result, '获取成功');
   } catch (err) {
     console.error('获取分类列表失败:', err);
     error(res, '获取分类列表失败');

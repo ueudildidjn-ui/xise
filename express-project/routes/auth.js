@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
-const { pool, email: emailConfig, oauth2: oauth2Config } = require('../config/config');
+const { pool, prisma, email: emailConfig, oauth2: oauth2Config } = require('../config/config');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/jwt');
 const { authenticateToken } = require('../middleware/auth');
 const { getIPLocation, getRealIP } = require('../utils/ipLocation');
@@ -111,15 +111,15 @@ router.get('/check-user-id', async (req, res) => {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '请输入汐社号' });
     }
     // 查数据库是否已有该ID
-    const [existingUser] = await pool.execute(
-      'SELECT id FROM users WHERE user_id = ?',
-      [user_id.toString()]
-    );
+    const existingUser = await prisma.user.findUnique({
+      where: { user_id: user_id.toString() },
+      select: { id: true }
+    });
     // 存在返回false，不存在返回true（供前端判断是否可继续）
     res.json({
       code: RESPONSE_CODES.SUCCESS,
-      data: { isUnique: existingUser.length === 0 },
-      message: existingUser.length > 0 ? '汐社号已存在' : '汐社号可用'
+      data: { isUnique: !existingUser },
+      message: existingUser ? '汐社号已存在' : '汐社号可用'
     });
   } catch (error) {
     console.error('检查用户ID失败:', error);
@@ -148,12 +148,12 @@ router.post('/send-email-code', async (req, res) => {
     }
 
     // 检查邮箱是否已被注册
-    const [existingUser] = await pool.execute(
-      'SELECT id FROM users WHERE email = ?',
-      [email]
-    );
+    const existingUser = await prisma.user.findFirst({
+      where: { email: email },
+      select: { id: true }
+    });
 
-    if (existingUser.length > 0) {
+    if (existingUser) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.CONFLICT, message: '该邮箱已被注册' });
     }
 
@@ -210,12 +210,12 @@ router.post('/bind-email', authenticateToken, async (req, res) => {
     }
 
     // 检查邮箱是否已被其他用户使用
-    const [existingUser] = await pool.execute(
-      'SELECT id FROM users WHERE email = ? AND id != ?',
-      [email, userId.toString()]
-    );
+    const existingUser = await prisma.user.findFirst({
+      where: { email: email, NOT: { id: BigInt(userId) } },
+      select: { id: true }
+    });
 
-    if (existingUser.length > 0) {
+    if (existingUser) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.CONFLICT, message: '该邮箱已被其他用户绑定' });
     }
 
@@ -238,10 +238,10 @@ router.post('/bind-email', authenticateToken, async (req, res) => {
     emailCodeStore.delete(email);
 
     // 更新用户邮箱
-    await pool.execute(
-      'UPDATE users SET email = ? WHERE id = ?',
-      [email, userId.toString()]
-    );
+    await prisma.user.update({
+      where: { id: BigInt(userId) },
+      data: { email: email }
+    });
 
     console.log(`用户绑定邮箱成功 - 用户ID: ${userId}, 邮箱: ${email}`);
 
@@ -278,12 +278,12 @@ router.post('/send-reset-code', async (req, res) => {
     }
 
     // 检查邮箱是否已注册
-    const [existingUser] = await pool.execute(
-      'SELECT id, user_id FROM users WHERE email = ?',
-      [email]
-    );
+    const existingUser = await prisma.user.findFirst({
+      where: { email: email },
+      select: { id: true, user_id: true }
+    });
 
-    if (existingUser.length === 0) {
+    if (!existingUser) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.NOT_FOUND, message: '该邮箱未绑定任何账号' });
     }
 
@@ -396,11 +396,12 @@ router.post('/reset-password', async (req, res) => {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '验证码错误' });
     }
 
-    // 更新密码
-    await pool.execute(
-      'UPDATE users SET password = SHA2(?, 256) WHERE email = ?',
-      [newPassword, email]
-    );
+    // 更新密码 (use SHA256 hash)
+    const hashedPassword = crypto.createHash('sha256').update(newPassword).digest('hex');
+    await prisma.user.updateMany({
+      where: { email: email },
+      data: { password: hashedPassword }
+    });
 
     // 删除已使用的验证码
     emailCodeStore.delete(`reset_${email}`);
@@ -429,25 +430,25 @@ router.delete('/unbind-email', authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     // 检查用户是否已绑定邮箱
-    const [userRows] = await pool.execute(
-      'SELECT email FROM users WHERE id = ?',
-      [userId.toString()]
-    );
+    const user = await prisma.user.findUnique({
+      where: { id: BigInt(userId) },
+      select: { email: true }
+    });
 
-    if (userRows.length === 0) {
+    if (!user) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
     }
 
-    const currentEmail = userRows[0].email;
+    const currentEmail = user.email;
     if (!currentEmail || currentEmail.trim() === '') {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '您尚未绑定邮箱' });
     }
 
     // 解除邮箱绑定（将email设为空字符串）
-    await pool.execute(
-      'UPDATE users SET email = ? WHERE id = ?',
-      ['', userId.toString()]
-    );
+    await prisma.user.update({
+      where: { id: BigInt(userId) },
+      data: { email: '' }
+    });
 
     console.log(`用户解除邮箱绑定成功 - 用户ID: ${userId}, 原邮箱: ${currentEmail}`);
 
@@ -483,11 +484,11 @@ router.post('/register', async (req, res) => {
     }
 
     // 检查用户ID是否已存在
-    const [existingUser] = await pool.execute(
-      'SELECT id FROM users WHERE user_id = ?',
-      [user_id.toString()]
-    );
-    if (existingUser.length > 0) {
+    const existingUser = await prisma.user.findUnique({
+      where: { user_id: user_id.toString() },
+      select: { id: true }
+    });
+    if (existingUser) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.CONFLICT, message: '用户ID已存在' });
     }
 
@@ -590,36 +591,50 @@ router.post('/register', async (req, res) => {
     // 插入新用户（密码使用SHA2哈希加密）
     // 邮件功能未启用时，email字段存储空字符串
     const userEmail = isEmailEnabled ? email : '';
-    const [result] = await pool.execute(
-      'INSERT INTO users (user_id, nickname, password, email, avatar, bio, location) VALUES (?, ?, SHA2(?, 256), ?, ?, ?, ?)',
-      [user_id, nickname, password, userEmail, defaultAvatar, '', ipLocation]
-    );
+    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+    const newUser = await prisma.user.create({
+      data: {
+        user_id: user_id,
+        nickname: nickname,
+        password: hashedPassword,
+        email: userEmail,
+        avatar: defaultAvatar,
+        bio: '',
+        location: ipLocation
+      }
+    });
 
-    const userId = result.insertId;
+    const userId = newUser.id;
 
     // 生成JWT令牌
-    const accessToken = generateAccessToken({ userId, user_id });
-    const refreshToken = generateRefreshToken({ userId, user_id });
+    const accessToken = generateAccessToken({ userId: Number(userId), user_id });
+    const refreshToken = generateRefreshToken({ userId: Number(userId), user_id });
 
     // 保存会话
-    await pool.execute(
-      'INSERT INTO user_sessions (user_id, token, refresh_token, expires_at, user_agent, is_active) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY), ?, 1)',
-      [userId.toString(), accessToken, refreshToken, userAgent]
-    );
+    await prisma.userSession.create({
+      data: {
+        user_id: userId,
+        token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        user_agent: userAgent,
+        is_active: true
+      }
+    });
 
     // 获取完整用户信息
-    const [userRows] = await pool.execute(
-      'SELECT id, user_id, nickname, avatar, bio, location, follow_count, fans_count, like_count FROM users WHERE id = ?',
-      [userId.toString()]
-    );
+    const userInfo = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, user_id: true, nickname: true, avatar: true, bio: true, location: true, follow_count: true, fans_count: true, like_count: true }
+    });
 
-    console.log(`用户注册成功 - 用户ID: ${userId}, 汐社号: ${userRows[0].user_id}`);
+    console.log(`用户注册成功 - 用户ID: ${userId}, 汐社号: ${userInfo.user_id}`);
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: '注册成功',
       data: {
-        user: userRows[0],
+        user: { ...userInfo, id: Number(userInfo.id) },
         tokens: {
           access_token: accessToken,
           refresh_token: refreshToken,
@@ -642,34 +657,28 @@ router.post('/login', async (req, res) => {
     }
 
     // 查找用户
-    const [userRows] = await pool.execute(
-      'SELECT id, user_id, nickname, password, avatar, bio, location, follow_count, fans_count, like_count, is_active, gender, zodiac_sign, mbti, education, major, interests FROM users WHERE user_id = ?',
-      [user_id.toString()]
-    );
+    const user = await prisma.user.findUnique({
+      where: { user_id: user_id.toString() },
+      select: { id: true, user_id: true, nickname: true, password: true, avatar: true, bio: true, location: true, follow_count: true, fans_count: true, like_count: true, is_active: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true }
+    });
 
-    if (userRows.length === 0) {
+    if (!user) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
     }
-
-    const user = userRows[0];
 
     if (!user.is_active) {
       return res.status(HTTP_STATUS.FORBIDDEN).json({ code: RESPONSE_CODES.FORBIDDEN, message: '账户已被禁用' });
     }
 
     // 验证密码（哈希比较）
-    const [passwordCheck] = await pool.execute(
-      'SELECT 1 FROM users WHERE id = ? AND password = SHA2(?, 256)',
-      [user.id.toString(), password]
-    );
-
-    if (passwordCheck.length === 0) {
+    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+    if (user.password !== hashedPassword) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '密码错误' });
     }
 
     // 生成JWT令牌
-    const accessToken = generateAccessToken({ userId: user.id, user_id: user.user_id });
-    const refreshToken = generateRefreshToken({ userId: user.id, user_id: user.user_id });
+    const accessToken = generateAccessToken({ userId: Number(user.id), user_id: user.user_id });
+    const refreshToken = generateRefreshToken({ userId: Number(user.id), user_id: user.user_id });
 
     // 获取用户IP和User-Agent
     const userIP = getRealIP(req);
@@ -677,32 +686,41 @@ router.post('/login', async (req, res) => {
 
     // 获取IP地理位置并更新用户location
     const ipLocation = await getIPLocation(userIP);
-    await pool.execute(
-      'UPDATE users SET location = ? WHERE id = ?',
-      [ipLocation, user.id.toString()]
-    );
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { location: ipLocation }
+    });
 
     // 清除旧会话并保存新会话
-    await pool.execute('UPDATE user_sessions SET is_active = 0 WHERE user_id = ?', [user.id.toString()]);
-    await pool.execute(
-      'INSERT INTO user_sessions (user_id, token, refresh_token, expires_at, user_agent, is_active) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY), ?, 1)',
-      [user.id.toString(), accessToken, refreshToken, userAgent]
-    );
+    await prisma.userSession.updateMany({
+      where: { user_id: user.id },
+      data: { is_active: false }
+    });
+    await prisma.userSession.create({
+      data: {
+        user_id: user.id,
+        token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        user_agent: userAgent,
+        is_active: true
+      }
+    });
 
     // 更新用户对象中的location字段
-    user.location = ipLocation;
+    const userResponse = { ...user, id: Number(user.id), location: ipLocation };
 
     // 移除密码字段
-    delete user.password;
+    delete userResponse.password;
 
     // 处理interests字段（如果是JSON字符串则解析）
-    if (user.interests) {
+    if (userResponse.interests) {
       try {
-        user.interests = typeof user.interests === 'string'
-          ? JSON.parse(user.interests)
-          : user.interests;
+        userResponse.interests = typeof userResponse.interests === 'string'
+          ? JSON.parse(userResponse.interests)
+          : userResponse.interests;
       } catch (e) {
-        user.interests = null;
+        userResponse.interests = null;
       }
     }
 
@@ -712,7 +730,7 @@ router.post('/login', async (req, res) => {
       code: RESPONSE_CODES.SUCCESS,
       message: '登录成功',
       data: {
-        user,
+        user: userResponse,
         tokens: {
           access_token: accessToken,
           refresh_token: refreshToken,
@@ -739,12 +757,17 @@ router.post('/refresh', async (req, res) => {
     const decoded = verifyToken(refresh_token);
 
     // 检查会话是否有效
-    const [sessionRows] = await pool.execute(
-      'SELECT id FROM user_sessions WHERE user_id = ? AND refresh_token = ? AND is_active = 1 AND expires_at > NOW()',
-      [decoded.userId.toString(), refresh_token]
-    );
+    const session = await prisma.userSession.findFirst({
+      where: {
+        user_id: BigInt(decoded.userId),
+        refresh_token: refresh_token,
+        is_active: true,
+        expires_at: { gt: new Date() }
+      },
+      select: { id: true }
+    });
 
-    if (sessionRows.length === 0) {
+    if (!session) {
       return res.status(HTTP_STATUS.UNAUTHORIZED).json({ code: RESPONSE_CODES.UNAUTHORIZED, message: '刷新令牌无效或已过期' });
     }
 
@@ -758,16 +781,21 @@ router.post('/refresh', async (req, res) => {
 
     // 获取IP地理位置并更新用户location
     const ipLocation = await getIPLocation(userIP);
-    await pool.execute(
-      'UPDATE users SET location = ? WHERE id = ?',
-      [ipLocation, decoded.userId.toString()]
-    );
+    await prisma.user.update({
+      where: { id: BigInt(decoded.userId) },
+      data: { location: ipLocation }
+    });
 
     // 更新会话
-    await pool.execute(
-      'UPDATE user_sessions SET token = ?, refresh_token = ?, expires_at = DATE_ADD(NOW(), INTERVAL 7 DAY), user_agent = ? WHERE id = ?',
-      [newAccessToken, newRefreshToken, userAgent, sessionRows[0].id.toString()]
-    );
+    await prisma.userSession.update({
+      where: { id: session.id },
+      data: {
+        token: newAccessToken,
+        refresh_token: newRefreshToken,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        user_agent: userAgent
+      }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
@@ -791,10 +819,10 @@ router.post('/logout', authenticateToken, async (req, res) => {
     const token = req.token;
 
     // 将当前会话设为无效
-    await pool.execute(
-      'UPDATE user_sessions SET is_active = 0 WHERE user_id = ? AND token = ?',
-      [userId.toString(), token]
-    );
+    await prisma.userSession.updateMany({
+      where: { user_id: BigInt(userId), token: token },
+      data: { is_active: false }
+    });
 
     console.log(`用户退出成功 - 用户ID: ${userId}`);
 
@@ -813,32 +841,33 @@ router.get('/me', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const [userRows] = await pool.execute(
-      'SELECT id, user_id, nickname, avatar, bio, location, email, follow_count, fans_count, like_count, is_active, created_at, gender, zodiac_sign, mbti, education, major, interests,verified FROM users WHERE id = ?',
-      [userId.toString()]
-    );
+    const user = await prisma.user.findUnique({
+      where: { id: BigInt(userId) },
+      select: { id: true, user_id: true, nickname: true, avatar: true, bio: true, location: true, email: true, follow_count: true, fans_count: true, like_count: true, is_active: true, created_at: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, verified: true }
+    });
 
-    if (userRows.length === 0) {
+    if (!user) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
     }
 
-    const user = userRows[0];
+    // Format user response
+    const userResponse = { ...user, id: Number(user.id) };
 
     // 处理interests字段（如果是JSON字符串则解析）
-    if (user.interests) {
+    if (userResponse.interests) {
       try {
-        user.interests = typeof user.interests === 'string'
-          ? JSON.parse(user.interests)
-          : user.interests;
+        userResponse.interests = typeof userResponse.interests === 'string'
+          ? JSON.parse(userResponse.interests)
+          : userResponse.interests;
       } catch (e) {
-        user.interests = null;
+        userResponse.interests = null;
       }
     }
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
-      data: user
+      data: userResponse
     });
   } catch (error) {
     console.error('获取用户信息失败:', error);
@@ -856,47 +885,38 @@ router.post('/admin/login', async (req, res) => {
     }
 
     // 查找管理员
-    const [adminRows] = await pool.execute(
-      'SELECT id, username, password FROM admin WHERE username = ?',
-      [username]
-    );
+    const admin = await prisma.admin.findUnique({
+      where: { username: username },
+      select: { id: true, username: true, password: true }
+    });
 
-    if (adminRows.length === 0) {
+    if (!admin) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.NOT_FOUND, message: '管理员账号不存在' });
     }
 
-    const admin = adminRows[0];
-
     // 验证密码（哈希比较）
-    const [passwordCheck] = await pool.execute(
-      'SELECT 1 FROM admin WHERE id = ? AND password = SHA2(?, 256)',
-      [admin.id.toString(), password]
-    );
-
-    if (passwordCheck.length === 0) {
+    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+    if (admin.password !== hashedPassword) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '密码错误' });
     }
 
     // 生成JWT令牌
     const accessToken = generateAccessToken({
-      adminId: admin.id,
+      adminId: Number(admin.id),
       username: admin.username,
       type: 'admin'
     });
     const refreshToken = generateRefreshToken({
-      adminId: admin.id,
+      adminId: Number(admin.id),
       username: admin.username,
       type: 'admin'
     });
-
-    // 移除密码字段
-    delete admin.password;
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: '登录成功',
       data: {
-        admin,
+        admin: { id: Number(admin.id), username: admin.username },
         tokens: {
           access_token: accessToken,
           refresh_token: refreshToken,
@@ -920,19 +940,19 @@ router.get('/admin/me', authenticateToken, async (req, res) => {
 
     const adminId = req.user.adminId;
 
-    const [adminRows] = await pool.execute(
-      'SELECT id, username FROM admin WHERE id = ?',
-      [adminId.toString()]
-    );
+    const admin = await prisma.admin.findUnique({
+      where: { id: BigInt(adminId) },
+      select: { id: true, username: true }
+    });
 
-    if (adminRows.length === 0) {
+    if (!admin) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '管理员不存在' });
     }
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
-      data: adminRows[0]
+      data: { id: Number(admin.id), username: admin.username }
     });
   } catch (error) {
     console.error('获取管理员信息失败:', error);
@@ -950,42 +970,36 @@ router.get('/admin/admins', authenticateToken, async (req, res) => {
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     // 搜索条件
-    let whereClause = '';
-    const params = [];
-
+    const where = {};
     if (req.query.username) {
-      whereClause += ' WHERE username LIKE ?';
-      params.push(`%${req.query.username}%`);
+      where.username = { contains: req.query.username };
     }
 
     // 验证排序字段
     const allowedSortFields = ['username', 'created_at'];
     const sortField = allowedSortFields.includes(req.query.sortField) ? req.query.sortField : 'created_at';
-    const sortOrder = req.query.sortOrder && req.query.sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    const sortOrder = req.query.sortOrder && req.query.sortOrder.toUpperCase() === 'ASC' ? 'asc' : 'desc';
 
-    // 获取总数
-    const countQuery = `SELECT COUNT(*) as total FROM admin ${whereClause}`;
-    const [countRows] = await pool.execute(countQuery, params);
-    const total = countRows[0].total;
-
-    // 查询管理员列表
-    const dataQuery = `
-      SELECT username, password, created_at 
-      FROM admin 
-      ${whereClause}
-      ORDER BY ${sortField} ${sortOrder} 
-      LIMIT ? OFFSET ?
-    `;
-    const [adminRows] = await pool.execute(dataQuery, [...params, String(limit), String(offset)]);
+    // 获取总数和列表
+    const [total, admins] = await Promise.all([
+      prisma.admin.count({ where }),
+      prisma.admin.findMany({
+        where,
+        select: { username: true, password: true, created_at: true },
+        orderBy: { [sortField]: sortOrder },
+        skip,
+        take: limit
+      })
+    ]);
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
       data: {
-        data: adminRows,
+        data: admins,
         pagination: {
           page,
           limit,
@@ -1016,26 +1030,29 @@ router.post('/admin/admins', authenticateToken, async (req, res) => {
     }
 
     // 检查用户名是否已存在
-    const [existingRows] = await pool.execute(
-      'SELECT id FROM admin WHERE username = ?',
-      [username]
-    );
+    const existingAdmin = await prisma.admin.findUnique({
+      where: { username: username },
+      select: { id: true }
+    });
 
-    if (existingRows.length > 0) {
+    if (existingAdmin) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.CONFLICT, message: '账号已存在' });
     }
 
     // 创建管理员（密码使用SHA2哈希加密）
-    const [result] = await pool.execute(
-      'INSERT INTO admin (username, password, created_at) VALUES (?, SHA2(?, 256), NOW())',
-      [username, password]
-    );
+    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+    const newAdmin = await prisma.admin.create({
+      data: {
+        username: username,
+        password: hashedPassword
+      }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: '创建管理员成功',
       data: {
-        id: result.insertId
+        id: Number(newAdmin.id)
       }
     });
   } catch (error) {
@@ -1061,20 +1078,21 @@ router.put('/admin/admins/:id', authenticateToken, async (req, res) => {
     }
 
     // 检查管理员是否存在
-    const [adminRows] = await pool.execute(
-      'SELECT username FROM admin WHERE username = ?',
-      [adminId]
-    );
+    const admin = await prisma.admin.findUnique({
+      where: { username: adminId },
+      select: { username: true }
+    });
 
-    if (adminRows.length === 0) {
+    if (!admin) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '管理员不存在' });
     }
 
     // 更新管理员密码（使用SHA2哈希加密）
-    await pool.execute(
-      'UPDATE admin SET password = SHA2(?, 256) WHERE username = ?',
-      [password, adminId]
-    );
+    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+    await prisma.admin.update({
+      where: { username: adminId },
+      data: { password: hashedPassword }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
@@ -1097,17 +1115,17 @@ router.delete('/admin/admins/:id', authenticateToken, async (req, res) => {
     const adminId = req.params.id;
 
     // 检查管理员是否存在
-    const [adminRows] = await pool.execute(
-      'SELECT username FROM admin WHERE username = ?',
-      [adminId]
-    );
+    const admin = await prisma.admin.findUnique({
+      where: { username: adminId },
+      select: { username: true }
+    });
 
-    if (adminRows.length === 0) {
+    if (!admin) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '管理员不存在' });
     }
 
     // 删除管理员
-    await pool.execute('DELETE FROM admin WHERE username = ?', [adminId]);
+    await prisma.admin.delete({ where: { username: adminId } });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
@@ -1136,20 +1154,21 @@ router.put('/admin/admins/:id/password', authenticateToken, async (req, res) => 
     }
 
     // 检查管理员是否存在
-    const [adminRows] = await pool.execute(
-      'SELECT id FROM admin WHERE id = ?',
-      [adminId.toString()]
-    );
+    const admin = await prisma.admin.findUnique({
+      where: { id: BigInt(adminId) },
+      select: { id: true }
+    });
 
-    if (adminRows.length === 0) {
+    if (!admin) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '管理员不存在' });
     }
 
     // 更新密码（使用SHA2哈希加密）
-    await pool.execute(
-      'UPDATE admin SET password = SHA2(?, 256) WHERE id = ?',
-      [password, adminId.toString()]
-    );
+    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+    await prisma.admin.update({
+      where: { id: BigInt(adminId) },
+      data: { password: hashedPassword }
+    });
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
@@ -1164,7 +1183,7 @@ router.put('/admin/admins/:id/password', authenticateToken, async (req, res) => 
 // ========== OAuth2 登录相关 ==========
 
 // OAuth2用户信息查询字段（减少重复）
-const OAUTH2_USER_SELECT_FIELDS = 'id, user_id, nickname, avatar, bio, location, follow_count, fans_count, like_count, is_active, gender, zodiac_sign, mbti, education, major, interests';
+const OAUTH2_USER_SELECT_FIELDS = { id: true, user_id: true, nickname: true, avatar: true, bio: true, location: true, follow_count: true, fans_count: true, like_count: true, is_active: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true };
 
 // 生成OAuth2 state参数
 const generateOAuth2State = () => {
@@ -1340,17 +1359,17 @@ router.get('/oauth2/callback', async (req, res) => {
     }
 
     // 首先尝试通过oauth2_id查找用户
-    let [existingUsers] = await pool.execute(
-      `SELECT ${OAUTH2_USER_SELECT_FIELDS} FROM users WHERE oauth2_id = ?`,
-      [oauth2UserId]
-    );
+    let existingUser = await prisma.user.findFirst({
+      where: { oauth2_id: BigInt(oauth2UserId) },
+      select: OAUTH2_USER_SELECT_FIELDS
+    });
 
     let user;
     let isNewUser = false;
 
-    if (existingUsers.length > 0) {
+    if (existingUser) {
       // 找到已绑定的用户
-      user = existingUsers[0];
+      user = existingUser;
       
       if (!user.is_active) {
         return res.redirect('/?error=account_disabled');
@@ -1365,11 +1384,11 @@ router.get('/oauth2/callback', async (req, res) => {
       let suffix = 0;
       let baseUserId = newUserId;
       while (true) {
-        const [checkUser] = await pool.execute(
-          'SELECT id FROM users WHERE user_id = ?',
-          [newUserId]
-        );
-        if (checkUser.length === 0) {
+        const checkUser = await prisma.user.findUnique({
+          where: { user_id: newUserId },
+          select: { id: true }
+        });
+        if (!checkUser) {
           break;
         }
         suffix++;
@@ -1387,45 +1406,62 @@ router.get('/oauth2/callback', async (req, res) => {
 
       // 创建新用户（不设置密码，通过OAuth2登录）
       const defaultNickname = oauth2Username || `用户${oauth2UserId}`;
-      const [insertResult] = await pool.execute(
-        'INSERT INTO users (user_id, nickname, password, email, avatar, bio, location, oauth2_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [newUserId, defaultNickname, '', oauth2Email, '', '这个人很懒，还没有简介', ipLocation, oauth2UserId]
-      );
+      const newUser = await prisma.user.create({
+        data: {
+          user_id: newUserId,
+          nickname: defaultNickname,
+          password: '',
+          email: oauth2Email,
+          avatar: '',
+          bio: '这个人很懒，还没有简介',
+          location: ipLocation,
+          oauth2_id: BigInt(oauth2UserId)
+        }
+      });
 
-      const newId = insertResult.insertId;
-      
       // 获取新创建的用户信息
-      const [newUserRows] = await pool.execute(
-        `SELECT ${OAUTH2_USER_SELECT_FIELDS} FROM users WHERE id = ?`,
-        [newId.toString()]
-      );
-      user = newUserRows[0];
+      user = await prisma.user.findUnique({
+        where: { id: newUser.id },
+        select: OAUTH2_USER_SELECT_FIELDS
+      });
 
-      console.log(`OAuth2新用户创建成功 - 用户ID: ${newId}, 汐社号: ${newUserId}, OAuth2_ID: ${oauth2UserId}`);
+      console.log(`OAuth2新用户创建成功 - 用户ID: ${newUser.id}, 汐社号: ${newUserId}, OAuth2_ID: ${oauth2UserId}`);
     }
 
     // 生成本站JWT令牌
-    const accessToken = generateAccessToken({ userId: user.id, user_id: user.user_id });
-    const refreshToken = generateRefreshToken({ userId: user.id, user_id: user.user_id });
+    const accessToken = generateAccessToken({ userId: Number(user.id), user_id: user.user_id });
+    const refreshToken = generateRefreshToken({ userId: Number(user.id), user_id: user.user_id });
 
     // 获取User-Agent
     const userAgent = req.headers['user-agent'] || '';
 
     // 清除旧会话并保存新会话
-    await pool.execute('UPDATE user_sessions SET is_active = 0 WHERE user_id = ?', [user.id.toString()]);
-    await pool.execute(
-      'INSERT INTO user_sessions (user_id, token, refresh_token, expires_at, user_agent, is_active) VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 7 DAY), ?, 1)',
-      [user.id.toString(), accessToken, refreshToken, userAgent]
-    );
+    await prisma.userSession.updateMany({
+      where: { user_id: user.id },
+      data: { is_active: false }
+    });
+    await prisma.userSession.create({
+      data: {
+        user_id: user.id,
+        token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        user_agent: userAgent,
+        is_active: true
+      }
+    });
 
+    // Format user response
+    const userResponse = { ...user, id: Number(user.id) };
+    
     // 处理interests字段
-    if (user.interests) {
+    if (userResponse.interests) {
       try {
-        user.interests = typeof user.interests === 'string'
-          ? JSON.parse(user.interests)
-          : user.interests;
+        userResponse.interests = typeof userResponse.interests === 'string'
+          ? JSON.parse(userResponse.interests)
+          : userResponse.interests;
       } catch (e) {
-        user.interests = null;
+        userResponse.interests = null;
       }
     }
 

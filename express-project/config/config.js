@@ -407,7 +407,11 @@ const dbConfig = {
 // 创建连接池
 const pool = mysql.createPool(dbConfig);
 
+// 导入 Prisma Client
+const prisma = require('../utils/prisma');
+
 module.exports = {
   ...config,
-  pool
+  pool,
+  prisma
 };
