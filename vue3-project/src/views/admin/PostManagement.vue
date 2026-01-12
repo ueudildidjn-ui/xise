@@ -15,10 +15,7 @@ const categories = ref([])
 const loadCategories = async () => {
   try {
     const response = await getCategories()
-    // 检查响应成功且有数据时才设置分类
-    if (response && response.data) {
-      categories.value = response.data
-    }
+    categories.value = response.data
   } catch (error) {
     console.error('加载分类失败:', error)
   }

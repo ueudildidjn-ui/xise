@@ -31,7 +31,7 @@
                 v-if="isPaidVideoWithPreview"
                 ref="videoPlayer"
                 :src="props.item.preview_video_url || props.item.video_url"
-                :poster-url="firstImageUrl"
+                :poster-url="props.item.cover_url || (props.item.images && props.item.images[0])"
                 :autoplay="true"
                 :show-controls="true"
                 :show-play-button="true"
@@ -49,7 +49,7 @@
                 v-else
                 ref="videoPlayer"
                 :src="props.item.video_url"
-                :poster-url="firstImageUrl"
+                :poster-url="props.item.cover_url || (props.item.images && props.item.images[0])"
                 :autoplay="true"
                 :show-controls="true"
                 :show-play-button="true"
@@ -60,8 +60,8 @@
             </template>
             <!-- 付费视频且无video_url也无preview_video_url：显示解锁遮罩 -->
             <div v-else-if="isPaidContent && !hasPurchased" class="video-payment-overlay">
-              <div class="video-cover-blur" v-if="firstImageUrl">
-                <img :src="firstImageUrl" alt="视频封面" class="blur-cover-image" />
+              <div class="video-cover-blur" v-if="props.item.cover_url || (props.item.images && props.item.images[0])">
+                <img :src="props.item.cover_url || (props.item.images && props.item.images[0])" alt="视频封面" class="blur-cover-image" />
               </div>
               <div class="video-unlock-content">
                 <div class="unlock-icon">🔒</div>
@@ -181,7 +181,7 @@
                   v-if="isPaidVideoWithPreview"
                   ref="mobileVideoPlayer"
                   :src="props.item.preview_video_url || props.item.video_url"
-                  :poster-url="firstImageUrl"
+                  :poster-url="props.item.cover_url || (props.item.images && props.item.images[0])"
                   :autoplay="true"
                   :show-controls="true"
                   :show-play-button="true"
@@ -199,7 +199,7 @@
                   v-else
                   ref="mobileVideoPlayer"
                   :src="props.item.video_url"
-                  :poster-url="firstImageUrl"
+                  :poster-url="props.item.cover_url || (props.item.images && props.item.images[0])"
                   :autoplay="true"
                   :show-controls="true"
                   :show-play-button="true"
@@ -210,8 +210,8 @@
               </template>
               <!-- 付费视频且无video_url也无preview_video_url：显示解锁遮罩 -->
               <div v-else-if="isPaidContent && !hasPurchased" class="video-payment-overlay">
-                <div class="video-cover-blur" v-if="firstImageUrl">
-                  <img :src="firstImageUrl" alt="视频封面" class="blur-cover-image" />
+                <div class="video-cover-blur" v-if="props.item.cover_url || (props.item.images && props.item.images[0])">
+                  <img :src="props.item.cover_url || (props.item.images && props.item.images[0])" alt="视频封面" class="blur-cover-image" />
                 </div>
                 <div class="video-unlock-content">
                   <div class="unlock-icon">🔒</div>
@@ -865,29 +865,6 @@ const freePreviewCount = computed(() => {
   return paymentSettings.value.freePreviewCount || 0
 })
 
-// 从图片数据中提取URL（兼容字符串和对象格式）
-const getImageUrl = (img) => {
-  if (!img) return null
-  if (typeof img === 'string') return img
-  if (typeof img === 'object') {
-    return img.url || img.image_url || null
-  }
-  return null
-}
-
-// 获取第一张图片的URL（用于视频封面等场景的fallback）
-const firstImageUrl = computed(() => {
-  // 优先使用 cover_url
-  if (props.item.cover_url) return props.item.cover_url
-  
-  // 从 images 数组提取第一张图片
-  const images = props.item.images || props.item.originalData?.images
-  if (images && Array.isArray(images) && images.length > 0) {
-    return getImageUrl(images[0])
-  }
-  return null
-})
-
 // 获取原始图片数据（用于访问isFreePreview属性）- 排序后免费图片优先
 const rawImages = computed(() => {
   let images = []
@@ -1226,13 +1203,11 @@ const imageList = computed(() => {
   
   // 提取URL（兼容字符串和对象格式）
   return sortedImages.map(img => {
-    if (typeof img === 'object' && img !== null) {
-      // 支持多种属性名：url, image_url，并确保值是字符串
-      if (typeof img.url === 'string' && img.url) return img.url
-      if (typeof img.image_url === 'string' && img.image_url) return img.image_url
+    if (typeof img === 'object' && img.url) {
+      return img.url
     }
-    return typeof img === 'string' ? img : ''
-  }).filter(url => url) // 过滤掉空值
+    return img
+  })
 })
 
 const hasMultipleImages = computed(() => imageList.value.length > 1)
@@ -2141,11 +2116,9 @@ const getCommentUserHoverConfig = (comment) => {
           // 收集每个笔记的第一张图片作为封面
           const coverImages = []
           postsResponse.data.posts.forEach((post) => {
-            // 使用图片数组的第一张作为封面（兼容字符串和对象格式）
+            // 使用图片数组的第一张作为封面
             if (post.images && post.images.length > 0) {
-              const firstImg = post.images[0]
-              const imgUrl = typeof firstImg === 'object' ? (firstImg.url || firstImg.image_url) : firstImg
-              if (imgUrl) coverImages.push(imgUrl)
+              coverImages.push(post.images[0])
             }
           })
           // 取前3张封面图
@@ -2298,11 +2271,9 @@ const getAuthorUserHoverConfig = () => {
           // 收集每个笔记的第一张图片作为封面
           const coverImages = []
           postsResponse.data.posts.forEach((post) => {
-            // 使用图片数组的第一张作为封面（兼容字符串和对象格式）
+            // 使用图片数组的第一张作为封面
             if (post.images && post.images.length > 0) {
-              const firstImg = post.images[0]
-              const imgUrl = typeof firstImg === 'object' ? (firstImg.url || firstImg.image_url) : firstImg
-              if (imgUrl) coverImages.push(imgUrl)
+              coverImages.push(post.images[0])
             }
           })
           // 取前3张封面图
