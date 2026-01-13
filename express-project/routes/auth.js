@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
-const { pool, prisma, email: emailConfig, oauth2: oauth2Config, queue: queueConfig } = require('../config/config');
+const { pool, prisma, email: emailConfig, oauth2: oauth2Config, queue: queueConfig, geetest: geetestConfig } = require('../config/config');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/jwt');
 const { authenticateToken } = require('../middleware/auth');
 const { getIPLocation, getRealIP } = require('../utils/ipLocation');
@@ -21,6 +21,62 @@ const emailCodeStore = new Map();
 // 存储OAuth2 state参数（用于防止CSRF攻击）
 const oauth2StateStore = new Map();
 
+/**
+ * 极验验证码二次校验
+ * @param {Object} geetestData - 前端传来的极验验证数据
+ * @param {string} geetestData.lot_number - 验证流水号
+ * @param {string} geetestData.captcha_output - 验证输出信息
+ * @param {string} geetestData.pass_token - 验证通过标识
+ * @param {string} geetestData.gen_time - 验证通过时间戳
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+const verifyGeetestCaptcha = async (geetestData) => {
+  try {
+    const { lot_number, captcha_output, pass_token, gen_time } = geetestData;
+    
+    // 生成签名 sign_token = HMAC-SHA256(captcha_key, lot_number)
+    const sign_token = crypto
+      .createHmac('sha256', geetestConfig.captchaKey)
+      .update(lot_number)
+      .digest('hex');
+    
+    // 构建请求参数
+    const params = new URLSearchParams({
+      lot_number,
+      captcha_output,
+      pass_token,
+      gen_time,
+      sign_token
+    });
+    
+    // 调用极验二次校验接口
+    const response = await fetch(
+      `${geetestConfig.apiServer}/validate?captcha_id=${geetestConfig.captchaId}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: params.toString()
+      }
+    );
+    
+    const result = await response.json();
+    
+    if (result.result === 'success') {
+      return { success: true, message: '验证通过' };
+    } else {
+      console.error('极验验证失败:', result.reason);
+      return { success: false, message: result.reason || '验证码校验失败' };
+    }
+  } catch (error) {
+    console.error('极验验证异常:', error);
+    // 极验服务异常时，为了不影响用户体验，可以选择放行
+    // 这里选择返回成功，但实际生产环境可根据需求调整
+    return { success: true, message: '极验服务异常，已放行' };
+  }
+};
+
 // 获取认证配置状态（包括邮件功能和OAuth2配置）
 router.get('/auth-config', (req, res) => {
   res.json({
@@ -30,7 +86,10 @@ router.get('/auth-config', (req, res) => {
       oauth2Enabled: oauth2Config.enabled,
       oauth2OnlyLogin: oauth2Config.onlyOAuth2,
       // 只返回必要的OAuth2配置，不返回敏感信息
-      oauth2LoginUrl: oauth2Config.enabled ? oauth2Config.loginUrl : ''
+      oauth2LoginUrl: oauth2Config.enabled ? oauth2Config.loginUrl : '',
+      // 极验验证码配置
+      geetestEnabled: geetestConfig.enabled,
+      geetestCaptchaId: geetestConfig.enabled ? geetestConfig.captchaId : ''
     },
     message: 'success'
   });
@@ -468,20 +527,38 @@ router.delete('/unbind-email', authenticateToken, async (req, res) => {
 // 用户注册
 router.post('/register', async (req, res) => {
   try {
-    const { user_id, nickname, password, captchaId, captchaText, email, emailCode } = req.body;
+    const { user_id, nickname, password, captchaId, captchaText, email, emailCode,
+      // 极验验证码参数
+      lot_number, captcha_output, pass_token, gen_time
+    } = req.body;
 
     // 根据邮件功能是否启用，决定必填参数
     const isEmailEnabled = emailConfig.enabled;
+    // 根据极验是否启用，决定验证方式
+    const isGeetestEnabled = geetestConfig.enabled;
 
-    if (isEmailEnabled) {
-      // 邮件功能启用时，邮箱和邮箱验证码必填
-      if (!user_id || !nickname || !password || !captchaId || !captchaText || !email || !emailCode) {
-        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少必要参数' });
+    // 基本参数验证
+    if (!user_id || !nickname || !password) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少必要参数' });
+    }
+
+    // 验证码参数验证（根据启用的验证码类型）
+    if (isGeetestEnabled) {
+      // 极验验证码启用时，需要极验相关参数
+      if (!lot_number || !captcha_output || !pass_token || !gen_time) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少验证码参数' });
       }
     } else {
-      // 邮件功能未启用时，邮箱和邮箱验证码可选
-      if (!user_id || !nickname || !password || !captchaId || !captchaText) {
-        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少必要参数' });
+      // 传统验证码启用时，需要captchaId和captchaText
+      if (!captchaId || !captchaText) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少验证码参数' });
+      }
+    }
+
+    // 邮件功能启用时，邮箱和邮箱验证码必填
+    if (isEmailEnabled) {
+      if (!email || !emailCode) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少邮箱验证参数' });
       }
     }
 
@@ -494,23 +571,38 @@ router.post('/register', async (req, res) => {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.CONFLICT, message: '用户ID已存在' });
     }
 
-    // 验证验证码
-    const storedCaptcha = captchaStore.get(captchaId);
-    if (!storedCaptcha) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '验证码已过期或不存在' });
-    }
+    // 验证验证码（根据启用的类型）
+    if (isGeetestEnabled) {
+      // 极验验证码二次校验
+      const geetestResult = await verifyGeetestCaptcha({
+        lot_number,
+        captcha_output,
+        pass_token,
+        gen_time
+      });
+      
+      if (!geetestResult.success) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: geetestResult.message || '验证码校验失败' });
+      }
+    } else {
+      // 传统验证码验证
+      const storedCaptcha = captchaStore.get(captchaId);
+      if (!storedCaptcha) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '验证码已过期或不存在' });
+      }
 
-    if (Date.now() > storedCaptcha.expires) {
+      if (Date.now() > storedCaptcha.expires) {
+        captchaStore.delete(captchaId);
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '验证码已过期' });
+      }
+
+      if (captchaText !== storedCaptcha.text) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '验证码错误' });
+      }
+
+      // 验证码验证成功，删除已使用的验证码
       captchaStore.delete(captchaId);
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '验证码已过期' });
     }
-
-    if (captchaText !== storedCaptcha.text) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '验证码错误' });
-    }
-
-    // 验证码验证成功，删除已使用的验证码
-    captchaStore.delete(captchaId);
 
     // 邮件功能启用时才验证邮箱
     if (isEmailEnabled) {

@@ -405,6 +405,18 @@ const config = {
       password: process.env.REDIS_PASSWORD || undefined,
       db: parseInt(process.env.REDIS_DB) || 0
     }
+  },
+
+  // 极验验证码 (GeetestV4) 配置
+  geetest: {
+    // 是否启用极验验证码
+    enabled: process.env.GEETEST_ENABLED === 'true', // 默认不启用
+    // 验证码ID
+    captchaId: process.env.GEETEST_CAPTCHA_ID || '',
+    // 验证码密钥（用于服务端签名）
+    captchaKey: process.env.GEETEST_CAPTCHA_KEY || '',
+    // 极验API服务器地址
+    apiServer: 'https://gcaptcha4.geetest.com'
   }
 };
 
