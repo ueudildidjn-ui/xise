@@ -3027,10 +3027,10 @@ onUnmounted(() => {
   }
   
   // 确保视频在组件卸载时暂停播放
-  if (videoPlayer.value && typeof videoPlayer.value.pause === 'function') {
+  if (videoPlayer.value?.pause) {
     videoPlayer.value.pause()
   }
-  if (mobileVideoPlayer.value && typeof mobileVideoPlayer.value.pause === 'function') {
+  if (mobileVideoPlayer.value?.pause) {
     mobileVideoPlayer.value.pause()
   }
 })

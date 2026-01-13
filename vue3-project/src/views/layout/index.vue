@@ -21,7 +21,7 @@ import LayoutFooter from './components/LayoutFooter.vue'
 const route = useRoute()
 
 // Check if current route is post detail page
-const isPostDetailPage = computed(() => route.path.startsWith('/post'))
+const isPostDetailPage = computed(() => route.name === 'post_detail')
 
 const showSidebar = ref(window.innerWidth > 960)
 const handleResize = () => {
