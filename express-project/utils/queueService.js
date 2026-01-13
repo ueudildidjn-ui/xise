@@ -246,7 +246,7 @@ async function initWorkers(connection) {
           });
         }
 
-        // 如果是个人简介审核，审核不通过则设置bio_audit_status为2
+        // 如果是个人简介审核，审核不通过则设置bio_audit_status为2并清空bio
         if (type === 'bio' && targetId) {
           if (result.passed) {
             await prisma.user.update({
@@ -257,9 +257,9 @@ async function initWorkers(connection) {
           } else {
             await prisma.user.update({
               where: { id: BigInt(targetId) },
-              data: { bio_audit_status: 2 }
+              data: { bio: '', bio_audit_status: 2 }
             });
-            console.log(`⚠️ 个人简介审核不通过 - 用户ID: ${targetId}, 原因: ${result.reason || '个人简介不符合社区规范'}`);
+            console.log(`⚠️ 个人简介审核不通过，已清空简介 - 用户ID: ${targetId}, 原因: ${result.reason || '个人简介不符合社区规范'}`);
           }
           
           // 创建审核记录

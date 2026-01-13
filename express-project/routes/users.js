@@ -479,7 +479,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (bioChanged && trimmedBio) {
       const bioCheck = await checkBioBannedWords(prisma, trimmedBio);
       if (bioCheck.matched) {
-        // 触发本地违禁词，设置简介为拒绝状态
+        // 触发本地违禁词，设置简介为空并拒绝
+        updateData.bio = '';
         updateData.bio_audit_status = AUDIT_STATUS.REJECTED;
         addAuditLogTask({
           userId: Number(targetUserId),
@@ -489,7 +490,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
           auditResult: getBannedWordAuditResult(bioCheck.matchedWords),
           riskLevel: 'high',
           categories: ['banned_word'],
-          reason: `[本地违禁词拒绝] 个人简介触发违禁词: ${bioCheck.matchedWords.join(', ')}`,
+          reason: `[本地违禁词拒绝] 个人简介触发违禁词: ${bioCheck.matchedWords.join(', ')}，已自动清空简介`,
           status: AUDIT_STATUS.REJECTED
         });
       } else if (isAuditEnabled()) {
@@ -502,6 +503,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
           const auditResult = await auditBio(trimmedBio, Number(targetUserId));
           const passed = auditResult?.passed !== false;
           updateData.bio_audit_status = passed ? AUDIT_STATUS.APPROVED : AUDIT_STATUS.REJECTED;
+          if (!passed) {
+            // AI审核不通过，清空简介
+            updateData.bio = '';
+          }
           addAuditLogTask({
             userId: Number(targetUserId),
             type: AUDIT_TYPES.BIO,
@@ -510,7 +515,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
             auditResult: auditResult,
             riskLevel: auditResult?.risk_level || 'low',
             categories: auditResult?.categories || [],
-            reason: passed ? '[AI审核通过] 个人简介审核通过' : `[AI审核拒绝] ${auditResult?.reason || '个人简介不符合规范'}`,
+            reason: passed ? '[AI审核通过] 个人简介审核通过' : `[AI审核拒绝] ${auditResult?.reason || '个人简介不符合规范'}，已自动清空简介`,
             status: passed ? AUDIT_STATUS.APPROVED : AUDIT_STATUS.REJECTED
           });
         }
