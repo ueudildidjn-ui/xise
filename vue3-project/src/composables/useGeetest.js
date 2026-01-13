@@ -138,9 +138,15 @@ export function useGeetest(options = {}) {
 
       // 重置之前的结果
       captchaResult.value = null
+      
+      // 使用标志位来确保回调只处理一次
+      let handled = false
 
       // 设置一次性成功回调
       const successHandler = () => {
+        if (handled) return
+        handled = true
+        
         const result = captchaObj.getValidate()
         if (result) {
           captchaResult.value = {
@@ -157,12 +163,15 @@ export function useGeetest(options = {}) {
 
       // 设置关闭回调
       const closeHandler = () => {
+        if (handled) return
+        handled = true
+        
         if (!captchaResult.value) {
           reject(new Error('用户取消验证'))
         }
       }
 
-      // 重新绑定回调
+      // 绑定回调（Geetest SDK不支持移除回调，使用handled标志位确保只处理一次）
       captchaObj.onSuccess(successHandler)
       captchaObj.onClose(closeHandler)
 

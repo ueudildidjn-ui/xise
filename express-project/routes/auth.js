@@ -61,6 +61,11 @@ const verifyGeetestCaptcha = async (geetestData) => {
       }
     );
     
+    if (!response.ok) {
+      console.error('极验API请求失败:', `HTTP ${response.status} ${response.statusText}`);
+      return { success: false, message: '验证码服务暂时不可用，请稍后重试' };
+    }
+    
     const result = await response.json();
     
     if (result.result === 'success') {
@@ -70,10 +75,17 @@ const verifyGeetestCaptcha = async (geetestData) => {
       return { success: false, message: result.reason || '验证码校验失败' };
     }
   } catch (error) {
-    console.error('极验验证异常:', error);
-    // 极验服务异常时，为了不影响用户体验，可以选择放行
-    // 这里选择返回成功，但实际生产环境可根据需求调整
-    return { success: true, message: '极验服务异常，已放行' };
+    // 区分不同类型的错误
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      console.error('极验验证网络错误:', error.message);
+      return { success: false, message: '网络连接失败，请检查网络后重试' };
+    } else if (error.name === 'AbortError') {
+      console.error('极验验证请求超时');
+      return { success: false, message: '验证码服务响应超时，请稍后重试' };
+    } else {
+      console.error('极验验证异常:', error.name, error.message);
+      return { success: false, message: '验证码服务异常，请稍后重试' };
+    }
   }
 };
 
