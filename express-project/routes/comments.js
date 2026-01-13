@@ -7,6 +7,7 @@ const NotificationHelper = require('../utils/notificationHelper');
 const { extractMentionedUsers, hasMentions } = require('../utils/mentionParser');
 const { sanitizeContent } = require('../utils/contentSecurity');
 const { auditComment, isAuditEnabled } = require('../utils/contentAudit');
+const { addContentAuditTask, isQueueEnabled } = require('../utils/queueService');
 
 // 获取AI自动审核状态（延迟加载以避免循环依赖）
 let getAiAutoReviewStatus = null;
@@ -229,8 +230,18 @@ router.post('/', authenticateToken, async (req, res) => {
     let auditResult = null;
     let auditRecordStatus = 0;
     let shouldDeleteComment = false;
+    let useAsyncAudit = false;
 
-    if (isAuditEnabled()) {
+    // 判断是否使用异步审核
+    // 条件：启用了内容审核 + 启用了异步队列
+    if (isAuditEnabled() && isQueueEnabled()) {
+      // 使用异步审核：评论先创建为待审核状态，后台处理审核
+      useAsyncAudit = true;
+      auditStatus = 0;
+      isPublic = false;
+      console.log('📝 使用异步队列进行内容审核');
+    } else if (isAuditEnabled()) {
+      // 使用同步审核
       try {
         auditResult = await auditComment(sanitizedContent, Number(userId));
         
@@ -327,8 +338,8 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const commentId = newComment.id;
     
-    // 更新audit表中的target_id为评论ID
-    if (isAuditEnabled()) {
+    // 更新audit表中的target_id为评论ID（仅同步审核时需要）
+    if (isAuditEnabled() && !useAsyncAudit) {
       await prisma.audit.updateMany({
         where: {
           user_id: userId,
@@ -337,6 +348,12 @@ router.post('/', authenticateToken, async (req, res) => {
         },
         data: { target_id: commentId }
       });
+    }
+
+    // 如果使用异步审核，将审核任务加入队列
+    if (useAsyncAudit) {
+      addContentAuditTask(sanitizedContent, Number(userId), 'comment', Number(commentId));
+      console.log(`📝 内容审核任务已加入队列 - 评论ID: ${commentId}`);
     }
 
     // 更新笔记评论数

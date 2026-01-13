@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
-const { pool, prisma, email: emailConfig, oauth2: oauth2Config } = require('../config/config');
+const { pool, prisma, email: emailConfig, oauth2: oauth2Config, queue: queueConfig } = require('../config/config');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/jwt');
 const { authenticateToken } = require('../middleware/auth');
 const { getIPLocation, getRealIP } = require('../utils/ipLocation');
 const { sendEmailCode } = require('../utils/email');
 const { auditNickname, isAuditEnabled } = require('../utils/contentAudit');
+const { addIPLocationTask, isQueueEnabled } = require('../utils/queueService');
 const svgCaptcha = require('svg-captcha');
 const path = require('path');
 const fs = require('fs');
@@ -575,18 +576,23 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // 获取用户IP属地
+    // 获取用户IP和User-Agent
     const userIP = getRealIP(req);
-    let ipLocation;
-    try {
-      ipLocation = await getIPLocation(userIP);
-    } catch (error) {
-      ipLocation = '未知';
-    }
-    // 获取用户User-Agent
     const userAgent = req.headers['user-agent'] || '';
     // 默认头像使用空字符串，前端会使用本地默认头像
     const defaultAvatar = '';
+
+    // 获取用户IP属地
+    // 如果启用了异步队列，使用队列处理；否则同步处理
+    let ipLocation = '未知';
+    if (!isQueueEnabled()) {
+      // 同步获取 IP 属地
+      try {
+        ipLocation = await getIPLocation(userIP);
+      } catch (error) {
+        ipLocation = '未知';
+      }
+    }
 
     // 插入新用户（密码使用SHA2哈希加密）
     // 邮件功能未启用时，email字段存储空字符串
@@ -605,6 +611,11 @@ router.post('/register', async (req, res) => {
     });
 
     const userId = newUser.id;
+
+    // 如果启用了异步队列，将 IP 属地更新任务加入队列
+    if (isQueueEnabled()) {
+      addIPLocationTask(Number(userId), userIP);
+    }
 
     // 生成JWT令牌
     const accessToken = generateAccessToken({ userId: Number(userId), user_id });
@@ -685,11 +696,19 @@ router.post('/login', async (req, res) => {
     const userAgent = req.headers['user-agent'] || '';
 
     // 获取IP地理位置并更新用户location
-    const ipLocation = await getIPLocation(userIP);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { location: ipLocation }
-    });
+    // 如果启用了异步队列，使用队列处理；否则同步处理
+    let ipLocation = user.location || '未知';
+    if (isQueueEnabled()) {
+      // 异步更新 IP 属地
+      addIPLocationTask(Number(user.id), userIP);
+    } else {
+      // 同步更新 IP 属地
+      ipLocation = await getIPLocation(userIP);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { location: ipLocation }
+      });
+    }
 
     // 清除旧会话并保存新会话
     await prisma.userSession.updateMany({
@@ -780,11 +799,18 @@ router.post('/refresh', async (req, res) => {
     const userAgent = req.headers['user-agent'] || '';
 
     // 获取IP地理位置并更新用户location
-    const ipLocation = await getIPLocation(userIP);
-    await prisma.user.update({
-      where: { id: BigInt(decoded.userId) },
-      data: { location: ipLocation }
-    });
+    // 如果启用了异步队列，使用队列处理；否则同步处理
+    if (isQueueEnabled()) {
+      // 异步更新 IP 属地
+      addIPLocationTask(decoded.userId, userIP);
+    } else {
+      // 同步更新 IP 属地
+      const ipLocation = await getIPLocation(userIP);
+      await prisma.user.update({
+        where: { id: BigInt(decoded.userId) },
+        data: { location: ipLocation }
+      });
+    }
 
     // 更新会话
     await prisma.userSession.update({
