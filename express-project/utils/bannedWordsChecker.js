@@ -3,16 +3,11 @@
  * 
  * @description 用于检查内容是否包含本地违禁词
  * 支持普通匹配和通配符匹配
+ * 所有违禁词适用于所有内容类型（通用）
  */
 
-const { BANNED_WORD_TYPES } = require('../constants');
-
 // 缓存违禁词列表，避免每次查询数据库
-let bannedWordsCache = {
-  [BANNED_WORD_TYPES.USERNAME]: [],
-  [BANNED_WORD_TYPES.COMMENT]: [],
-  [BANNED_WORD_TYPES.BIO]: []
-};
+let bannedWordsCache = [];
 let cacheLastUpdated = 0;
 const CACHE_TTL = 60000; // 缓存60秒
 
@@ -55,29 +50,19 @@ async function refreshBannedWordsCache(prisma) {
   try {
     const words = await prisma.bannedWord.findMany({
       where: { enabled: true },
-      select: { word: true, type: true, is_regex: true }
+      select: { word: true, is_regex: true, category_id: true }
     });
 
-    // 重置缓存
-    bannedWordsCache = {
-      [BANNED_WORD_TYPES.USERNAME]: [],
-      [BANNED_WORD_TYPES.COMMENT]: [],
-      [BANNED_WORD_TYPES.BIO]: []
-    };
-
-    // 按类型分组
-    for (const item of words) {
-      if (bannedWordsCache[item.type]) {
-        bannedWordsCache[item.type].push({
-          word: item.word,
-          isRegex: item.is_regex,
-          regex: item.is_regex ? wildcardToRegex(item.word) : null
-        });
-      }
-    }
+    // 重置缓存为统一列表
+    bannedWordsCache = words.map(item => ({
+      word: item.word,
+      isRegex: item.is_regex,
+      regex: item.is_regex ? wildcardToRegex(item.word) : null,
+      categoryId: item.category_id
+    }));
 
     cacheLastUpdated = Date.now();
-    console.log(`✅ 违禁词缓存已刷新 - 用户名: ${bannedWordsCache[1].length}, 评论: ${bannedWordsCache[2].length}, 简介: ${bannedWordsCache[3].length}`);
+    console.log(`✅ 违禁词缓存已刷新 - 共 ${bannedWordsCache.length} 个违禁词`);
   } catch (error) {
     console.error('刷新违禁词缓存失败:', error);
   }
@@ -94,24 +79,22 @@ async function ensureCacheUpdated(prisma) {
 }
 
 /**
- * 检查内容是否包含违禁词
+ * 检查内容是否包含违禁词（通用，适用于所有内容类型）
  * @param {Object} prisma - Prisma客户端实例
  * @param {string} content - 待检查内容
- * @param {number} type - 违禁词类型 (1:用户名 2:评论 3:简介)
  * @returns {Promise<{matched: boolean, matchedWords: string[]}>} 检查结果
  */
-async function checkBannedWords(prisma, content, type) {
+async function checkBannedWords(prisma, content) {
   if (!content || !content.trim()) {
     return { matched: false, matchedWords: [] };
   }
 
   await ensureCacheUpdated(prisma);
 
-  const words = bannedWordsCache[type] || [];
   const matchedWords = [];
   const contentLower = content.toLowerCase();
 
-  for (const item of words) {
+  for (const item of bannedWordsCache) {
     if (item.isRegex && item.regex) {
       // 使用正则表达式匹配
       if (item.regex.test(content)) {
@@ -138,7 +121,7 @@ async function checkBannedWords(prisma, content, type) {
  * @returns {Promise<{matched: boolean, matchedWords: string[]}>}
  */
 async function checkUsernameBannedWords(prisma, username) {
-  return checkBannedWords(prisma, username, BANNED_WORD_TYPES.USERNAME);
+  return checkBannedWords(prisma, username);
 }
 
 /**
@@ -148,7 +131,7 @@ async function checkUsernameBannedWords(prisma, username) {
  * @returns {Promise<{matched: boolean, matchedWords: string[]}>}
  */
 async function checkCommentBannedWords(prisma, comment) {
-  return checkBannedWords(prisma, comment, BANNED_WORD_TYPES.COMMENT);
+  return checkBannedWords(prisma, comment);
 }
 
 /**
@@ -158,7 +141,7 @@ async function checkCommentBannedWords(prisma, comment) {
  * @returns {Promise<{matched: boolean, matchedWords: string[]}>}
  */
 async function checkBioBannedWords(prisma, bio) {
-  return checkBannedWords(prisma, bio, BANNED_WORD_TYPES.BIO);
+  return checkBannedWords(prisma, bio);
 }
 
 /**
@@ -196,6 +179,5 @@ module.exports = {
   checkBioBannedWords,
   refreshBannedWordsCache,
   forceRefreshCache,
-  getBannedWordAuditResult,
-  BANNED_WORD_TYPES
+  getBannedWordAuditResult
 };

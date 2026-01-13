@@ -2682,7 +2682,7 @@ router.get('/queue-names', adminAuth, (req, res) => {
 })
 
 // ===================== 违禁词管理 =====================
-const { forceRefreshCache, BANNED_WORD_TYPES } = require('../utils/bannedWordsChecker')
+const { forceRefreshCache } = require('../utils/bannedWordsChecker')
 
 // 获取违禁词列表
 router.get('/banned-words', adminAuth, async (req, res) => {
@@ -2690,17 +2690,24 @@ router.get('/banned-words', adminAuth, async (req, res) => {
     const page = parseInt(req.query.page) || 1
     const limit = parseInt(req.query.limit) || 50
     const skip = (page - 1) * limit
-    const { word, type, enabled, sortField = 'created_at', sortOrder = 'desc' } = req.query
+    const { word, category_id, enabled, sortField = 'created_at', sortOrder = 'desc' } = req.query
 
     const where = {}
     if (word) where.word = { contains: word }
-    if (type !== undefined && type !== '') where.type = parseInt(type)
+    if (category_id !== undefined && category_id !== '' && category_id !== 'all') {
+      where.category_id = category_id === 'null' ? null : parseInt(category_id)
+    }
     if (enabled !== undefined && enabled !== '') where.enabled = enabled === 'true' || enabled === '1'
 
     const [total, words] = await Promise.all([
       prisma.bannedWord.count({ where }),
       prisma.bannedWord.findMany({
         where,
+        include: {
+          category: {
+            select: { id: true, name: true }
+          }
+        },
         orderBy: { [sortField]: sortOrder.toLowerCase() },
         take: limit,
         skip: skip
@@ -2722,7 +2729,14 @@ router.get('/banned-words', adminAuth, async (req, res) => {
 router.get('/banned-words/:id', adminAuth, async (req, res) => {
   try {
     const wordId = parseInt(req.params.id)
-    const word = await prisma.bannedWord.findUnique({ where: { id: wordId } })
+    const word = await prisma.bannedWord.findUnique({ 
+      where: { id: wordId },
+      include: {
+        category: {
+          select: { id: true, name: true }
+        }
+      }
+    })
 
     if (!word) {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '违禁词不存在' })
@@ -2738,20 +2752,16 @@ router.get('/banned-words/:id', adminAuth, async (req, res) => {
 // 创建违禁词
 router.post('/banned-words', adminAuth, async (req, res) => {
   try {
-    const { word, type, is_regex, enabled } = req.body
+    const { word, category_id, is_regex, enabled } = req.body
 
     if (!word || !word.trim()) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '违禁词不能为空' })
     }
 
-    if (!type || ![1, 2, 3].includes(parseInt(type))) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '请选择有效的违禁词类型' })
-    }
-
     const newWord = await prisma.bannedWord.create({
       data: {
         word: word.trim(),
-        type: parseInt(type),
+        category_id: category_id ? parseInt(category_id) : null,
         is_regex: !!is_regex,
         enabled: enabled !== false
       }
@@ -2771,7 +2781,7 @@ router.post('/banned-words', adminAuth, async (req, res) => {
 router.put('/banned-words/:id', adminAuth, async (req, res) => {
   try {
     const wordId = parseInt(req.params.id)
-    const { word, type, is_regex, enabled } = req.body
+    const { word, category_id, is_regex, enabled } = req.body
 
     const existing = await prisma.bannedWord.findUnique({ where: { id: wordId } })
     if (!existing) {
@@ -2780,7 +2790,7 @@ router.put('/banned-words/:id', adminAuth, async (req, res) => {
 
     const updateData = {}
     if (word !== undefined) updateData.word = word.trim()
-    if (type !== undefined) updateData.type = parseInt(type)
+    if (category_id !== undefined) updateData.category_id = category_id ? parseInt(category_id) : null
     if (is_regex !== undefined) updateData.is_regex = !!is_regex
     if (enabled !== undefined) updateData.enabled = !!enabled
 
@@ -2835,14 +2845,10 @@ router.delete('/banned-words', adminAuth, async (req, res) => {
 // 批量导入违禁词
 router.post('/banned-words/import', adminAuth, async (req, res) => {
   try {
-    const { words, type, isRegex } = req.body
+    const { words, category_id, isRegex } = req.body
 
     if (!words || !Array.isArray(words) || words.length === 0) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '请提供要导入的违禁词列表' })
-    }
-
-    if (!type || ![1, 2, 3].includes(parseInt(type))) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '请选择有效的违禁词类型' })
     }
 
     // 过滤空值和重复值
@@ -2852,7 +2858,7 @@ router.post('/banned-words/import', adminAuth, async (req, res) => {
     const created = await prisma.bannedWord.createMany({
       data: uniqueWords.map(word => ({
         word,
-        type: parseInt(type),
+        category_id: category_id ? parseInt(category_id) : null,
         is_regex: isRegex || word.includes('*') || word.includes('?'),
         enabled: true
       })),
@@ -2870,13 +2876,13 @@ router.post('/banned-words/import', adminAuth, async (req, res) => {
 })
 
 // 导出违禁词
-router.get('/banned-words/export/:type', adminAuth, async (req, res) => {
+router.get('/banned-words/export', adminAuth, async (req, res) => {
   try {
-    const type = parseInt(req.params.type)
+    const { category_id } = req.query
 
     const where = { enabled: true }
-    if (type && [1, 2, 3].includes(type)) {
-      where.type = type
+    if (category_id && category_id !== 'all') {
+      where.category_id = category_id === 'null' ? null : parseInt(category_id)
     }
 
     const words = await prisma.bannedWord.findMany({
@@ -2888,7 +2894,7 @@ router.get('/banned-words/export/:type', adminAuth, async (req, res) => {
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       data: {
-        type,
+        category_id: category_id || 'all',
         words: words.map(w => w.word),
         count: words.length
       },
@@ -2900,17 +2906,124 @@ router.get('/banned-words/export/:type', adminAuth, async (req, res) => {
   }
 })
 
-// 获取违禁词类型列表
-router.get('/banned-word-types', adminAuth, (req, res) => {
-  res.json({
-    code: RESPONSE_CODES.SUCCESS,
-    data: [
-      { value: 1, label: '用户名/昵称' },
-      { value: 2, label: '评论内容' },
-      { value: 3, label: '个人简介' }
-    ],
-    message: 'success'
-  })
+// ===================== 违禁词分类管理 =====================
+
+// 获取违禁词分类列表
+router.get('/banned-word-categories', adminAuth, async (req, res) => {
+  try {
+    const categories = await prisma.bannedWordCategory.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        _count: {
+          select: { words: true }
+        }
+      }
+    })
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: categories.map(c => ({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        word_count: c._count.words,
+        created_at: c.created_at,
+        updated_at: c.updated_at
+      })),
+      message: 'success'
+    })
+  } catch (error) {
+    console.error('获取违禁词分类列表失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '获取失败' })
+  }
+})
+
+// 创建违禁词分类
+router.post('/banned-word-categories', adminAuth, async (req, res) => {
+  try {
+    const { name, description } = req.body
+
+    if (!name || !name.trim()) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '分类名称不能为空' })
+    }
+
+    // 检查名称是否已存在
+    const existing = await prisma.bannedWordCategory.findUnique({ where: { name: name.trim() } })
+    if (existing) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.CONFLICT, message: '分类名称已存在' })
+    }
+
+    const newCategory = await prisma.bannedWordCategory.create({
+      data: {
+        name: name.trim(),
+        description: description?.trim() || null
+      }
+    })
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, data: { id: newCategory.id }, message: '创建成功' })
+  } catch (error) {
+    console.error('创建违禁词分类失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '创建失败' })
+  }
+})
+
+// 更新违禁词分类
+router.put('/banned-word-categories/:id', adminAuth, async (req, res) => {
+  try {
+    const categoryId = parseInt(req.params.id)
+    const { name, description } = req.body
+
+    const existing = await prisma.bannedWordCategory.findUnique({ where: { id: categoryId } })
+    if (!existing) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '分类不存在' })
+    }
+
+    const updateData = {}
+    if (name !== undefined) {
+      if (!name.trim()) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '分类名称不能为空' })
+      }
+      // 检查名称是否与其他分类冲突
+      const nameConflict = await prisma.bannedWordCategory.findFirst({
+        where: { name: name.trim(), id: { not: categoryId } }
+      })
+      if (nameConflict) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.CONFLICT, message: '分类名称已存在' })
+      }
+      updateData.name = name.trim()
+    }
+    if (description !== undefined) updateData.description = description?.trim() || null
+
+    await prisma.bannedWordCategory.update({ where: { id: categoryId }, data: updateData })
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '更新成功' })
+  } catch (error) {
+    console.error('更新违禁词分类失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '更新失败' })
+  }
+})
+
+// 删除违禁词分类
+router.delete('/banned-word-categories/:id', adminAuth, async (req, res) => {
+  try {
+    const categoryId = parseInt(req.params.id)
+
+    const existing = await prisma.bannedWordCategory.findUnique({ where: { id: categoryId } })
+    if (!existing) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '分类不存在' })
+    }
+
+    // 删除分类（关联的违禁词的category_id会被设为null）
+    await prisma.bannedWordCategory.delete({ where: { id: categoryId } })
+
+    // 刷新缓存
+    await forceRefreshCache(prisma)
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '删除成功' })
+  } catch (error) {
+    console.error('删除违禁词分类失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '删除失败' })
+  }
 })
 
 module.exports = router

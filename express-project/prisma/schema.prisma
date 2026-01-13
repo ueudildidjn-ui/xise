@@ -49,17 +49,32 @@ model Audit {
 
 // 违禁词表
 model BannedWord {
-  id         Int      @id @default(autoincrement())
-  word       String   @db.VarChar(100)
-  type       Int      @db.TinyInt // 1:用户名 2:评论内容 3:个人简介
-  is_regex   Boolean  @default(false) // 是否为正则表达式/通配符模式
-  enabled    Boolean  @default(true)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  word        String   @db.VarChar(100)
+  category_id Int?     // 分类ID，可为空（表示未分类）
+  is_regex    Boolean  @default(false) // 是否为正则表达式/通配符模式
+  enabled     Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 
-  @@index([type], name: "idx_banned_word_type")
+  category BannedWordCategory? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+
+  @@index([category_id], name: "idx_banned_word_category")
   @@index([enabled], name: "idx_banned_word_enabled")
   @@map("banned_words")
+}
+
+// 违禁词分类表
+model BannedWordCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50) // 分类名称
+  description String?  @db.VarChar(200)        // 分类描述
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  words BannedWord[]
+
+  @@map("banned_word_categories")
 }
 
 // 分类表
