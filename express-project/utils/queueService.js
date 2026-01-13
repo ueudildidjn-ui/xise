@@ -29,7 +29,7 @@ const getRedisConnection = () => {
     db: queueConfig.redis.db
   };
   // 只有当密码非空时才添加
-  if (queueConfig.redis.password) {
+  if (queueConfig.redis.password && queueConfig.redis.password.trim()) {
     config.password = queueConfig.redis.password;
   }
   return config;
