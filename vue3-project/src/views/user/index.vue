@@ -558,13 +558,16 @@ function handleCollect(data) {
   height: auto;
   min-height: 196px;
   padding: 16px 0;
+  padding-top: 88px; /* 为导航栏留出空间 */
+  margin-top: -72px; /* 延伸到导航栏区域 */
   width: 100%;
   max-width: 1200px;
   overflow: hidden;
   position: relative;
   cursor: pointer;
-  border-radius: 12px;
-  margin: 0 16px;
+  border-radius: 0 0 12px 12px; /* 只有底部圆角 */
+  margin-left: 16px;
+  margin-right: 16px;
   max-width: calc(100% - 32px);
 }
 
@@ -577,7 +580,7 @@ function handleCollect(data) {
   bottom: 0;
   z-index: 0;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: 0 0 12px 12px; /* 只有底部圆角 */
 }
 
 .background-image {

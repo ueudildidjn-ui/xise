@@ -179,10 +179,7 @@ onUnmounted(() => {
     <header :class="{ 'transparent-header': isUserPage }">
         <div class="header-container">
             <template v-if="displaySearch">
-                <div v-if="isLargeScreen && !isUserPage" class="logo" @click="router.push('/')">
-                    <img :src="logoUrl" alt="汐社" />
-                </div>
-                <div class="search-row" :class="{ 'large-screen': isLargeScreen, 'small-screen': !isLargeScreen, 'no-logo': isUserPage }">
+                <div class="search-row" :class="{ 'large-screen': isLargeScreen, 'small-screen': !isLargeScreen }">
                     <div class="search-bar-container">
                         <div class="search-bar">
                             <input v-model="searchText" type="text" placeholder="搜索汐社" @keypress="handleKeyPress"
@@ -219,10 +216,7 @@ onUnmounted(() => {
             </template>
 
             <template v-else>
-                <div v-if="!isUserPage" class="logo" @click="router.push('/')">
-                    <img :src="logoUrl" alt="汐社" />
-                </div>
-                <div class="header-right" :class="{ 'no-logo': isUserPage }">
+                <div class="header-right">
                     <div @click="openSearch" class="circle-btn">
                         <SvgIcon name="search" class="btn-icon" height="20" width="20" />
                     </div>
@@ -272,34 +266,10 @@ header.transparent-header {
     width: 100%;
 }
 
-/* 无logo时的布局调整 */
-.search-row.no-logo {
-    margin-left: 0;
-}
-
-.header-right.no-logo {
-    margin-left: auto;
-}
-
-.logo {
-    width: 68.32px;
-    height: 32px;
-    color: var(--button-text-color);
-    background: var(--primary-color);
-    border-radius: 999px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-img {
-    width: 68.32px;
-    height: 32px;
-}
-
 .header-right {
     display: flex;
     align-items: center;
+    margin-left: auto;
 }
 
 /* 按钮基础样式 */
