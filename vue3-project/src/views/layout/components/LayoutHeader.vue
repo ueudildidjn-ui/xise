@@ -249,9 +249,11 @@ header {
     transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
-/* 用户页面透明导航栏 */
+/* 用户页面透明导航栏带模糊效果 */
 header.transparent-header {
-    background: transparent;
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 .header-container {
