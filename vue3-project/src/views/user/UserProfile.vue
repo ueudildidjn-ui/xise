@@ -403,7 +403,7 @@ onMounted(async () => {
   padding: 16px 0;
   width: 100%;
   max-width: 1200px;
-  overflow-x: hidden;
+  overflow: hidden;
   position: relative;
   border-radius: 12px;
   margin: 0 16px;
@@ -448,6 +448,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: row;
   align-items: center;
+  height: 72px;
   width: 100%;
   padding: 0 16px;
   position: relative;

@@ -560,7 +560,7 @@ function handleCollect(data) {
   padding: 16px 0;
   width: 100%;
   max-width: 1200px;
-  overflow-x: hidden;
+  overflow: hidden;
   position: relative;
   cursor: pointer;
   border-radius: 12px;
@@ -635,6 +635,7 @@ function handleCollect(data) {
   display: flex;
   flex-direction: row;
   align-items: center;
+  height: 72px;
   width: 100%;
   padding: 0 16px;
   position: relative;
