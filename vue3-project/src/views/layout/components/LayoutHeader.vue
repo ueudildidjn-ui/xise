@@ -17,6 +17,11 @@ const logoUrl = new URL('@/assets/imgs/汐社.png', import.meta.url).href
 const isLargeScreen = ref(window.innerWidth > 695)
 const showSidebar = ref(window.innerWidth > 960)
 
+// 检查是否在用户页面（需要透明导航栏）
+const isUserPage = computed(() => {
+    return route.path === '/user' || route.name === 'user'
+})
+
 const showSearch = ref(false)
 const searchText = ref('')
 const showSearchDropdown = ref(false)
@@ -171,13 +176,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <header>
+    <header :class="{ 'transparent-header': isUserPage }">
         <div class="header-container">
             <template v-if="displaySearch">
-                <div v-if="isLargeScreen" class="logo" @click="router.push('/')">
+                <div v-if="isLargeScreen && !isUserPage" class="logo" @click="router.push('/')">
                     <img :src="logoUrl" alt="汐社" />
                 </div>
-                <div class="search-row" :class="{ 'large-screen': isLargeScreen, 'small-screen': !isLargeScreen }">
+                <div class="search-row" :class="{ 'large-screen': isLargeScreen, 'small-screen': !isLargeScreen, 'no-logo': isUserPage }">
                     <div class="search-bar-container">
                         <div class="search-bar">
                             <input v-model="searchText" type="text" placeholder="搜索汐社" @keypress="handleKeyPress"
@@ -214,10 +219,10 @@ onUnmounted(() => {
             </template>
 
             <template v-else>
-                <div class="logo" @click="router.push('/')">
+                <div v-if="!isUserPage" class="logo" @click="router.push('/')">
                     <img :src="logoUrl" alt="汐社" />
                 </div>
-                <div class="header-right">
+                <div class="header-right" :class="{ 'no-logo': isUserPage }">
                     <div @click="openSearch" class="circle-btn">
                         <SvgIcon name="search" class="btn-icon" height="20" width="20" />
                     </div>
@@ -250,6 +255,11 @@ header {
     transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
+/* 用户页面透明导航栏 */
+header.transparent-header {
+    background: transparent;
+}
+
 .header-container {
     max-width: 1500px;
     margin: 0 auto;
@@ -260,6 +270,15 @@ header {
     justify-content: space-between;
     box-sizing: border-box;
     width: 100%;
+}
+
+/* 无logo时的布局调整 */
+.search-row.no-logo {
+    margin-left: 0;
+}
+
+.header-right.no-logo {
+    margin-left: auto;
 }
 
 .logo {
