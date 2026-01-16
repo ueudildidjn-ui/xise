@@ -299,6 +299,13 @@ function goToFollowList(type) {
   })
 }
 
+// 跳转到浏览历史页面
+function goToHistory() {
+  router.push({
+    name: 'browsing_history'
+  })
+}
+
 // 处理关注事件
 function handleFollow(userId) {
   console.log('用户页面: 收到关注事件，用户ID:', userId)
@@ -411,6 +418,13 @@ function handleCollect(data) {
         <div class="interaction-item">
           <span class="count">{{ formatNumber(userStats.likes_and_collects) }}</span>
           <span class="shows">获赞与收藏</span>
+        </div>
+      </div>
+      <!-- 工具栏 -->
+      <div class="user-toolbar">
+        <div class="toolbar-item" @click="goToHistory">
+          <SvgIcon name="history" width="20" height="20" />
+          <span>浏览历史</span>
         </div>
       </div>
     </div>
@@ -813,6 +827,40 @@ function handleCollect(data) {
 
 .user-info :deep(.tag .gender-icon) {
   color: #ffffff;
+}
+
+/* ---------- 3.4. 工具栏样式 ---------- */
+.user-toolbar {
+  display: flex;
+  padding: 16px 16px 0;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.toolbar-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  color: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.toolbar-item:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.toolbar-item :deep(svg) {
+  flex-shrink: 0;
 }
 
 /* ---------- 3.5. 登录提示样式 ---------- */

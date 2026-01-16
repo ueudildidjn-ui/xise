@@ -22,11 +22,14 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPostDetail } from '@/api/posts'
+import { userApi } from '@/api/index.js'
+import { useUserStore } from '@/stores/user'
 import DetailCard from '@/components/DetailCard.vue'
 import SvgIcon from '@/components/SvgIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const postData = ref(null)
 const loading = ref(true)
@@ -42,6 +45,18 @@ const updateShowBackButton = () => {
   showBackButton.value = window.innerWidth <= 768
 }
 
+// 记录浏览历史
+const recordBrowsingHistory = async (postId) => {
+  try {
+    // 只有登录用户才记录浏览历史
+    if (userStore.isLoggedIn) {
+      await userApi.recordHistory(postId)
+    }
+  } catch (error) {
+    // 静默失败，不影响用户体验
+    console.debug('记录浏览历史失败:', error)
+  }
+}
 
 
 
@@ -60,6 +75,8 @@ const fetchPostDetail = async (postId) => {
       postData.value = response
       // 设置页面标题
       document.title = response.title || '笔记详情'
+      // 记录浏览历史
+      recordBrowsingHistory(postId)
     } else {
       router.replace({ name: 'not_found' })
       return

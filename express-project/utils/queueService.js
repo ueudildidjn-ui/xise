@@ -63,11 +63,46 @@ const QUEUE_NAMES = {
   IP_LOCATION: 'ip-location-update',
   CONTENT_AUDIT: 'content-audit',
   AUDIT_LOG: 'audit-log',
-  GENERAL_TASK: 'general-task'
+  GENERAL_TASK: 'general-task',
+  BROWSING_HISTORY: 'browsing-history'
 };
 
 // 内容截断长度常量
 const CONTENT_TRUNCATE_LENGTH = 500;
+
+// 浏览历史配置
+const BROWSING_HISTORY_CONFIG = {
+  // 每用户每分钟最多写入20条
+  rateLimit: 20,
+  rateLimitWindow: 60 * 1000, // 1分钟（毫秒）
+  // 历史记录保留时间（48小时）
+  retentionHours: 48,
+  // 速率限制Map清理间隔（5分钟）
+  rateLimitCleanupInterval: 5 * 60 * 1000
+};
+
+// 用户浏览历史写入计数器（内存中的简单速率限制）
+// 结构: Map<userId, { timestamps: number[], lastAccess: number }>
+const userHistoryRateLimit = new Map();
+
+// 定期清理过期的速率限制记录
+setInterval(() => {
+  const now = Date.now();
+  const windowStart = now - BROWSING_HISTORY_CONFIG.rateLimitWindow;
+  let cleanedCount = 0;
+  
+  for (const [userId, data] of userHistoryRateLimit.entries()) {
+    // 如果用户超过2分钟没有访问，删除记录
+    if (data.lastAccess < windowStart) {
+      userHistoryRateLimit.delete(userId);
+      cleanedCount++;
+    }
+  }
+  
+  if (cleanedCount > 0) {
+    console.log(`🧹 清理了 ${cleanedCount} 个过期的速率限制记录`);
+  }
+}, BROWSING_HISTORY_CONFIG.rateLimitCleanupInterval);
 
 // 存储所有队列实例
 const queues = {};
@@ -354,6 +389,43 @@ async function initWorkers(connection) {
     { connection, concurrency: queueConfig.concurrency.generalTask }
   );
 
+  // 浏览历史 Worker
+  workers[QUEUE_NAMES.BROWSING_HISTORY] = new Worker(
+    QUEUE_NAMES.BROWSING_HISTORY,
+    async (job) => {
+      const { userId, postId } = job.data;
+      console.log(`🔄 处理浏览历史任务 - 用户: ${userId}, 笔记: ${postId}`);
+      
+      try {
+        const { prisma } = require('../config/config');
+        
+        // 使用upsert来记录或更新浏览历史
+        await prisma.browsingHistory.upsert({
+          where: {
+            uk_user_post_history: {
+              user_id: BigInt(userId),
+              post_id: BigInt(postId)
+            }
+          },
+          update: {
+            updated_at: new Date()
+          },
+          create: {
+            user_id: BigInt(userId),
+            post_id: BigInt(postId)
+          }
+        });
+        
+        console.log(`✅ 浏览历史记录成功 - 用户: ${userId}, 笔记: ${postId}`);
+        return { success: true };
+      } catch (error) {
+        console.error(`❌ 浏览历史记录失败 - 用户: ${userId}`, error.message);
+        throw error;
+      }
+    },
+    { connection, concurrency: queueConfig.concurrency.generalTask }
+  );
+
   console.log('● 队列 Workers 初始化完成');
 }
 
@@ -489,6 +561,117 @@ async function addGeneralTask(taskType, data = {}) {
   } catch (error) {
     console.error('添加通用任务失败:', error.message);
     return null;
+  }
+}
+
+/**
+ * 检查用户浏览历史写入速率限制
+ * @param {number|string} userId - 用户 ID
+ * @returns {boolean} - 是否在限制内（true表示可以写入）
+ */
+function checkBrowsingHistoryRateLimit(userId) {
+  const key = String(userId);
+  const now = Date.now();
+  const windowStart = now - BROWSING_HISTORY_CONFIG.rateLimitWindow;
+  
+  // 获取用户的写入记录
+  let userData = userHistoryRateLimit.get(key) || { timestamps: [], lastAccess: now };
+  
+  // 清理过期的记录
+  userData.timestamps = userData.timestamps.filter(timestamp => timestamp > windowStart);
+  userData.lastAccess = now;
+  
+  // 检查是否超过限制
+  if (userData.timestamps.length >= BROWSING_HISTORY_CONFIG.rateLimit) {
+    userHistoryRateLimit.set(key, userData);
+    return false;
+  }
+  
+  // 添加新记录
+  userData.timestamps.push(now);
+  userHistoryRateLimit.set(key, userData);
+  
+  return true;
+}
+
+/**
+ * 添加浏览历史任务到队列
+ * @param {number|string} userId - 用户 ID
+ * @param {number|string} postId - 笔记 ID
+ * @returns {Object|null} - 返回任务对象或null（如果被限流或队列未启用）
+ */
+async function addBrowsingHistoryTask(userId, postId) {
+  // 检查速率限制
+  if (!checkBrowsingHistoryRateLimit(userId)) {
+    console.log(`⚠️ 用户 ${userId} 浏览历史写入已达到速率限制 (${BROWSING_HISTORY_CONFIG.rateLimit}条/分钟)`);
+    return { rateLimited: true };
+  }
+  
+  // 如果队列未启用，同步执行
+  if (!queueConfig.enabled || !isInitialized) {
+    try {
+      const { prisma } = require('../config/config');
+      await prisma.browsingHistory.upsert({
+        where: {
+          uk_user_post_history: {
+            user_id: BigInt(userId),
+            post_id: BigInt(postId)
+          }
+        },
+        update: {
+          updated_at: new Date()
+        },
+        create: {
+          user_id: BigInt(userId),
+          post_id: BigInt(postId)
+        }
+      });
+      console.log(`📝 浏览历史同步写入成功 - 用户: ${userId}, 笔记: ${postId}`);
+      return { success: true, sync: true };
+    } catch (error) {
+      console.error('浏览历史同步写入失败:', error.message);
+      return null;
+    }
+  }
+
+  try {
+    const queue = queues[QUEUE_NAMES.BROWSING_HISTORY];
+    const job = await queue.add('record-history', { userId: String(userId), postId: String(postId) }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: 100,
+      removeOnFail: 50
+    });
+    console.log(`📝 浏览历史任务已加入队列 - 用户: ${userId}, 笔记: ${postId}, 任务 ID: ${job.id}`);
+    return job;
+  } catch (error) {
+    console.error('添加浏览历史任务失败:', error.message);
+    return null;
+  }
+}
+
+/**
+ * 清理过期的浏览历史记录（超过48小时）
+ * @returns {Object} - 返回清理结果
+ */
+async function cleanupExpiredBrowsingHistory() {
+  try {
+    const { prisma } = require('../config/config');
+    const cutoffTime = new Date(Date.now() - BROWSING_HISTORY_CONFIG.retentionHours * 60 * 60 * 1000);
+    
+    const result = await prisma.browsingHistory.deleteMany({
+      where: {
+        updated_at: {
+          lt: cutoffTime
+        }
+      }
+    });
+    
+    console.log(`🗑️ 清理过期浏览历史完成 - 删除了 ${result.count} 条记录（超过 ${BROWSING_HISTORY_CONFIG.retentionHours} 小时）`);
+    return { success: true, deletedCount: result.count };
+  } catch (error) {
+    console.error('清理过期浏览历史失败:', error.message);
+    return { success: false, error: error.message };
   }
 }
 
@@ -760,6 +943,8 @@ module.exports = {
   addContentAuditTask,
   addAuditLogTask,
   addGeneralTask,
+  addBrowsingHistoryTask,
+  cleanupExpiredBrowsingHistory,
   getQueueStats,
   getQueueJobs,
   getJobDetails,
@@ -768,5 +953,6 @@ module.exports = {
   isQueueEnabled,
   closeQueueService,
   generateRandomNickname,
-  QUEUE_NAMES
+  QUEUE_NAMES,
+  BROWSING_HISTORY_CONFIG
 };

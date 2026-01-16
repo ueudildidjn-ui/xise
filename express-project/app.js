@@ -29,10 +29,14 @@ const { execSync } = require('child_process');
 const config = require('./config/config');
 const { HTTP_STATUS, RESPONSE_CODES } = require('./constants');
 const prisma = require('./utils/prisma');
-const { initQueueService, closeQueueService } = require('./utils/queueService');
+const { initQueueService, closeQueueService, cleanupExpiredBrowsingHistory } = require('./utils/queueService');
 
 // 加载环境变量
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+
+// 定时清理过期浏览历史的间隔（1小时）
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+let cleanupTimer = null;
 
 // 默认管理员账户配置
 // 用户名: admin
@@ -224,6 +228,19 @@ validatePrismaConnection().then(async (connected) => {
   // 初始化异步队列服务
   await initQueueService();
   
+  // 启动定时清理过期浏览历史任务（每小时执行一次）
+  if (connected) {
+    // 首次启动时执行一次清理
+    cleanupExpiredBrowsingHistory();
+    
+    // 设置定时任务
+    cleanupTimer = setInterval(() => {
+      cleanupExpiredBrowsingHistory();
+    }, CLEANUP_INTERVAL_MS);
+    
+    console.log('● 浏览历史定时清理任务已启动（每小时执行）');
+  }
+  
   app.listen(PORT, () => {
     console.log(`● 服务器运行在端口 ${PORT}`);
     console.log(`● 环境: ${config.server.env}`);
@@ -235,6 +252,10 @@ validatePrismaConnection().then(async (connected) => {
 
 // 优雅关闭 - 断开 Prisma 连接和队列服务
 process.on('beforeExit', async () => {
+  // 清除定时器
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer);
+  }
   await closeQueueService();
   await prisma.$disconnect();
 });

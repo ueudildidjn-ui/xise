@@ -143,6 +143,21 @@ export async function getPostList(params = {}) {
             hasMore: response.data.pagination.page < response.data.pagination.pages
           }
         }
+      } else if (type === 'history') {
+        // 获取用户浏览历史
+        response = await fetch(`${apiConfig.baseURL}/users/history?page=${page}&limit=${limit}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        }).then(res => res.json())
+
+        if (response && response.code === 200 && response.data && response.data.posts) {
+          return {
+            posts: response.data.posts.map(transformPostData),
+            pagination: response.data.pagination,
+            hasMore: response.data.pagination.page < response.data.pagination.pages
+          }
+        }
       } else if (type === 'posts') {
         // 获取用户自己发布的笔记
         const searchParams = new URLSearchParams({
