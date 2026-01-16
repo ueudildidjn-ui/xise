@@ -3104,7 +3104,7 @@ router.get('/batch-upload/files', adminAuth, async (req, res) => {
 // 批量创建笔记（从plsc目录）
 router.post('/batch-upload/create', adminAuth, async (req, res) => {
   try {
-    const { user_id, type, images_per_note, tags, is_draft, files } = req.body
+    const { user_id, type, images_per_note, title, content, tags, is_draft, files } = req.body
     
     if (!user_id) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少用户ID' })
@@ -3121,7 +3121,7 @@ router.post('/batch-upload/create', adminAuth, async (req, res) => {
     
     const config = require('../config/config')
     const baseUrl = config?.upload?.image?.local?.baseUrl || config?.api?.baseUrl || 'http://localhost:3001'
-    const imagesPerNote = parseInt(images_per_note) || 1
+    const imagesPerNote = parseInt(images_per_note) || 4
     const postType = parseInt(type) || 1
     const createdPosts = []
     
@@ -3134,8 +3134,8 @@ router.post('/batch-upload/create', adminAuth, async (req, res) => {
         const post = await prisma.post.create({
           data: {
             user_id: BigInt(user_id),
-            title: '',
-            content: '',
+            title: title || '',
+            content: content || '',
             type: 1,
             is_draft: is_draft !== undefined ? Boolean(is_draft) : false
           }
@@ -3179,8 +3179,8 @@ router.post('/batch-upload/create', adminAuth, async (req, res) => {
         const post = await prisma.post.create({
           data: {
             user_id: BigInt(user_id),
-            title: '',
-            content: '',
+            title: title || '',
+            content: content || '',
             type: 2,
             is_draft: is_draft !== undefined ? Boolean(is_draft) : false
           }

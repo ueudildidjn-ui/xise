@@ -301,8 +301,8 @@
               </div>
             </div>
             <div class="post-content">
-              <h2 class="post-title">{{ postData.title }}</h2>
-              <p class="post-text">
+              <h2 v-if="postData.title" class="post-title">{{ postData.title }}</h2>
+              <p v-if="postData.content || (showPaymentOverlay && isContentHidden)" class="post-text">
                 <ContentRenderer :text="displayContent" />
                 <span v-if="showPaymentOverlay && (postData.content.length > 50 || isContentHidden)" class="content-locked-hint">
                   （内容已隐藏，解锁后查看完整内容）
@@ -1143,8 +1143,8 @@ const isCurrentUserPost = computed(() => {
 
 const postData = computed(() => {
   const data = {
-    title: props.item.title || '无标题',
-    content: props.item.originalData?.content || props.item.content || '暂无内容',
+    title: props.item.title || '',
+    content: props.item.originalData?.content || props.item.content || '',
     tags: props.item.originalData?.tags ?
       (Array.isArray(props.item.originalData.tags) ?
         props.item.originalData.tags.map(tag => typeof tag === 'object' ? tag.name : tag) :

@@ -28,9 +28,19 @@
 
       <div class="form-section" v-if="formData.type === 1">
         <label class="form-label">每条笔记图片数量</label>
-        <input v-model.number="formData.images_per_note" type="number" class="form-input" min="1" max="9"
-          placeholder="默认1张图片为一条笔记" />
-        <p class="form-hint">设置每条笔记包含多少张图片（1-9张）</p>
+        <input v-model.number="formData.images_per_note" type="number" class="form-input" min="1"
+          placeholder="默认4张图片为一条笔记" />
+        <p class="form-hint">设置每条笔记包含多少张图片（不限制数量）</p>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">笔记标题（可选）</label>
+        <input v-model="formData.title" type="text" class="form-input" placeholder="留空则不显示标题" />
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">笔记内容（可选）</label>
+        <textarea v-model="formData.content" class="form-textarea" placeholder="留空则不显示内容" rows="3"></textarea>
       </div>
 
       <div class="form-section">
@@ -142,7 +152,9 @@ import apiConfig from '@/config/api.js'
 const formData = reactive({
   user_id: null,
   type: 1,
-  images_per_note: 1,
+  images_per_note: 4,
+  title: '',
+  content: '',
   tags: [],
   is_draft: false
 })
@@ -276,7 +288,9 @@ const getSubmitButtonText = () => {
 const resetForm = () => {
   formData.user_id = null
   formData.type = 1
-  formData.images_per_note = 1
+  formData.images_per_note = 4
+  formData.title = ''
+  formData.content = ''
   formData.tags = []
   formData.is_draft = false
   selectedFiles.value = []
@@ -297,7 +311,9 @@ const handleBatchCreate = async () => {
       body: JSON.stringify({
         user_id: formData.user_id,
         type: formData.type,
-        images_per_note: formData.images_per_note || 1,
+        images_per_note: formData.images_per_note || 4,
+        title: formData.title || '',
+        content: formData.content || '',
         tags: formData.tags,
         is_draft: formData.is_draft,
         files: selectedFiles.value
@@ -414,6 +430,25 @@ watch(() => formData.type, () => {
 }
 
 .form-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color-primary);
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  background-color: var(--bg-color-primary);
+  color: var(--text-color-primary);
+  transition: border-color 0.2s ease;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-textarea:focus {
   outline: none;
   border-color: var(--primary-color);
 }
