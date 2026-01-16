@@ -3037,5 +3037,230 @@ router.delete('/banned-word-categories/:id', adminAuth, async (req, res) => {
   }
 })
 
+// ===================== 批量上传管理 =====================
+const fs = require('fs')
+const pathModule = require('path')
+
+// 支持的文件扩展名常量
+const SUPPORTED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']
+const SUPPORTED_VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv']
+
+// 获取 /uploads/plsc 目录下的所有图片和视频文件
+router.get('/batch-upload/files', adminAuth, async (req, res) => {
+  try {
+    const plscDir = pathModule.join(process.cwd(), 'uploads', 'plsc')
+    
+    // 检查目录是否存在
+    if (!fs.existsSync(plscDir)) {
+      // 创建目录
+      fs.mkdirSync(plscDir, { recursive: true })
+      return res.json({
+        code: RESPONSE_CODES.SUCCESS,
+        data: { images: [], videos: [] },
+        message: '目录为空'
+      })
+    }
+    
+    const files = fs.readdirSync(plscDir)
+    const images = []
+    const videos = []
+    
+    for (const file of files) {
+      const ext = pathModule.extname(file).toLowerCase()
+      const filePath = pathModule.join(plscDir, file)
+      const stat = fs.statSync(filePath)
+      
+      if (stat.isFile()) {
+        const fileInfo = {
+          name: file,
+          size: stat.size,
+          path: `/uploads/plsc/${file}`,
+          createdAt: stat.birthtime
+        }
+        
+        if (SUPPORTED_IMAGE_EXTENSIONS.includes(ext)) {
+          images.push(fileInfo)
+        } else if (SUPPORTED_VIDEO_EXTENSIONS.includes(ext)) {
+          videos.push(fileInfo)
+        }
+      }
+    }
+    
+    // 按创建时间排序
+    images.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    videos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: { images, videos },
+      message: '获取成功'
+    })
+  } catch (error) {
+    console.error('获取批量上传文件列表失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '获取文件列表失败' })
+  }
+})
+
+// 批量创建笔记（从plsc目录）
+router.post('/batch-upload/create', adminAuth, async (req, res) => {
+  try {
+    const { user_id, type, images_per_note, tags, is_draft, files } = req.body
+    
+    if (!user_id) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少用户ID' })
+    }
+    
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '没有选择文件' })
+    }
+    
+    const user = await prisma.user.findUnique({ where: { id: BigInt(user_id) } })
+    if (!user) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' })
+    }
+    
+    const config = require('../config/config')
+    const baseUrl = config?.upload?.image?.local?.baseUrl || config?.api?.baseUrl || 'http://localhost:3001'
+    const imagesPerNote = parseInt(images_per_note) || 1
+    const postType = parseInt(type) || 1
+    const createdPosts = []
+    
+    if (postType === 1) {
+      // 图文笔记：按images_per_note分组
+      for (let i = 0; i < files.length; i += imagesPerNote) {
+        const groupFiles = files.slice(i, i + imagesPerNote)
+        
+        // 创建笔记
+        const post = await prisma.post.create({
+          data: {
+            user_id: BigInt(user_id),
+            title: '',
+            content: '',
+            type: 1,
+            is_draft: is_draft !== undefined ? Boolean(is_draft) : false
+          }
+        })
+        
+        // 添加图片
+        const imageUrls = groupFiles.map(file => `${baseUrl}${file.path}`)
+        if (imageUrls.length > 0) {
+          await prisma.postImage.createMany({
+            data: imageUrls.map(url => ({
+              post_id: post.id,
+              image_url: url
+            }))
+          })
+        }
+        
+        // 添加标签
+        if (tags && tags.length > 0) {
+          for (const tag of tags) {
+            let tagId
+            let tagName = typeof tag === 'string' ? tag : tag.name
+            
+            const existingTag = await prisma.tag.findUnique({ where: { name: tagName } })
+            if (existingTag) {
+              tagId = existingTag.id
+            } else {
+              const newTag = await prisma.tag.create({ data: { name: tagName } })
+              tagId = newTag.id
+            }
+            
+            await prisma.postTag.create({ data: { post_id: post.id, tag_id: tagId } })
+            await prisma.tag.update({ where: { id: tagId }, data: { use_count: { increment: 1 } } })
+          }
+        }
+        
+        createdPosts.push({ id: Number(post.id), imageCount: groupFiles.length })
+      }
+    } else {
+      // 视频笔记：每个视频一个笔记
+      for (const file of files) {
+        const post = await prisma.post.create({
+          data: {
+            user_id: BigInt(user_id),
+            title: '',
+            content: '',
+            type: 2,
+            is_draft: is_draft !== undefined ? Boolean(is_draft) : false
+          }
+        })
+        
+        // 添加视频
+        await prisma.postVideo.create({
+          data: {
+            post_id: post.id,
+            video_url: `${baseUrl}${file.path}`,
+            cover_url: ''
+          }
+        })
+        
+        // 添加标签
+        if (tags && tags.length > 0) {
+          for (const tag of tags) {
+            let tagId
+            let tagName = typeof tag === 'string' ? tag : tag.name
+            
+            const existingTag = await prisma.tag.findUnique({ where: { name: tagName } })
+            if (existingTag) {
+              tagId = existingTag.id
+            } else {
+              const newTag = await prisma.tag.create({ data: { name: tagName } })
+              tagId = newTag.id
+            }
+            
+            await prisma.postTag.create({ data: { post_id: post.id, tag_id: tagId } })
+            await prisma.tag.update({ where: { id: tagId }, data: { use_count: { increment: 1 } } })
+          }
+        }
+        
+        createdPosts.push({ id: Number(post.id) })
+      }
+    }
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: { posts: createdPosts, count: createdPosts.length },
+      message: `成功创建 ${createdPosts.length} 条笔记`
+    })
+  } catch (error) {
+    console.error('批量创建笔记失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '批量创建失败' })
+  }
+})
+
+// 删除plsc目录中的文件
+router.delete('/batch-upload/files', adminAuth, async (req, res) => {
+  try {
+    const { files } = req.body
+    
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '没有选择文件' })
+    }
+    
+    const plscDir = pathModule.join(process.cwd(), 'uploads', 'plsc')
+    let deletedCount = 0
+    
+    for (const file of files) {
+      const fileName = pathModule.basename(file.path || file.name || file)
+      const filePath = pathModule.join(plscDir, fileName)
+      
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath)
+        deletedCount++
+      }
+    }
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: { deletedCount },
+      message: `成功删除 ${deletedCount} 个文件`
+    })
+  } catch (error) {
+    console.error('删除文件失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '删除文件失败' })
+  }
+})
+
 module.exports = router
 module.exports.isAiAutoReviewEnabled = isAiAutoReviewEnabled

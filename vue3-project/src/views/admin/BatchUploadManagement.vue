@@ -2,7 +2,7 @@
   <div class="batch-upload-management">
     <div class="batch-upload-header">
       <h2>批量上传笔记</h2>
-      <p class="description">每张图片或每个视频将创建为一条独立的笔记</p>
+      <p class="description">从服务器 /uploads/plsc 目录读取文件批量创建笔记</p>
     </div>
 
     <div class="batch-upload-form">
@@ -15,71 +15,27 @@
       <div class="form-section">
         <label class="form-label">笔记类型 <span class="required">*</span></label>
         <div class="type-selector">
-          <button :class="['type-btn', { active: formData.type === 1 }]" @click="formData.type = 1">
+          <button :class="['type-btn', { active: formData.type === 1 }]" @click="selectType(1)">
             <SvgIcon name="post" width="20" height="20" />
             图文笔记
           </button>
-          <button :class="['type-btn', { active: formData.type === 2 }]" @click="formData.type = 2">
+          <button :class="['type-btn', { active: formData.type === 2 }]" @click="selectType(2)">
             <SvgIcon name="video" width="20" height="20" />
             视频笔记
           </button>
         </div>
       </div>
 
+      <div class="form-section" v-if="formData.type === 1">
+        <label class="form-label">每条笔记图片数量</label>
+        <input v-model.number="formData.images_per_note" type="number" class="form-input" min="1" max="9"
+          placeholder="默认1张图片为一条笔记" />
+        <p class="form-hint">设置每条笔记包含多少张图片（1-9张）</p>
+      </div>
+
       <div class="form-section">
         <label class="form-label">标签（可选，将应用到所有笔记）</label>
         <TagSelector v-model="formData.tags" :max-tags="10" />
-      </div>
-
-      <div class="form-section" v-if="formData.type === 1">
-        <label class="form-label">批量上传图片 <span class="required">*</span></label>
-        <div class="batch-upload-area" @click="triggerImageInput" @dragover.prevent @drop.prevent="handleImageDrop">
-          <input ref="imageInputRef" type="file" accept="image/*" multiple @change="handleImageSelect"
-            style="display: none" />
-          <SvgIcon name="publish" width="40" height="40" />
-          <p>点击或拖拽上传多张图片</p>
-          <p class="upload-hint">每张图片将创建一条笔记，支持JPG、PNG、GIF、WebP格式</p>
-        </div>
-        <div v-if="pendingImages.length > 0" class="pending-files">
-          <div class="pending-header">
-            <span>待上传图片（{{ pendingImages.length }}张，将创建{{ pendingImages.length }}条笔记）</span>
-            <button class="btn-clear" @click="clearPendingImages">清空</button>
-          </div>
-          <div class="pending-list">
-            <div v-for="(img, index) in pendingImages" :key="index" class="pending-item">
-              <img :src="img.preview" class="pending-preview" />
-              <span class="pending-name">{{ img.name }}</span>
-              <button class="btn-remove" @click="removePendingImage(index)">×</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="form-section" v-if="formData.type === 2">
-        <label class="form-label">批量上传视频 <span class="required">*</span></label>
-        <div class="batch-upload-area" @click="triggerVideoInput" @dragover.prevent @drop.prevent="handleVideoDrop">
-          <input ref="videoInputRef" type="file" accept="video/*" multiple @change="handleVideoSelect"
-            style="display: none" />
-          <SvgIcon name="video" width="40" height="40" />
-          <p>点击或拖拽上传多个视频</p>
-          <p class="upload-hint">每个视频将创建一条笔记，支持MP4、MOV、AVI、WMV、FLV格式</p>
-        </div>
-        <div v-if="pendingVideos.length > 0" class="pending-files">
-          <div class="pending-header">
-            <span>待上传视频（{{ pendingVideos.length }}个，将创建{{ pendingVideos.length }}条笔记）</span>
-            <button class="btn-clear" @click="clearPendingVideos">清空</button>
-          </div>
-          <div class="pending-list">
-            <div v-for="(video, index) in pendingVideos" :key="index" class="pending-item">
-              <div class="video-icon">
-                <SvgIcon name="video" width="24" height="24" />
-              </div>
-              <span class="pending-name">{{ video.name }}</span>
-              <span class="pending-size">{{ formatFileSize(video.size) }}</span>
-              <button class="btn-remove" @click="removePendingVideo(index)">×</button>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="form-section">
@@ -89,11 +45,65 @@
         </label>
       </div>
 
+      <!-- Server files section -->
+      <div class="form-section">
+        <div class="server-files-header">
+          <label class="form-label">服务器文件 (/uploads/plsc)</label>
+          <button class="btn btn-small" @click="fetchServerFiles" :disabled="isLoading">
+            {{ isLoading ? '加载中...' : '刷新列表' }}
+          </button>
+        </div>
+
+        <div v-if="isLoading" class="loading-state">
+          <SvgIcon name="loading" width="24" height="24" class="loading-icon" />
+          <span>正在加载文件列表...</span>
+        </div>
+
+        <div v-else-if="currentFiles.length === 0" class="empty-state">
+          <SvgIcon name="post" width="40" height="40" />
+          <p>{{ formData.type === 1 ? '目录中没有图片文件' : '目录中没有视频文件' }}</p>
+          <p class="hint">请将文件上传到服务器的 /uploads/plsc 目录</p>
+        </div>
+
+        <div v-else class="file-list">
+          <div class="file-list-header">
+            <label class="checkbox-label">
+              <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
+              全选 ({{ selectedFiles.length }}/{{ currentFiles.length }})
+            </label>
+            <span class="file-count">
+              {{ formData.type === 1 
+                ? `将创建 ${Math.ceil(selectedFiles.length / (formData.images_per_note || 1))} 条笔记` 
+                : `将创建 ${selectedFiles.length} 条笔记` }}
+            </span>
+          </div>
+          <div class="file-grid">
+            <div v-for="file in currentFiles" :key="file.path" 
+              :class="['file-item', { selected: isSelected(file) }]"
+              @click="toggleSelect(file)">
+              <div class="file-preview">
+                <img v-if="formData.type === 1" :src="getFileUrl(file)" :alt="file.name" />
+                <div v-else class="video-placeholder">
+                  <SvgIcon name="video" width="32" height="32" />
+                </div>
+              </div>
+              <div class="file-info">
+                <span class="file-name">{{ file.name }}</span>
+                <span class="file-size">{{ formatFileSize(file.size) }}</span>
+              </div>
+              <div class="file-checkbox">
+                <input type="checkbox" :checked="isSelected(file)" @click.stop />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button class="btn btn-outline" @click="resetForm" :disabled="isSubmitting">
           重置
         </button>
-        <button class="btn btn-primary" @click="handleBatchSubmit" :disabled="!canSubmit || isSubmitting">
+        <button class="btn btn-primary" @click="handleBatchCreate" :disabled="!canSubmit || isSubmitting">
           {{ getSubmitButtonText() }}
         </button>
       </div>
@@ -108,7 +118,7 @@
     </div>
 
     <div v-if="uploadHistory.length > 0" class="upload-history">
-      <h3>上传历史</h3>
+      <h3>创建历史</h3>
       <div class="history-list">
         <div v-for="(item, index) in uploadHistory" :key="index" class="history-item"
           :class="{ success: item.success, error: !item.success }">
@@ -123,45 +133,42 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import SvgIcon from '@/components/SvgIcon.vue'
 import TagSelector from '@/components/TagSelector.vue'
 import messageManager from '@/utils/messageManager'
 import apiConfig from '@/config/api.js'
 
-const imageInputRef = ref(null)
-const videoInputRef = ref(null)
-
 const formData = reactive({
   user_id: null,
   type: 1,
+  images_per_note: 1,
   tags: [],
   is_draft: false
 })
 
-const pendingImages = ref([])
-const pendingVideos = ref([])
+const serverImages = ref([])
+const serverVideos = ref([])
+const selectedFiles = ref([])
+const isLoading = ref(false)
 const isSubmitting = ref(false)
 const uploadHistory = ref([])
-const currentProgress = ref(0)
-const totalItems = ref(0)
 const progressText = ref('')
+const progressPercent = ref(0)
 
-// Progress percentage
-const progressPercent = computed(() => {
-  if (totalItems.value === 0) return 0
-  return Math.round((currentProgress.value / totalItems.value) * 100)
+// Current files based on type
+const currentFiles = computed(() => {
+  return formData.type === 1 ? serverImages.value : serverVideos.value
+})
+
+// Check if all files are selected
+const allSelected = computed(() => {
+  return currentFiles.value.length > 0 && selectedFiles.value.length === currentFiles.value.length
 })
 
 // Check if form can be submitted
 const canSubmit = computed(() => {
-  if (!formData.user_id) return false
-
-  if (formData.type === 1) {
-    return pendingImages.value.length > 0
-  } else {
-    return pendingVideos.value.length > 0
-  }
+  return formData.user_id && selectedFiles.value.length > 0
 })
 
 // Get auth headers
@@ -176,97 +183,9 @@ const getAuthHeaders = () => {
   return headers
 }
 
-// Trigger file inputs
-const triggerImageInput = () => {
-  imageInputRef.value?.click()
-}
-
-const triggerVideoInput = () => {
-  videoInputRef.value?.click()
-}
-
-// Handle image selection
-const handleImageSelect = (event) => {
-  const files = Array.from(event.target.files)
-  addImages(files)
-  event.target.value = ''
-}
-
-const handleImageDrop = (event) => {
-  const files = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/'))
-  addImages(files)
-}
-
-// Max file size: 100MB for images
-const MAX_IMAGE_SIZE = 100 * 1024 * 1024
-
-const addImages = (files) => {
-  for (const file of files) {
-    if (!file.type.startsWith('image/')) continue
-    if (file.size > MAX_IMAGE_SIZE) {
-      messageManager.warning(`图片 ${file.name} 超过100MB限制，已跳过`)
-      continue
-    }
-    const preview = URL.createObjectURL(file)
-    pendingImages.value.push({
-      file,
-      name: file.name,
-      size: file.size,
-      preview
-    })
-  }
-}
-
-const removePendingImage = (index) => {
-  if (index >= 0 && index < pendingImages.value.length) {
-    URL.revokeObjectURL(pendingImages.value[index].preview)
-    pendingImages.value.splice(index, 1)
-  }
-}
-
-const clearPendingImages = () => {
-  pendingImages.value.forEach(img => URL.revokeObjectURL(img.preview))
-  pendingImages.value = []
-}
-
-// Handle video selection
-const handleVideoSelect = (event) => {
-  const files = Array.from(event.target.files)
-  addVideos(files)
-  event.target.value = ''
-}
-
-const handleVideoDrop = (event) => {
-  const files = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('video/'))
-  addVideos(files)
-}
-
-// Max file size: 500MB for videos
-const MAX_VIDEO_SIZE = 500 * 1024 * 1024
-
-const addVideos = (files) => {
-  for (const file of files) {
-    if (!file.type.startsWith('video/')) continue
-    if (file.size > MAX_VIDEO_SIZE) {
-      messageManager.warning(`视频 ${file.name} 超过500MB限制，已跳过`)
-      continue
-    }
-    pendingVideos.value.push({
-      file,
-      name: file.name,
-      size: file.size
-    })
-  }
-}
-
-const removePendingVideo = (index) => {
-  if (index >= 0 && index < pendingVideos.value.length) {
-    pendingVideos.value.splice(index, 1)
-  }
-}
-
-const clearPendingVideos = () => {
-  pendingVideos.value = []
+// Get file URL for preview
+const getFileUrl = (file) => {
+  return `${apiConfig.baseURL}${file.path}`
 }
 
 // Format file size
@@ -276,194 +195,138 @@ const formatFileSize = (bytes) => {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
-// Get submit button text
-const getSubmitButtonText = () => {
-  if (isSubmitting.value) {
-    return `上传中 (${currentProgress.value}/${totalItems.value})`
-  }
-
-  if (formData.type === 1) {
-    const count = pendingImages.value.length
-    return count > 0 ? `上传并创建${count}条笔记` : '上传并创建笔记'
-  } else {
-    const count = pendingVideos.value.length
-    return count > 0 ? `上传并创建${count}条笔记` : '上传并创建笔记'
-  }
-}
-
 // Format time
 const formatTime = (time) => {
   return new Date(time).toLocaleString('zh-CN')
+}
+
+// Select type and clear selection
+const selectType = (type) => {
+  formData.type = type
+  selectedFiles.value = []
+}
+
+// Check if file is selected
+const isSelected = (file) => {
+  return selectedFiles.value.some(f => f.path === file.path)
+}
+
+// Toggle file selection
+const toggleSelect = (file) => {
+  const index = selectedFiles.value.findIndex(f => f.path === file.path)
+  if (index >= 0) {
+    selectedFiles.value.splice(index, 1)
+  } else {
+    selectedFiles.value.push(file)
+  }
+}
+
+// Toggle select all
+const toggleSelectAll = () => {
+  if (allSelected.value) {
+    selectedFiles.value = []
+  } else {
+    selectedFiles.value = [...currentFiles.value]
+  }
+}
+
+// Fetch server files
+const fetchServerFiles = async () => {
+  isLoading.value = true
+  try {
+    const response = await fetch(`${apiConfig.baseURL}/admin/batch-upload/files`, {
+      headers: getAuthHeaders()
+    })
+    const result = await response.json()
+    
+    if (result.code === 200) {
+      serverImages.value = result.data.images || []
+      serverVideos.value = result.data.videos || []
+      selectedFiles.value = []
+    } else {
+      messageManager.error(result.message || '获取文件列表失败')
+    }
+  } catch (error) {
+    console.error('获取文件列表失败:', error)
+    messageManager.error('获取文件列表失败')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Get submit button text
+const getSubmitButtonText = () => {
+  if (isSubmitting.value) {
+    return '创建中...'
+  }
+  
+  if (selectedFiles.value.length === 0) {
+    return '请选择文件'
+  }
+  
+  if (formData.type === 1) {
+    const noteCount = Math.ceil(selectedFiles.value.length / (formData.images_per_note || 1))
+    return `创建 ${noteCount} 条笔记`
+  } else {
+    return `创建 ${selectedFiles.value.length} 条笔记`
+  }
 }
 
 // Reset form
 const resetForm = () => {
   formData.user_id = null
   formData.type = 1
+  formData.images_per_note = 1
   formData.tags = []
   formData.is_draft = false
-  clearPendingImages()
-  clearPendingVideos()
+  selectedFiles.value = []
 }
 
-// Upload single image and get URL
-const uploadSingleImage = async (file) => {
-  const formDataUpload = new FormData()
-  formDataUpload.append('file', file)
-
-  const adminToken = localStorage.getItem('admin_token')
-  const response = await fetch(`${apiConfig.baseURL}/upload/single`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${adminToken}`
-    },
-    body: formDataUpload
-  })
-
-  const result = await response.json()
-  if (result.code === 200) {
-    return result.data.url
-  }
-  throw new Error(result.message || '图片上传失败')
-}
-
-// Upload single video and get URL
-const uploadSingleVideo = async (file) => {
-  const formDataUpload = new FormData()
-  formDataUpload.append('file', file)
-
-  const adminToken = localStorage.getItem('admin_token')
-  const response = await fetch(`${apiConfig.baseURL}/upload/video`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${adminToken}`
-    },
-    body: formDataUpload
-  })
-
-  const result = await response.json()
-  if (result.code === 200) {
-    return {
-      url: result.data.url,
-      coverUrl: result.data.coverUrl || ''
-    }
-  }
-  throw new Error(result.message || '视频上传失败')
-}
-
-// Create a single post
-const createPost = async (postData) => {
-  const response = await fetch(`${apiConfig.baseURL}/admin/posts`, {
-    method: 'POST',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(postData)
-  })
-
-  const result = await response.json()
-  if (result.code === 200) {
-    return result.data
-  }
-  throw new Error(result.message || '创建笔记失败')
-}
-
-// Handle batch submit
-const handleBatchSubmit = async () => {
+// Handle batch create
+const handleBatchCreate = async () => {
   if (!canSubmit.value || isSubmitting.value) return
 
   isSubmitting.value = true
-  currentProgress.value = 0
-  let successCount = 0
-  let failCount = 0
+  progressPercent.value = 0
+  progressText.value = '正在创建笔记...'
 
   try {
-    if (formData.type === 1) {
-      // Batch upload images - each image becomes a separate post
-      totalItems.value = pendingImages.value.length
-      progressText.value = '正在批量上传图片笔记...'
-
-      for (let i = 0; i < pendingImages.value.length; i++) {
-        const img = pendingImages.value[i]
-        progressText.value = `正在上传第 ${i + 1}/${pendingImages.value.length} 张图片...`
-
-        try {
-          // Upload image
-          const imageUrl = await uploadSingleImage(img.file)
-
-          // Create post with this single image
-          await createPost({
-            user_id: formData.user_id,
-            type: 1,
-            title: '',
-            content: '',
-            tags: formData.tags,
-            is_draft: formData.is_draft,
-            images: [imageUrl]
-          })
-
-          successCount++
-        } catch (error) {
-          console.error(`图片 ${img.name} 上传失败:`, error)
-          failCount++
-        }
-
-        currentProgress.value = i + 1
-      }
-    } else {
-      // Batch upload videos - each video becomes a separate post
-      totalItems.value = pendingVideos.value.length
-      progressText.value = '正在批量上传视频笔记...'
-
-      for (let i = 0; i < pendingVideos.value.length; i++) {
-        const video = pendingVideos.value[i]
-        progressText.value = `正在上传第 ${i + 1}/${pendingVideos.value.length} 个视频...`
-
-        try {
-          // Upload video
-          const { url, coverUrl } = await uploadSingleVideo(video.file)
-
-          // Create post with this video
-          await createPost({
-            user_id: formData.user_id,
-            type: 2,
-            title: '',
-            content: '',
-            tags: formData.tags,
-            is_draft: formData.is_draft,
-            video_url: url,
-            cover_url: coverUrl
-          })
-
-          successCount++
-        } catch (error) {
-          console.error(`视频 ${video.name} 上传失败:`, error)
-          failCount++
-        }
-
-        currentProgress.value = i + 1
-      }
-    }
-
-    // Show result
-    if (failCount === 0) {
-      messageManager.success(`成功创建 ${successCount} 条笔记`)
-    } else {
-      messageManager.warning(`成功 ${successCount} 条，失败 ${failCount} 条`)
-    }
-
-    // Add to history
-    uploadHistory.value.unshift({
-      type: formData.type,
-      count: successCount,
-      success: failCount === 0,
-      time: new Date()
+    const response = await fetch(`${apiConfig.baseURL}/admin/batch-upload/create`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        user_id: formData.user_id,
+        type: formData.type,
+        images_per_note: formData.images_per_note || 1,
+        tags: formData.tags,
+        is_draft: formData.is_draft,
+        files: selectedFiles.value
+      })
     })
 
-    // Reset form
-    resetForm()
+    const result = await response.json()
 
+    if (result.code === 200) {
+      progressPercent.value = 100
+      messageManager.success(result.message || `成功创建 ${result.data.count} 条笔记`)
+      
+      // Add to history
+      uploadHistory.value.unshift({
+        type: formData.type,
+        count: result.data.count,
+        success: true,
+        time: new Date()
+      })
+
+      // Reset selection and refresh file list
+      selectedFiles.value = []
+      await fetchServerFiles()
+    } else {
+      throw new Error(result.message || '创建失败')
+    }
   } catch (error) {
-    console.error('批量上传失败:', error)
-    messageManager.error('批量上传失败')
+    console.error('批量创建失败:', error)
+    messageManager.error(error.message || '批量创建失败')
 
     uploadHistory.value.unshift({
       type: formData.type,
@@ -476,12 +339,22 @@ const handleBatchSubmit = async () => {
     progressText.value = ''
   }
 }
+
+// Fetch files on mount
+onMounted(() => {
+  fetchServerFiles()
+})
+
+// Watch type change to clear selection
+watch(() => formData.type, () => {
+  selectedFiles.value = []
+})
 </script>
 
 <style scoped>
 .batch-upload-management {
   padding: 20px 30px;
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
 }
 
@@ -528,8 +401,7 @@ const handleBatchSubmit = async () => {
   color: var(--primary-color);
 }
 
-.form-input,
-.form-textarea {
+.form-input {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border-color-primary);
@@ -541,15 +413,15 @@ const handleBatchSubmit = async () => {
   transition: border-color 0.2s ease;
 }
 
-.form-input:focus,
-.form-textarea:focus {
+.form-input:focus {
   outline: none;
   border-color: var(--primary-color);
 }
 
-.form-textarea {
-  resize: vertical;
-  min-height: 100px;
+.form-hint {
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  color: var(--text-color-tertiary);
 }
 
 .type-selector {
@@ -584,136 +456,6 @@ const handleBatchSubmit = async () => {
   color: white;
 }
 
-/* Batch upload area */
-.batch-upload-area {
-  border: 2px dashed var(--border-color-primary);
-  border-radius: 8px;
-  padding: 40px 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--text-color-secondary);
-}
-
-.batch-upload-area:hover {
-  border-color: var(--primary-color);
-  background: var(--bg-color-secondary);
-}
-
-.batch-upload-area p {
-  margin: 10px 0 0 0;
-}
-
-.upload-hint {
-  margin: 8px 0 0 0;
-  font-size: 12px;
-  color: var(--text-color-tertiary);
-}
-
-/* Pending files */
-.pending-files {
-  margin-top: 16px;
-  border: 1px solid var(--border-color-primary);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.pending-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: var(--bg-color-secondary);
-  border-bottom: 1px solid var(--border-color-primary);
-  font-size: 14px;
-  color: var(--text-color-primary);
-}
-
-.btn-clear {
-  padding: 4px 12px;
-  border: none;
-  border-radius: 4px;
-  background: var(--bg-color-tertiary);
-  color: var(--text-color-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-clear:hover {
-  background: var(--primary-color);
-  color: white;
-}
-
-.pending-list {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.pending-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color-primary);
-}
-
-.pending-item:last-child {
-  border-bottom: none;
-}
-
-.pending-preview {
-  width: 48px;
-  height: 48px;
-  object-fit: cover;
-  border-radius: 4px;
-}
-
-.video-icon {
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-color-secondary);
-  border-radius: 4px;
-  color: var(--text-color-secondary);
-}
-
-.pending-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 14px;
-  color: var(--text-color-primary);
-}
-
-.pending-size {
-  font-size: 12px;
-  color: var(--text-color-tertiary);
-}
-
-.btn-remove {
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 50%;
-  background: var(--bg-color-tertiary);
-  color: var(--text-color-secondary);
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-remove:hover {
-  background: #f56c6c;
-  color: white;
-}
-
 .checkbox-label {
   display: inline-flex;
   align-items: center;
@@ -723,6 +465,163 @@ const handleBatchSubmit = async () => {
 }
 
 .checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary-color);
+}
+
+/* Server files section */
+.server-files-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.server-files-header .form-label {
+  margin-bottom: 0;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.loading-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-color-secondary);
+  background: var(--bg-color-secondary);
+  border-radius: 8px;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.empty-state p {
+  margin: 10px 0 0 0;
+}
+
+.empty-state .hint {
+  font-size: 12px;
+  color: var(--text-color-tertiary);
+}
+
+/* File list */
+.file-list {
+  border: 1px solid var(--border-color-primary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.file-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-color-secondary);
+  border-bottom: 1px solid var(--border-color-primary);
+}
+
+.file-count {
+  font-size: 14px;
+  color: var(--text-color-secondary);
+}
+
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.file-item {
+  position: relative;
+  border: 2px solid var(--border-color-primary);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.file-item:hover {
+  border-color: var(--primary-color);
+}
+
+.file-item.selected {
+  border-color: var(--primary-color);
+  background: var(--bg-color-secondary);
+}
+
+.file-preview {
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--bg-color-secondary);
+}
+
+.file-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color-tertiary);
+}
+
+.file-info {
+  padding: 8px;
+  background: var(--bg-color-primary);
+}
+
+.file-name {
+  display: block;
+  font-size: 12px;
+  color: var(--text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  display: block;
+  font-size: 11px;
+  color: var(--text-color-tertiary);
+  margin-top: 2px;
+}
+
+.file-checkbox {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-checkbox input {
   width: 16px;
   height: 16px;
   accent-color: var(--primary-color);
@@ -882,17 +781,8 @@ const handleBatchSubmit = async () => {
     width: 100%;
   }
 
-  .history-item {
-    flex-wrap: wrap;
-  }
-
-  .history-count {
-    width: 100%;
-    order: 1;
-  }
-
-  .history-time {
-    order: 2;
+  .file-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   }
 }
 </style>
