@@ -336,6 +336,7 @@ model Post {
   attachments     PostAttachment[]
   paymentSettings PostPaymentSetting?
   purchasedBy     UserPurchasedContent[]
+  browsingHistory BrowsingHistory[]
 
   @@index([user_id], name: "idx_user_id")
   @@index([category_id], name: "idx_category_id")
@@ -447,6 +448,24 @@ model UserSession {
   @@map("user_sessions")
 }
 
+// 浏览历史表
+model BrowsingHistory {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt
+  post_id    BigInt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, post_id], name: "uk_user_post_history")
+  @@index([user_id], name: "idx_browsing_history_user_id")
+  @@index([post_id], name: "idx_browsing_history_post_id")
+  @@index([updated_at], name: "idx_browsing_history_updated_at")
+  @@map("browsing_history")
+}
+
 // 用户表
 model User {
   id             BigInt    @id @default(autoincrement())
@@ -492,6 +511,7 @@ model User {
   subscriptionsAsAuthor   UserAuthorSubscription[] @relation("SubscriptionAuthor")
   purchasedContentAsUser  UserPurchasedContent[] @relation("PurchasedContentUser")
   purchasedContentAsAuthor UserPurchasedContent[] @relation("PurchasedContentAuthor")
+  browsingHistory         BrowsingHistory[]
 
   @@index([user_id], name: "idx_user_id")
   @@index([email], name: "idx_email")

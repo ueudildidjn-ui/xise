@@ -65,6 +65,26 @@ export const userApi = {
   // 删除账号
   deleteAccount(userId) {
     return request.delete(`/users/${userId}`)
+  },
+
+  // 记录浏览历史
+  recordHistory(postId) {
+    return request.post('/users/history', { post_id: postId })
+  },
+
+  // 获取浏览历史列表
+  getHistory(params = {}) {
+    return request.get('/users/history', { params })
+  },
+
+  // 删除单条浏览历史
+  deleteHistoryItem(postId) {
+    return request.delete(`/users/history/${postId}`)
+  },
+
+  // 清空所有浏览历史
+  clearHistory() {
+    return request.delete('/users/history')
   }
 }
 
