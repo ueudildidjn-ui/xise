@@ -11,7 +11,7 @@ import { useUserStore } from '@/stores/user'
 import { useLikeStore } from '@/stores/like.js'
 import { useCollectStore } from '@/stores/collect.js'
 import { useAuthStore } from '@/stores/auth'
-import { getPostList } from '@/api/posts.js'
+import { getPostList, getRecommendedPosts } from '@/api/posts.js'
 import { userApi } from '@/api/index.js'
 import defaultAvatar from '@/assets/imgs/avatar.png'
 import defaultPlaceholder from '@/assets/imgs/未加载.png'
@@ -255,6 +255,16 @@ async function initContent() {
         if (props.preloadedPosts && props.preloadedPosts.length > 0) {
             content = props.preloadedPosts
             hasMore.value = false // 预加载数据不支持分页，所以设置为false
+        } else if (!props.searchKeyword && !props.searchTag && !props.userId) {
+            // 无搜索条件时使用推荐算法
+            console.log('📊 [WaterfallFlow] 使用推荐算法获取笔记')
+            const result = await getRecommendedPosts({
+                page: 1,
+                limit: pageSize,
+                type: props.type
+            })
+            content = result.posts || []
+            hasMore.value = result.hasMore !== false
         } else {
             // 使用笔记API服务
             // 调用参数已准备完成
@@ -348,16 +358,28 @@ async function loadMoreContent() {
     currentPage.value++
 
     try {
-        // 使用笔记API服务
-        const result = await getPostList({
-            page: currentPage.value,
-            limit: pageSize,
-            category: props.category,
-            searchKeyword: props.searchKeyword,
-            searchTag: props.searchTag,
-            userId: props.userId,
-            type: props.type
-        })
+        let result
+        
+        // 无搜索条件时使用推荐算法
+        if (!props.searchKeyword && !props.searchTag && !props.userId) {
+            console.log('📊 [WaterfallFlow] 加载更多推荐笔记')
+            result = await getRecommendedPosts({
+                page: currentPage.value,
+                limit: pageSize,
+                type: props.type
+            })
+        } else {
+            // 使用笔记API服务
+            result = await getPostList({
+                page: currentPage.value,
+                limit: pageSize,
+                category: props.category,
+                searchKeyword: props.searchKeyword,
+                searchTag: props.searchTag,
+                userId: props.userId,
+                type: props.type
+            })
+        }
 
         const newContent = result.posts || []
         hasMore.value = result.hasMore !== false
