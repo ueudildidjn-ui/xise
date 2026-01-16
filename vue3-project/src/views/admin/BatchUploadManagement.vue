@@ -88,9 +88,12 @@
               @click="toggleSelect(file)">
               <div class="file-preview">
                 <img v-if="formData.type === 1" :src="getFileUrl(file)" :alt="file.name" />
-                <div v-else class="video-placeholder">
-                  <SvgIcon name="video" width="32" height="32" />
-                </div>
+                <template v-else>
+                  <img v-if="getVideoThumbnail(file)" :src="getVideoThumbnail(file)" :alt="file.name" class="video-thumbnail-img" />
+                  <div v-else class="video-placeholder">
+                    <SvgIcon name="video" width="32" height="32" />
+                  </div>
+                </template>
               </div>
               <div class="file-info">
                 <span class="file-name">{{ file.name }}</span>
@@ -135,9 +138,12 @@
             <div class="note-files-preview">
               <div v-for="file in note.files" :key="file.path" class="note-file-thumb">
                 <img v-if="formData.type === 1" :src="getFileUrl(file)" :alt="file.name" />
-                <div v-else class="video-thumb">
-                  <SvgIcon name="video" width="20" height="20" />
-                </div>
+                <template v-else>
+                  <img v-if="getVideoThumbnail(file)" :src="getVideoThumbnail(file)" :alt="file.name" class="video-thumbnail-img" />
+                  <div v-else class="video-thumb">
+                    <SvgIcon name="video" width="20" height="20" />
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -202,6 +208,7 @@ const isSubmitting = ref(false)
 const uploadHistory = ref([])
 const progressText = ref('')
 const progressPercent = ref(0)
+const videoThumbnails = ref({}) // Store video thumbnail URLs keyed by file path
 
 // Current files based on type
 const currentFiles = computed(() => {
@@ -376,6 +383,11 @@ const fetchServerFiles = async () => {
       serverVideos.value = result.data.videos || []
       selectedFiles.value = []
       notePreviews.value = []
+      
+      // Generate thumbnails for video files
+      if (result.data.videos && result.data.videos.length > 0) {
+        generateVideoThumbnails(result.data.videos)
+      }
     } else {
       messageManager.error(result.message || '获取文件列表失败')
     }
@@ -385,6 +397,48 @@ const fetchServerFiles = async () => {
   } finally {
     isLoading.value = false
   }
+}
+
+// Generate thumbnails for video files (for UI preview)
+const generateVideoThumbnails = async (videos) => {
+  // Process videos in parallel batches for better performance
+  const batchSize = 3 // Process 3 videos at a time to avoid overwhelming the browser
+  
+  const generateSingleThumbnail = async (video) => {
+    try {
+      // Fetch video file to generate thumbnail
+      const response = await fetch(video.path)
+      if (!response.ok) return
+      
+      const blob = await response.blob()
+      const videoFile = new File([blob], video.name, { type: blob.type })
+      
+      const result = await generateVideoThumbnail(videoFile, {
+        useOriginalSize: false,
+        width: 160,
+        height: 120,
+        quality: 0.7,
+        seekTime: 1
+      })
+      
+      if (result.success && result.dataUrl) {
+        videoThumbnails.value[video.path] = result.dataUrl
+      }
+    } catch (error) {
+      console.warn(`生成视频预览失败 [${video.name}]:`, error.message || error)
+    }
+  }
+  
+  // Process in batches
+  for (let i = 0; i < videos.length; i += batchSize) {
+    const batch = videos.slice(i, i + batchSize)
+    await Promise.all(batch.map(generateSingleThumbnail))
+  }
+}
+
+// Get video thumbnail URL for preview
+const getVideoThumbnail = (file) => {
+  return videoThumbnails.value[file.path] || null
 }
 
 // Get submit button text
@@ -864,6 +918,12 @@ watch(() => formData.type, () => {
   align-items: center;
   justify-content: center;
   color: var(--text-color-tertiary);
+}
+
+.video-thumbnail-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .file-info {
