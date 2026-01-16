@@ -15,6 +15,7 @@ const {
   protectPostListItem,
   protectPostDetail 
 } = require('../utils/paidContentHelper');
+const { getRecommendedPosts, getHotPosts } = require('../utils/recommendationService');
 
 // Post type constants
 const POST_TYPE_IMAGE = 1;
@@ -121,6 +122,211 @@ async function formatPost(post, currentUserId, prisma, options = {}) {
 
   return formatted;
 }
+
+// 获取推荐笔记列表 - 精准推送算法
+router.get('/recommended', optionalAuth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const category = req.query.category || null;
+    const type = req.query.type ? parseInt(req.query.type) : null;
+    const debug = req.query.debug === 'true';
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
+
+    console.log(`📊 [推荐算法] 开始计算推荐 - 用户ID: ${currentUserId || '未登录'}, 页码: ${page}, 分类: ${category || '全部'}`);
+
+    // 调用推荐算法服务
+    const result = await getRecommendedPosts({
+      userId: currentUserId,
+      page,
+      limit,
+      category,
+      type
+    });
+
+    // 批量获取用户互动状态
+    let purchasedPostIds = new Set();
+    let likedPostIds = new Set();
+    let collectedPostIds = new Set();
+    if (currentUserId && result.posts.length > 0) {
+      const postIds = result.posts.map(p => p.id);
+      const [purchases, likes, collections] = await Promise.all([
+        prisma.userPurchasedContent.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } }),
+        prisma.like.findMany({ where: { user_id: currentUserId, target_type: 1, target_id: { in: postIds } }, select: { target_id: true } }),
+        prisma.collection.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } })
+      ]);
+      purchasedPostIds = new Set(purchases.map(p => p.post_id));
+      likedPostIds = new Set(likes.map(l => l.target_id));
+      collectedPostIds = new Set(collections.map(c => c.post_id));
+    }
+
+    // 格式化返回数据
+    const formattedPosts = result.posts.map(post => {
+      const formatted = {
+        id: Number(post.id),
+        user_id: Number(post.user_id),
+        title: post.title,
+        content: post.content,
+        category_id: post.category_id,
+        category: post.category?.name,
+        type: post.type,
+        view_count: Number(post.view_count),
+        like_count: post.like_count,
+        collect_count: post.collect_count,
+        comment_count: post.comment_count,
+        created_at: post.created_at,
+        is_draft: post.is_draft,
+        visibility: post.visibility || VISIBILITY_PUBLIC,
+        nickname: post.user?.nickname,
+        user_avatar: post.user?.avatar,
+        author_account: post.user?.user_id,
+        author_auto_id: post.user ? Number(post.user.id) : null,
+        location: post.user?.location,
+        verified: post.user?.verified,
+        avatar: post.user?.avatar,
+        author: post.user?.nickname,
+        // 推荐算法调试信息
+        _recommendationScore: post._recommendationScore,
+        _scoreBreakdown: post._scoreBreakdown
+      };
+
+      const isAuthor = currentUserId && post.user_id === currentUserId;
+      const hasPurchased = purchasedPostIds.has(post.id);
+      const paymentSetting = post.paymentSettings;
+      const imageUrls = post.images.map(img => ({ url: img.image_url, isFreePreview: img.is_free_preview }));
+      const videoData = post.videos[0] || null;
+
+      protectPostListItem(formatted, {
+        paymentSetting: paymentSetting ? { enabled: paymentSetting.enabled ? 1 : 0, free_preview_count: paymentSetting.free_preview_count, preview_duration: paymentSetting.preview_duration, price: Number(paymentSetting.price), hide_all: paymentSetting.hide_all } : null,
+        isAuthor,
+        hasPurchased,
+        videoData: videoData ? { video_url: videoData.video_url, cover_url: videoData.cover_url, preview_video_url: videoData.preview_video_url } : null,
+        imageUrls
+      });
+
+      formatted.tags = post.tags.map(pt => ({ id: pt.tag.id, name: pt.tag.name }));
+      formatted.liked = likedPostIds.has(post.id);
+      formatted.collected = collectedPostIds.has(post.id);
+      return formatted;
+    });
+
+    console.log(`📊 [推荐算法] 计算完成 - 返回 ${formattedPosts.length} 条推荐, 执行时间: ${result.debug?.statistics?.executionTimeMs || 0}ms`);
+
+    const responseData = {
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success',
+      data: {
+        posts: formattedPosts,
+        pagination: result.pagination
+      }
+    };
+
+    // 如果开启调试模式，返回详细的推荐算法信息
+    if (debug && result.debug) {
+      responseData.data._recommendationDebug = result.debug;
+    }
+
+    res.json(responseData);
+  } catch (error) {
+    console.error('获取推荐笔记列表失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 获取热门笔记列表
+router.get('/hot', optionalAuth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const category = req.query.category || null;
+    const type = req.query.type ? parseInt(req.query.type) : null;
+    const timeRange = parseInt(req.query.timeRange) || 7; // 默认7天内
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
+
+    console.log(`🔥 [热门算法] 获取热门笔记 - 页码: ${page}, 时间范围: ${timeRange}天`);
+
+    // 调用热门算法服务
+    const result = await getHotPosts({
+      page,
+      limit,
+      timeRange,
+      category,
+      type
+    });
+
+    // 批量获取用户互动状态
+    let likedPostIds = new Set();
+    let collectedPostIds = new Set();
+    if (currentUserId && result.posts.length > 0) {
+      const postIds = result.posts.map(p => p.id);
+      const [likes, collections] = await Promise.all([
+        prisma.like.findMany({ where: { user_id: currentUserId, target_type: 1, target_id: { in: postIds } }, select: { target_id: true } }),
+        prisma.collection.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } })
+      ]);
+      likedPostIds = new Set(likes.map(l => l.target_id));
+      collectedPostIds = new Set(collections.map(c => c.post_id));
+    }
+
+    // 格式化返回数据
+    const formattedPosts = result.posts.map(post => {
+      const formatted = {
+        id: Number(post.id),
+        user_id: Number(post.user_id),
+        title: post.title,
+        content: post.content,
+        category_id: post.category_id,
+        category: post.category?.name,
+        type: post.type,
+        view_count: Number(post.view_count),
+        like_count: post.like_count,
+        collect_count: post.collect_count,
+        comment_count: post.comment_count,
+        created_at: post.created_at,
+        is_draft: post.is_draft,
+        visibility: post.visibility || VISIBILITY_PUBLIC,
+        nickname: post.user?.nickname,
+        user_avatar: post.user?.avatar,
+        author_account: post.user?.user_id,
+        author_auto_id: post.user ? Number(post.user.id) : null,
+        location: post.user?.location,
+        verified: post.user?.verified,
+        avatar: post.user?.avatar,
+        author: post.user?.nickname
+      };
+
+      const imageUrls = post.images.map(img => ({ url: img.image_url, isFreePreview: img.is_free_preview }));
+      const videoData = post.videos[0] || null;
+      const paymentSetting = post.paymentSettings;
+
+      protectPostListItem(formatted, {
+        paymentSetting: paymentSetting ? { enabled: paymentSetting.enabled ? 1 : 0, free_preview_count: paymentSetting.free_preview_count, preview_duration: paymentSetting.preview_duration, price: Number(paymentSetting.price), hide_all: paymentSetting.hide_all } : null,
+        isAuthor: false,
+        hasPurchased: false,
+        videoData: videoData ? { video_url: videoData.video_url, cover_url: videoData.cover_url, preview_video_url: videoData.preview_video_url } : null,
+        imageUrls
+      });
+
+      formatted.tags = post.tags.map(pt => ({ id: pt.tag.id, name: pt.tag.name }));
+      formatted.liked = likedPostIds.has(post.id);
+      formatted.collected = collectedPostIds.has(post.id);
+      return formatted;
+    });
+
+    console.log(`🔥 [热门算法] 计算完成 - 返回 ${formattedPosts.length} 条热门笔记`);
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success',
+      data: {
+        posts: formattedPosts,
+        pagination: result.pagination
+      }
+    });
+  } catch (error) {
+    console.error('获取热门笔记列表失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
 
 // 获取笔记列表
 router.get('/', optionalAuth, async (req, res) => {
