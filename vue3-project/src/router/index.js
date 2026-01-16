@@ -23,6 +23,7 @@ import ApiDocs from '@/views/admin/ApiDocs.vue'
 import AdminMonitor from '@/views/admin/AdminMonitor.vue'
 import UserManagement from '@/views/admin/UserManagement.vue'
 import PostManagement from '@/views/admin/PostManagement.vue'
+import BatchUploadManagement from '@/views/admin/BatchUploadManagement.vue'
 import CommentManagement from '@/views/admin/CommentManagement.vue'
 import TagManagement from '@/views/admin/TagManagement.vue'
 import LikeManagement from '@/views/admin/LikeManagement.vue'
@@ -218,6 +219,11 @@ const router = createRouter({
           path: 'posts',
           name: 'admin_posts',
           component: PostManagement
+        },
+        {
+          path: 'batch-upload',
+          name: 'admin_batch_upload',
+          component: BatchUploadManagement
         },
         {
           path: 'comments',

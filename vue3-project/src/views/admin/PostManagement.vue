@@ -24,8 +24,8 @@ const columns = [
 
 const formFields = [
   { key: 'user_id', label: '作者ID', type: 'number', required: true, placeholder: '请输入用户ID' },
-  { key: 'title', label: '标题', type: 'text', required: true, placeholder: '请输入笔记标题' },
-  { key: 'content', label: '内容', type: 'textarea', required: true, placeholder: '请输入笔记内容' },
+  { key: 'title', label: '标题', type: 'text', required: false, placeholder: '请输入笔记标题（可选）' },
+  { key: 'content', label: '内容', type: 'textarea', required: false, placeholder: '请输入笔记内容（可选）' },
   {
     key: 'type',
     label: '笔记类型',

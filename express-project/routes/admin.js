@@ -140,10 +140,10 @@ router.get('/posts/:id', adminAuth, async (req, res) => {
 
 router.post('/posts', adminAuth, async (req, res) => {
   try {
-    const { user_id, title, content, category_id, images, image_urls, tags, type, is_draft } = req.body
+    const { user_id, title, content, category_id, images, image_urls, tags, type, is_draft, video_url, cover_url } = req.body
 
-    if (!user_id || !title || !content) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少必填字段' })
+    if (!user_id) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少用户ID' })
     }
 
     const user = await prisma.user.findUnique({ where: { id: BigInt(user_id) } })
@@ -154,11 +154,11 @@ router.post('/posts', adminAuth, async (req, res) => {
     const post = await prisma.post.create({
       data: {
         user_id: BigInt(user_id),
-        title,
-        content,
+        title: title || '',
+        content: content || '',
         category_id: category_id ? parseInt(category_id) : null,
         type: type || 1,
-        is_draft: is_draft !== undefined ? Boolean(is_draft) : true
+        is_draft: is_draft !== undefined ? Boolean(is_draft) : false
       }
     })
 
@@ -207,6 +207,17 @@ router.post('/posts', adminAuth, async (req, res) => {
         await prisma.postTag.create({ data: { post_id: post.id, tag_id: tagId } })
         await prisma.tag.update({ where: { id: tagId }, data: { use_count: { increment: 1 } } })
       }
+    }
+
+    // Handle video for video posts
+    if (video_url && video_url.trim() !== '') {
+      await prisma.postVideo.create({
+        data: {
+          post_id: post.id,
+          video_url: video_url.trim(),
+          cover_url: cover_url || ''
+        }
+      })
     }
 
     res.json({ code: RESPONSE_CODES.SUCCESS, data: { id: Number(post.id) }, message: '笔记创建成功' })
