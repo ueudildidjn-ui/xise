@@ -183,6 +183,7 @@ import SvgIcon from '@/components/SvgIcon.vue'
 import TagSelector from '@/components/TagSelector.vue'
 import messageManager from '@/utils/messageManager'
 import apiConfig from '@/config/api.js'
+import { generateVideoThumbnail, blobToFile, generateThumbnailFilename } from '@/utils/videoThumbnail.js'
 
 const formData = reactive({
   user_id: null,
@@ -410,6 +411,34 @@ const resetForm = () => {
   notePreviews.value = []
 }
 
+// Generate thumbnail from video blob
+const generateThumbnailFromBlob = async (videoBlob, filename) => {
+  try {
+    // Create a File object from the blob for the thumbnail generator
+    // Note: generateVideoThumbnail uses URL.createObjectURL which accepts both File and Blob
+    const videoFile = new File([videoBlob], filename, { type: videoBlob.type })
+    
+    const result = await generateVideoThumbnail(videoFile, {
+      useOriginalSize: false,
+      width: 640,
+      height: 360,
+      quality: 0.8,
+      seekTime: 1
+    })
+    
+    if (result.success && result.blob) {
+      const thumbnailFilename = generateThumbnailFilename(filename)
+      return blobToFile(result.blob, thumbnailFilename)
+    }
+    
+    console.warn(`视频封面生成失败 [${filename}]:`, result.error || '未知错误')
+    return null
+  } catch (error) {
+    console.error(`生成视频封面异常 [${filename}]:`, error.message || error)
+    return null
+  }
+}
+
 // Upload a single file and get URL
 const uploadFile = async (file, isVideo = false) => {
   // Validate file path to prevent path traversal
@@ -429,6 +458,15 @@ const uploadFile = async (file, isVideo = false) => {
   
   const blob = await response.blob()
   formDataUpload.append('file', blob, file.name)
+  
+  // For video files, generate and include thumbnail
+  if (isVideo) {
+    const thumbnailFile = await generateThumbnailFromBlob(blob, file.name)
+    if (thumbnailFile) {
+      formDataUpload.append('thumbnail', thumbnailFile, thumbnailFile.name)
+      console.log('视频封面已生成并添加到上传请求')
+    }
+  }
   
   const adminToken = localStorage.getItem('admin_token')
   const uploadEndpoint = isVideo ? '/upload/video' : '/upload/single'
