@@ -6,7 +6,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { updatePost, getPostDetail } from '@/api/posts'
 import FormModal from '@/views/admin/components/FormModal.vue'
 import MessageToast from '@/components/MessageToast.vue'
@@ -248,11 +248,6 @@ const handleClose = () => {
 const handleUploadError = (error) => {
   showMessage(error, 'error')
 }
-
-// 组件挂载时无需获取分类数据
-onMounted(() => {
-  // No longer need to fetch categories
-})
 
 // 保存笔记
 const handleSave = async (processedData) => {

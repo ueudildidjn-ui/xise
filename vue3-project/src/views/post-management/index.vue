@@ -403,12 +403,6 @@ onMounted(() => {
   color: var(--text-color-secondary);
 }
 
-.filter-options {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
 
 
 .posts-section {
@@ -538,11 +532,6 @@ onMounted(() => {
 
   .search-box {
     max-width: none;
-  }
-
-  .filter-options {
-    justify-content: flex-start;
-    gap: 0.75rem;
   }
 
   .posts-section {
