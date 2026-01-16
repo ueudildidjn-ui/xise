@@ -16,11 +16,22 @@ export const useNotificationStore = defineStore('notification', () => {
     follows: 0
   })
 
-  // 获取未读通知数量
+  // 获取未读通知数量（同时获取系统消息未读数量）
   async function fetchUnreadCount() {
     try {
-      const response = await getUnreadNotificationCount()
+      // 同时获取普通通知数量和系统消息数量
+      const [response, systemResponse] = await Promise.all([
+        getUnreadNotificationCount(),
+        systemNotificationApi.getPendingCount().catch(() => ({ code: 200, data: { count: 0 } }))
+      ])
+      
       unreadCount.value = response.count || 0
+      
+      // 更新系统消息未读数量
+      if (systemResponse.code === 200) {
+        unreadCountByType.value.system = systemResponse.data?.count || 0
+      }
+      
       return unreadCount.value
     } catch (error) {
       console.error('获取未读通知数量失败:', error)
