@@ -1538,9 +1538,9 @@ watch(isLoggedIn, async (newValue, oldValue) => {
                   <h3 class="system-title">{{ item.title }}</h3>
                   <p class="system-text">{{ item.content }}</p>
                   <div v-if="item.image_url" class="system-image">
-                    <img :src="item.image_url" :alt="item.title" @error="handleImageError" />
+                    <img v-img-lazy="item.image_url" :alt="item.title" class="lazy-image" @error="handleImageError" />
                   </div>
-                  <a v-if="item.link_url" :href="item.link_url" target="_blank" class="system-link">
+                  <a v-if="item.link_url" :href="item.link_url" target="_blank" rel="noopener noreferrer" class="system-link">
                     查看详情 →
                   </a>
                 </div>
