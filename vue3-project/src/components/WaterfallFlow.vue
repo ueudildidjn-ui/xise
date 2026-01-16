@@ -255,13 +255,12 @@ async function initContent() {
         if (props.preloadedPosts && props.preloadedPosts.length > 0) {
             content = props.preloadedPosts
             hasMore.value = false // 预加载数据不支持分页，所以设置为false
-        } else if (props.category === 'recommend' && !props.searchKeyword && !props.searchTag && !props.userId) {
-            // 推荐频道使用推荐算法
+        } else if (!props.searchKeyword && !props.searchTag && !props.userId) {
+            // 无搜索条件时使用推荐算法
             console.log('📊 [WaterfallFlow] 使用推荐算法获取笔记')
             const result = await getRecommendedPosts({
                 page: 1,
                 limit: pageSize,
-                category: props.category,
                 type: props.type
             })
             content = result.posts || []
@@ -361,13 +360,12 @@ async function loadMoreContent() {
     try {
         let result
         
-        // 推荐频道使用推荐算法
-        if (props.category === 'recommend' && !props.searchKeyword && !props.searchTag && !props.userId) {
+        // 无搜索条件时使用推荐算法
+        if (!props.searchKeyword && !props.searchTag && !props.userId) {
             console.log('📊 [WaterfallFlow] 加载更多推荐笔记')
             result = await getRecommendedPosts({
                 page: currentPage.value,
                 limit: pageSize,
-                category: props.category,
                 type: props.type
             })
         } else {

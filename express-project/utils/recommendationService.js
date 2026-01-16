@@ -345,12 +345,11 @@ async function getRecommendedPosts(options = {}) {
     page = 1,
     limit = 20,
     excludePostIds = [],
-    category = null,
     type = null
   } = options;
 
   debugLog.userId = userId ? Number(userId) : null;
-  addDebugPhase(debugLog, 'INIT', { options: { page, limit, category, type, excludePostIds: excludePostIds.length } });
+  addDebugPhase(debugLog, 'INIT', { options: { page, limit, type, excludePostIds: excludePostIds.length } });
 
   try {
     let currentUserId = userId ? BigInt(userId) : null;
@@ -394,10 +393,6 @@ async function getRecommendedPosts(options = {}) {
       is_draft: false,
       visibility: 'public'
     };
-
-    if (category && category !== 'recommend') {
-      whereCondition.category_id = parseInt(category);
-    }
 
     if (type) {
       whereCondition.type = parseInt(type);

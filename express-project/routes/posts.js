@@ -128,19 +128,17 @@ router.get('/recommended', optionalAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const category = req.query.category || null;
     const type = req.query.type ? parseInt(req.query.type) : null;
     const debug = req.query.debug === 'true';
     const currentUserId = req.user ? BigInt(req.user.id) : null;
 
-    console.log(`📊 [推荐算法] 开始计算推荐 - 用户ID: ${currentUserId || '未登录'}, 页码: ${page}, 分类: ${category || '全部'}`);
+    console.log(`📊 [推荐算法] 开始计算推荐 - 用户ID: ${currentUserId || '未登录'}, 页码: ${page}`);
 
     // 调用推荐算法服务
     const result = await getRecommendedPosts({
       userId: currentUserId,
       page,
       limit,
-      category,
       type
     });
 

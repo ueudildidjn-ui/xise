@@ -716,7 +716,6 @@ export async function getRecommendedPosts(params = {}) {
   const {
     page = 1,
     limit = 20,
-    category,
     type
   } = params
 
@@ -730,15 +729,11 @@ export async function getRecommendedPosts(params = {}) {
       debug: debug.toString()
     })
 
-    if (category && category !== 'recommend') {
-      queryParams.append('category', category)
-    }
-
     if (type) {
       queryParams.append('type', type.toString())
     }
 
-    console.log(`📊 [推荐算法] 请求推荐列表 - 页码: ${page}, 分类: ${category || '全部'}`)
+    console.log(`📊 [推荐算法] 请求推荐列表 - 页码: ${page}`)
 
     const headers = {}
     if (token) {
