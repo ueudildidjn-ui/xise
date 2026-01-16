@@ -38,7 +38,7 @@ const WEIGHTS = {
 };
 
 // 调试日志开关（可通过环境变量控制）
-const DEBUG_ENABLED = process.env.RECOMMENDATION_DEBUG === 'true' || true;
+const DEBUG_ENABLED = process.env.RECOMMENDATION_DEBUG === 'true';
 
 /**
  * 创建推荐调试日志对象
@@ -368,13 +368,13 @@ async function getRecommendedPosts(options = {}) {
     if (currentUserId) {
       addDebugPhase(debugLog, 'FETCH_USER_DATA', { userId: Number(currentUserId) });
       
-      [behaviorData, preferences, userInterests] = await Promise.all([
+      // 并行获取用户行为数据和兴趣数据
+      [behaviorData, userInterests] = await Promise.all([
         getUserBehaviorData(currentUserId),
-        getUserBehaviorData(currentUserId).then(bd => getUserPreferences(currentUserId, bd)),
         getUserInterests(currentUserId)
       ]);
 
-      // 重新获取 preferences 使用正确的 behaviorData
+      // 基于行为数据获取用户偏好
       preferences = await getUserPreferences(currentUserId, behaviorData);
 
       addDebugPhase(debugLog, 'USER_DATA_LOADED', {

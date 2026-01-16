@@ -620,9 +620,17 @@ export async function getFollowingPosts(params = {}) {
   }
 }
 
-// 推荐算法调试日志配置
-const RECOMMENDATION_DEBUG_ENABLED = import.meta.env.VITE_RECOMMENDATION_DEBUG === 'true' || 
-                                      localStorage.getItem('recommendationDebug') === 'true'
+/**
+ * 检查推荐算法调试模式是否启用
+ * @returns {boolean}
+ */
+function isRecommendationDebugEnabled() {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    return false
+  }
+  return import.meta.env.VITE_RECOMMENDATION_DEBUG === 'true' || 
+         localStorage.getItem('recommendationDebug') === 'true'
+}
 
 /**
  * 在控制台输出推荐算法调试信息
@@ -630,7 +638,7 @@ const RECOMMENDATION_DEBUG_ENABLED = import.meta.env.VITE_RECOMMENDATION_DEBUG =
  * @param {Array} posts - 推荐的笔记列表
  */
 function logRecommendationDebug(debugData, posts) {
-  if (!RECOMMENDATION_DEBUG_ENABLED && !localStorage.getItem('recommendationDebug')) {
+  if (!isRecommendationDebugEnabled()) {
     return
   }
 
@@ -686,8 +694,9 @@ function logRecommendationDebug(debugData, posts) {
     console.log('%c📝 返回笔记的推荐分数', 'color: #E91E63; font-weight: bold;')
     posts.forEach((post, index) => {
       if (post._recommendationScore) {
-        console.log(`  ${index + 1}. [${post.id}] ${post.title?.substring(0, 25) || '无标题'}... 
-          分数: ${post._recommendationScore?.toFixed(3) || 'N/A'}`)
+        const title = post.title?.substring(0, 25) || '无标题'
+        const score = post._recommendationScore?.toFixed(3) || 'N/A'
+        console.log(`  ${index + 1}. [${post.id}] ${title}... 分数: ${score}`)
         if (post._scoreBreakdown) {
           console.log('     评分详情:', post._scoreBreakdown)
         }
@@ -712,8 +721,8 @@ export async function getRecommendedPosts(params = {}) {
   } = params
 
   try {
-    const token = localStorage.getItem('token')
-    const debug = RECOMMENDATION_DEBUG_ENABLED || localStorage.getItem('recommendationDebug') === 'true'
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('token') : null
+    const debug = isRecommendationDebugEnabled()
     
     const queryParams = new URLSearchParams({
       page: page.toString(),
@@ -746,7 +755,7 @@ export async function getRecommendedPosts(params = {}) {
       // 输出推荐算法调试信息
       if (debug && response.data._recommendationDebug) {
         logRecommendationDebug(response.data._recommendationDebug, transformedPosts)
-      } else if (transformedPosts.some(p => p._recommendationScore)) {
+      } else if (debug && transformedPosts.some(p => p._recommendationScore)) {
         // 即使没有完整调试数据，也输出简单的分数信息
         console.log('%c📊 [推荐算法] 笔记推荐分数', 'color: #4CAF50; font-weight: bold;')
         transformedPosts.slice(0, 10).forEach((post, index) => {
