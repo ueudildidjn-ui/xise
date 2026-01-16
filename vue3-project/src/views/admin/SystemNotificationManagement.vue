@@ -27,8 +27,6 @@ const columns = [
   { key: 'link_url', label: '链接', type: 'link', maxLength: 30, sortable: false },
   { key: 'is_active', label: '启用状态', type: 'boolean', trueText: '启用', falseText: '禁用', sortable: false },
   { key: 'confirmation_count', label: '确认人数', sortable: false },
-  { key: 'start_time', label: '开始时间', type: 'date', sortable: true },
-  { key: 'end_time', label: '结束时间', type: 'date', sortable: true },
   { key: 'created_at', label: '创建时间', type: 'date', sortable: true }
 ]
 
@@ -46,10 +44,7 @@ const formFields = [
     ]
   },
   { key: 'images', label: '图片上传', type: 'multi-image-upload', maxImages: 1 },
-  { key: 'link_url', label: '跳转链接', type: 'text', placeholder: '请输入跳转链接URL（可选）' },
-  { key: 'is_active', label: '启用状态', type: 'checkbox', checkboxLabel: '启用' },
-  { key: 'start_time', label: '开始时间', type: 'datetime', placeholder: '选择开始时间（可选）' },
-  { key: 'end_time', label: '结束时间', type: 'datetime', placeholder: '选择结束时间（可选）' }
+  { key: 'link_url', label: '跳转链接', type: 'text', placeholder: '请输入跳转链接URL（可选）' }
 ]
 
 const searchFields = [
@@ -63,17 +58,6 @@ const searchFields = [
       { value: '', label: '全部类型' },
       { value: 'system', label: '系统消息' },
       { value: 'activity', label: '活动消息' }
-    ]
-  },
-  {
-    key: 'is_active',
-    label: '启用状态',
-    type: 'select',
-    placeholder: '启用状态',
-    options: [
-      { value: '', label: '全部状态' },
-      { value: '1', label: '启用' },
-      { value: '0', label: '禁用' }
     ]
   }
 ]

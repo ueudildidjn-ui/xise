@@ -41,15 +41,15 @@ const themeStore = useThemeStore()
 
 // 常量定义
 const TABS = [
+  { key: 'system', label: '系统消息' },
   { key: 'comments', label: '评论和@' },
   { key: 'likes', label: '点赞' },
   { key: 'collections', label: '收藏' },
-  { key: 'follows', label: '新增关注' },
-  { key: 'system', label: '系统消息' }
+  { key: 'follows', label: '新增关注' }
 ]
 
 // 响应式数据
-const activeTab = ref('comments')
+const activeTab = ref('system')
 const isLoading = ref(true)
 const notificationTabRef = ref(null)
 const commentsData = ref([])
