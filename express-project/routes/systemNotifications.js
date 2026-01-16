@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
-const { prisma } = require('../config/config');
+const prisma = require('../utils/prisma');
 const { authenticateToken } = require('../middleware/auth');
 
 // 获取当前用户未确认的活跃系统通知
@@ -11,29 +11,24 @@ router.get('/pending', authenticateToken, async (req, res) => {
     const now = new Date();
 
     // 查找所有活跃的、在有效期内的、用户未确认的系统通知
+    // 简化时间条件：(start_time IS NULL OR start_time <= now) AND (end_time IS NULL OR end_time >= now)
     const notifications = await prisma.systemNotification.findMany({
       where: {
         is_active: true,
-        OR: [
-          // 没有设置时间限制
+        AND: [
+          // 开始时间条件：未设置或已开始
           {
-            start_time: null,
-            end_time: null
+            OR: [
+              { start_time: null },
+              { start_time: { lte: now } }
+            ]
           },
-          // 在有效期内
+          // 结束时间条件：未设置或未结束
           {
-            start_time: { lte: now },
-            end_time: { gte: now }
-          },
-          // 只设置了开始时间
-          {
-            start_time: { lte: now },
-            end_time: null
-          },
-          // 只设置了结束时间
-          {
-            start_time: null,
-            end_time: { gte: now }
+            OR: [
+              { end_time: null },
+              { end_time: { gte: now } }
+            ]
           }
         ],
         // 用户未确认过

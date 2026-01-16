@@ -3373,7 +3373,12 @@ router.post('/system-notifications', adminAuth, async (req, res) => {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '内容不能为空' })
     }
 
-    const notificationType = type && SYSTEM_NOTIFICATION_TYPES.includes(type) ? type : 'system'
+    // 验证通知类型，如果提供了无效类型则返回错误
+    if (type && !SYSTEM_NOTIFICATION_TYPES.includes(type)) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '无效的通知类型，必须是 system 或 activity' })
+    }
+
+    const notificationType = type || 'system'
 
     const notification = await prisma.systemNotification.create({
       data: {

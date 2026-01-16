@@ -3,7 +3,7 @@
     <Transition name="fade">
       <div v-if="visible && currentNotification" class="system-notification-overlay" @click.self="handleConfirm">
         <Transition name="scale">
-          <div v-if="visible && currentNotification" class="system-notification-modal">
+          <div v-if="visible" class="system-notification-modal">
             <!-- 关闭按钮 -->
             <button class="close-btn" @click="handleConfirm" aria-label="关闭">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -62,6 +62,11 @@ import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 
+// 初始化延迟时间（毫秒）
+// 延迟获取通知是为了避免与用户登录后的其他初始化操作冲突
+// 确保用户信息和token已完全加载后再获取系统通知
+const INIT_FETCH_DELAY_MS = 500
+
 const visible = ref(false)
 const notifications = ref([])
 const currentIndex = ref(0)
@@ -101,27 +106,25 @@ const fetchPendingNotifications = async () => {
 const handleConfirm = async () => {
   if (!currentNotification.value) return
   
-  try {
-    // 调用确认API
-    await systemNotificationApi.confirmNotification(currentNotification.value.id)
-    
-    // 如果还有更多通知，显示下一条
+  // 移动到下一条通知或关闭弹窗的通用处理函数
+  const moveToNextOrClose = () => {
     if (hasMoreNotifications.value) {
       currentIndex.value++
     } else {
-      // 没有更多通知了，关闭弹窗
       visible.value = false
       notifications.value = []
       currentIndex.value = 0
     }
+  }
+  
+  try {
+    // 调用确认API
+    await systemNotificationApi.confirmNotification(currentNotification.value.id)
+    moveToNextOrClose()
   } catch (error) {
     console.error('确认通知失败:', error)
-    // 即使失败也进入下一条或关闭
-    if (hasMoreNotifications.value) {
-      currentIndex.value++
-    } else {
-      visible.value = false
-    }
+    // 即使API失败也继续，确保用户体验不受影响
+    moveToNextOrClose()
   }
 }
 
@@ -148,10 +151,9 @@ watch(() => userStore.isLoggedIn, (newValue) => {
 // 组件挂载时获取通知
 onMounted(() => {
   if (userStore.isLoggedIn) {
-    // 延迟一点获取，避免与其他初始化冲突
     setTimeout(() => {
       fetchPendingNotifications()
-    }, 500)
+    }, INIT_FETCH_DELAY_MS)
   }
 })
 
