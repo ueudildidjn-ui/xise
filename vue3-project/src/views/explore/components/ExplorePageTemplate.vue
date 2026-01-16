@@ -9,8 +9,14 @@ import { useAuthStore } from '@/stores/auth'
 const userStore = useUserStore()
 const authStore = useAuthStore()
 
+// 从环境变量获取是否允许未登录用户查看首页内容
+const ALLOW_GUEST_VIEW = import.meta.env.VITE_ALLOW_GUEST_VIEW === 'true'
+
 // 计算用户是否已登录
 const isLoggedIn = computed(() => userStore.isLoggedIn)
+
+// 计算是否可以查看内容（已登录或允许游客查看）
+const canViewContent = computed(() => isLoggedIn.value || ALLOW_GUEST_VIEW)
 
 const props = defineProps({
     category: {
@@ -67,8 +73,8 @@ onUnmounted(() => {
 
 <template>
     <div class="explore-page">
-        <!-- 未登录状态 -->
-        <div v-if="!isLoggedIn" class="login-prompt">
+        <!-- 未登录且不允许游客查看时显示登录提示 -->
+        <div v-if="!canViewContent" class="login-prompt">
             <div class="login-prompt-content">
                 <SvgIcon name="user" width="48" height="48" class="login-icon" />
                 <h3 class="login-title">请先登录</h3>
@@ -77,7 +83,7 @@ onUnmounted(() => {
             </div>
         </div>
 
-        <!-- 已登录状态 -->
+        <!-- 已登录或允许游客查看时显示内容 -->
         <template v-else>
             <WaterfallFlow :refresh-key="refreshKey" :category="category" :type="effectiveType" />
             <FloatingBtn @reload="handleReload" @toggle-img-only="handleToggleImgOnly" :hideImgOnlyButton="forceType !== null" />
