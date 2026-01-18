@@ -3524,9 +3524,21 @@ router.put('/system-notifications/:id/toggle-active', adminAuth, async (req, res
 
 // ===================== 用户工具栏管理 =====================
 
+// 检查UserToolbar模型是否可用（数据库迁移后才能使用）
+const isUserToolbarAvailable = () => {
+  return prisma.userToolbar !== undefined
+}
+
 // 获取工具栏列表
 router.get('/user-toolbar', adminAuth, async (req, res) => {
   try {
+    if (!isUserToolbarAvailable()) {
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE || 503).json({ 
+        code: RESPONSE_CODES.ERROR, 
+        message: '工具栏功能暂不可用，请先运行数据库迁移: npx prisma generate && npx prisma db push' 
+      })
+    }
+
     const page = parseInt(req.query.page) || 1
     const limit = parseInt(req.query.limit) || 20
     const skip = (page - 1) * limit
@@ -3560,6 +3572,13 @@ router.get('/user-toolbar', adminAuth, async (req, res) => {
 // 获取单个工具栏项
 router.get('/user-toolbar/:id', adminAuth, async (req, res) => {
   try {
+    if (!isUserToolbarAvailable()) {
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE || 503).json({ 
+        code: RESPONSE_CODES.ERROR, 
+        message: '工具栏功能暂不可用，请先运行数据库迁移' 
+      })
+    }
+
     const toolbarId = parseInt(req.params.id)
     const toolbar = await prisma.userToolbar.findUnique({ where: { id: toolbarId } })
 
@@ -3577,6 +3596,13 @@ router.get('/user-toolbar/:id', adminAuth, async (req, res) => {
 // 创建工具栏项
 router.post('/user-toolbar', adminAuth, async (req, res) => {
   try {
+    if (!isUserToolbarAvailable()) {
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE || 503).json({ 
+        code: RESPONSE_CODES.ERROR, 
+        message: '工具栏功能暂不可用，请先运行数据库迁移' 
+      })
+    }
+
     const { name, icon, url, sort_order, is_active } = req.body
 
     if (!name || !name.trim()) {
@@ -3611,6 +3637,13 @@ router.post('/user-toolbar', adminAuth, async (req, res) => {
 // 更新工具栏项
 router.put('/user-toolbar/:id', adminAuth, async (req, res) => {
   try {
+    if (!isUserToolbarAvailable()) {
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE || 503).json({ 
+        code: RESPONSE_CODES.ERROR, 
+        message: '工具栏功能暂不可用，请先运行数据库迁移' 
+      })
+    }
+
     const toolbarId = parseInt(req.params.id)
     const { name, icon, url, sort_order, is_active } = req.body
 
@@ -3652,6 +3685,13 @@ router.put('/user-toolbar/:id', adminAuth, async (req, res) => {
 // 删除工具栏项
 router.delete('/user-toolbar/:id', adminAuth, async (req, res) => {
   try {
+    if (!isUserToolbarAvailable()) {
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE || 503).json({ 
+        code: RESPONSE_CODES.ERROR, 
+        message: '工具栏功能暂不可用，请先运行数据库迁移' 
+      })
+    }
+
     const toolbarId = parseInt(req.params.id)
     
     const existing = await prisma.userToolbar.findUnique({ where: { id: toolbarId } })
@@ -3670,6 +3710,13 @@ router.delete('/user-toolbar/:id', adminAuth, async (req, res) => {
 // 批量删除工具栏项
 router.delete('/user-toolbar', adminAuth, async (req, res) => {
   try {
+    if (!isUserToolbarAvailable()) {
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE || 503).json({ 
+        code: RESPONSE_CODES.ERROR, 
+        message: '工具栏功能暂不可用，请先运行数据库迁移' 
+      })
+    }
+
     const { ids } = req.body
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '请提供要删除的ID列表' })
@@ -3687,6 +3734,13 @@ router.delete('/user-toolbar', adminAuth, async (req, res) => {
 // 切换工具栏项启用状态
 router.put('/user-toolbar/:id/toggle-active', adminAuth, async (req, res) => {
   try {
+    if (!isUserToolbarAvailable()) {
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE || 503).json({ 
+        code: RESPONSE_CODES.ERROR, 
+        message: '工具栏功能暂不可用，请先运行数据库迁移' 
+      })
+    }
+
     const toolbarId = parseInt(req.params.id)
     
     const toolbar = await prisma.userToolbar.findUnique({ where: { id: toolbarId } })
