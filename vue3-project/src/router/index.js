@@ -290,6 +290,11 @@ const router = createRouter({
           path: 'system-notifications',
           name: 'admin_system_notifications',
           component: SystemNotificationManagement
+        },
+        {
+          path: 'user-toolbar',
+          name: 'admin_user_toolbar',
+          component: () => import('@/views/admin/ToolbarManagement.vue')
         }
       ]
     }

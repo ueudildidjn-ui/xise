@@ -1793,4 +1793,30 @@ router.get('/:id/stats', async (req, res) => {
   }
 });
 
+// 获取用户页面工具栏配置（公开接口）
+router.get('/toolbar/items', async (req, res) => {
+  try {
+    const toolbars = await prisma.userToolbar.findMany({
+      where: { is_active: true },
+      orderBy: { sort_order: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        icon: true,
+        url: true,
+        sort_order: true
+      }
+    });
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success',
+      data: toolbars
+    });
+  } catch (error) {
+    console.error('获取工具栏配置失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
 module.exports = router;

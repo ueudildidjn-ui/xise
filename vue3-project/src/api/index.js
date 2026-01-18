@@ -85,6 +85,11 @@ export const userApi = {
   // 清空所有浏览历史
   clearHistory() {
     return request.delete('/users/history')
+  },
+
+  // 获取用户工具栏配置
+  getToolbarItems() {
+    return request.get('/users/toolbar/items')
   }
 }
 
@@ -873,6 +878,42 @@ export const adminApi = {
   // 切换系统通知启用状态
   toggleSystemNotificationActive(notificationId) {
     return request.put(`/admin/system-notifications/${notificationId}/toggle-active`)
+  },
+
+  // ========== 用户工具栏管理 ==========
+  // 获取工具栏列表
+  getUserToolbars(params = {}) {
+    return request.get('/admin/user-toolbar', { params })
+  },
+
+  // 创建工具栏项
+  createUserToolbar(data) {
+    return request.post('/admin/user-toolbar', data)
+  },
+
+  // 更新工具栏项
+  updateUserToolbar(toolbarId, data) {
+    return request.put(`/admin/user-toolbar/${toolbarId}`, data)
+  },
+
+  // 删除工具栏项
+  deleteUserToolbar(toolbarId) {
+    return request.delete(`/admin/user-toolbar/${toolbarId}`)
+  },
+
+  // 批量删除工具栏项
+  batchDeleteUserToolbars(ids) {
+    return request.delete('/admin/user-toolbar', { data: { ids } })
+  },
+
+  // 获取单个工具栏项详情
+  getUserToolbarDetail(toolbarId) {
+    return request.get(`/admin/user-toolbar/${toolbarId}`)
+  },
+
+  // 切换工具栏项启用状态
+  toggleUserToolbarActive(toolbarId) {
+    return request.put(`/admin/user-toolbar/${toolbarId}/toggle-active`)
   }
 }
 

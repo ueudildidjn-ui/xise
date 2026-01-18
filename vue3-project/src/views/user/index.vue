@@ -57,6 +57,64 @@ const userStats = ref({
   likes_and_collects: 0
 })
 
+// 工具栏相关
+const toolbarItems = ref([])
+const toolbarExpanded = ref(false)
+const TOOLBAR_VISIBLE_COUNT = 4 // 默认显示的工具数量
+
+// 获取可见的工具栏项
+const visibleToolbarItems = computed(() => {
+  if (toolbarExpanded.value || toolbarItems.value.length <= TOOLBAR_VISIBLE_COUNT) {
+    return toolbarItems.value
+  }
+  return toolbarItems.value.slice(0, TOOLBAR_VISIBLE_COUNT)
+})
+
+// 是否需要显示展开按钮
+const showExpandButton = computed(() => {
+  return toolbarItems.value.length > TOOLBAR_VISIBLE_COUNT
+})
+
+// 获取工具栏配置
+const loadToolbarItems = async () => {
+  try {
+    const response = await userApi.getToolbarItems()
+    if (response.success && response.data && response.data.length > 0) {
+      toolbarItems.value = response.data
+    } else {
+      // 没有配置时使用默认工具栏项
+      toolbarItems.value = [
+        { id: 0, name: '浏览历史', icon: 'history', url: '/history' }
+      ]
+    }
+  } catch (error) {
+    console.error('获取工具栏配置失败:', error)
+    // 设置默认工具栏项（浏览历史）
+    toolbarItems.value = [
+      { id: 0, name: '浏览历史', icon: 'history', url: '/history' }
+    ]
+  }
+}
+
+// 切换工具栏展开/收起状态
+const toggleToolbarExpand = () => {
+  toolbarExpanded.value = !toolbarExpanded.value
+}
+
+// 处理工具栏项点击
+const handleToolbarClick = (item) => {
+  if (item.url.startsWith('/')) {
+    // 内部路由
+    router.push(item.url)
+  } else if (item.url.startsWith('http')) {
+    // 外部链接
+    window.open(item.url, '_blank')
+  } else {
+    // 尝试作为路由名称
+    router.push({ name: item.url })
+  }
+}
+
 // 编辑资料模态框
 const showEditProfileModal = ref(false)
 
@@ -140,6 +198,9 @@ const loadUserStats = async () => {
 // 页面挂载时自动滚动到顶部并获取统计信息
 onMounted(() => {
   navigationStore.scrollToTop('instant')
+
+  // 加载工具栏配置
+  loadToolbarItems()
 
   // 监听全局点赞和收藏事件
   eventBus.on(EVENT_TYPES.USER_LIKED_POST, handleGlobalLikeEvent)
@@ -421,10 +482,28 @@ function handleCollect(data) {
         </div>
       </div>
       <!-- 工具栏 -->
-      <div class="user-toolbar">
-        <div class="toolbar-item" @click="goToHistory">
-          <SvgIcon name="history" width="20" height="20" />
-          <span>浏览历史</span>
+      <div class="user-toolbar" :class="{ expanded: toolbarExpanded }">
+        <div class="toolbar-scroll-container">
+          <div class="toolbar-items-wrapper" :class="{ 'wrap-items': toolbarExpanded }">
+            <div 
+              v-for="item in visibleToolbarItems" 
+              :key="item.id" 
+              class="toolbar-item"
+              @click="handleToolbarClick(item)"
+            >
+              <SvgIcon :name="item.icon" width="18" height="18" />
+              <span class="toolbar-item-text">{{ item.name }}</span>
+            </div>
+            <!-- 展开/收起按钮 -->
+            <div 
+              v-if="showExpandButton" 
+              class="toolbar-item toolbar-expand-btn"
+              @click="toggleToolbarExpand"
+            >
+              <SvgIcon :name="toolbarExpanded ? 'up' : 'down'" width="16" height="16" />
+              <span class="toolbar-item-text">{{ toolbarExpanded ? '收起' : '展开' }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -832,35 +911,87 @@ function handleCollect(data) {
 /* ---------- 3.4. 工具栏样式 ---------- */
 .user-toolbar {
   display: flex;
+  flex-direction: column;
   padding: 16px 16px 0;
-  gap: 12px;
   position: relative;
   z-index: 1;
+}
+
+.toolbar-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.toolbar-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+.toolbar-items-wrapper {
+  display: flex;
+  gap: 10px;
+  flex-wrap: nowrap;
+  min-width: min-content;
+}
+
+.toolbar-items-wrapper.wrap-items {
+  flex-wrap: wrap;
 }
 
 .toolbar-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
   color: #ffffff;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   transition: all 0.2s ease;
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 80px;
+  justify-content: center;
 }
 
 .toolbar-item:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.toolbar-item:active {
+  transform: translateY(0);
 }
 
 .toolbar-item :deep(svg) {
   flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.toolbar-item-text {
+  font-weight: 500;
+}
+
+.toolbar-expand-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+  min-width: 60px;
+}
+
+.toolbar-expand-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.user-toolbar.expanded .toolbar-items-wrapper {
+  flex-wrap: wrap;
 }
 
 /* ---------- 3.5. 登录提示样式 ---------- */

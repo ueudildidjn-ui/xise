@@ -574,3 +574,19 @@ model User {
   @@index([oauth2_id], name: "idx_user_oauth2_id")
   @@map("users")
 }
+
+// 用户工具栏配置表
+model UserToolbar {
+  id         Int      @id @default(autoincrement())
+  name       String   @db.VarChar(50) // 工具名称
+  icon       String   @db.VarChar(50) // 图标名称（SvgIcon组件使用）
+  url        String   @db.VarChar(255) // 跳转链接或路由
+  sort_order Int      @default(0) // 排序顺序
+  is_active  Boolean  @default(true) // 是否启用
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([is_active], name: "idx_user_toolbar_is_active")
+  @@index([sort_order], name: "idx_user_toolbar_sort_order")
+  @@map("user_toolbar")
+}
