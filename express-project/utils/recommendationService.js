@@ -404,66 +404,25 @@ async function getRecommendedPosts(options = {}) {
 
     addDebugPhase(debugLog, 'QUERY_CONDITION', whereCondition);
 
-    // 首先获取总数以便正确计算分页
-    const totalCount = await prisma.post.count({ where: whereCondition });
-    
-    // 计算需要获取的候选笔记数量
-    // 对于前几页使用推荐算法排序，后续页面使用数据库分页
-    const RECOMMENDATION_THRESHOLD = 500; // 前500条使用推荐算法排序
-    const useRecommendationSort = (page - 1) * limit < RECOMMENDATION_THRESHOLD;
-    
-    let candidatePosts;
-    let candidateLimit;
-    let dbSkip;
-    
-    if (useRecommendationSort) {
-      // 前500条数据：获取足够的候选进行推荐排序
-      candidateLimit = Math.min(RECOMMENDATION_THRESHOLD, totalCount);
-      dbSkip = 0;
-      
-      candidatePosts = await prisma.post.findMany({
-        where: whereCondition,
-        include: {
-          user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true, verified: true } },
-          category: { select: { name: true } },
-          images: { select: { image_url: true, is_free_preview: true } },
-          videos: { select: { video_url: true, cover_url: true, preview_video_url: true }, take: 1 },
-          tags: { include: { tag: { select: { id: true, name: true } } } },
-          paymentSettings: true
-        },
-        orderBy: { created_at: 'desc' },
-        take: candidateLimit
-      });
-    } else {
-      // 超过阈值后：直接使用数据库分页，按时间倒序
-      dbSkip = (page - 1) * limit - RECOMMENDATION_THRESHOLD;
-      if (dbSkip < 0) dbSkip = 0;
-      
-      candidatePosts = await prisma.post.findMany({
-        where: whereCondition,
-        include: {
-          user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true, verified: true } },
-          category: { select: { name: true } },
-          images: { select: { image_url: true, is_free_preview: true } },
-          videos: { select: { video_url: true, cover_url: true, preview_video_url: true }, take: 1 },
-          tags: { include: { tag: { select: { id: true, name: true } } } },
-          paymentSettings: true
-        },
-        orderBy: { created_at: 'desc' },
-        skip: RECOMMENDATION_THRESHOLD + dbSkip,
-        take: limit
-      });
-      
-      addDebugPhase(debugLog, 'DB_PAGINATION', { 
-        skip: RECOMMENDATION_THRESHOLD + dbSkip, 
-        take: limit,
-        reason: 'Page exceeds recommendation threshold' 
-      });
-    }
+    // 获取所有符合条件的笔记，用于推荐算法排序
+    // 所有数据都使用推荐算法智能排序
+    const candidatePosts = await prisma.post.findMany({
+      where: whereCondition,
+      include: {
+        user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true, verified: true } },
+        category: { select: { name: true } },
+        images: { select: { image_url: true, is_free_preview: true } },
+        videos: { select: { video_url: true, cover_url: true, preview_video_url: true }, take: 1 },
+        tags: { include: { tag: { select: { id: true, name: true } } } },
+        paymentSettings: true
+      },
+      orderBy: { created_at: 'desc' }
+    });
+
+    const totalCount = candidatePosts.length;
 
     addDebugPhase(debugLog, 'CANDIDATES_FETCHED', { 
       count: candidatePosts.length,
-      useRecommendationSort,
       totalCount
     });
     debugLog.statistics.totalCandidates = candidatePosts.length;
@@ -492,19 +451,12 @@ async function getRecommendedPosts(options = {}) {
       return true; // 暂时不过滤，让用户可以再次看到喜欢的内容
     }) : scoredPosts;
 
-    let paginatedPosts;
+    // 按推荐分数排序（所有数据都使用推荐算法智能排序）
+    filteredPosts.sort((a, b) => b.score - a.score);
     
-    if (useRecommendationSort) {
-      // 按分数排序
-      filteredPosts.sort((a, b) => b.score - a.score);
-      
-      // 在推荐范围内分页
-      const startIndex = (page - 1) * limit;
-      paginatedPosts = filteredPosts.slice(startIndex, startIndex + limit);
-    } else {
-      // 超过推荐阈值后，直接使用数据库返回的数据（已经分页）
-      paginatedPosts = filteredPosts;
-    }
+    // 分页
+    const startIndex = (page - 1) * limit;
+    const paginatedPosts = filteredPosts.slice(startIndex, startIndex + limit);
 
     debugLog.statistics.scoredPosts = filteredPosts.length;
 
@@ -528,7 +480,6 @@ async function getRecommendedPosts(options = {}) {
     debugLog.statistics.returnedPosts = paginatedPosts.length;
     debugLog.statistics.executionTimeMs = Date.now() - startTime;
 
-    const startIndex = (page - 1) * limit;
     addDebugPhase(debugLog, 'PAGINATION', { 
       page, 
       limit, 
@@ -604,85 +555,48 @@ async function getHotPosts(options = {}) {
     whereCondition.type = parseInt(type);
   }
 
-  // 获取总数以便正确计算分页
-  const totalCount = await prisma.post.count({ where: whereCondition });
-  
-  // 热门排序阈值：前300条使用热门算法排序，后续使用数据库分页
-  const HOT_THRESHOLD = 300;
-  const useHotSort = (page - 1) * limit < HOT_THRESHOLD;
-  
-  let posts;
-  
-  if (useHotSort) {
-    posts = await prisma.post.findMany({
-      where: whereCondition,
-      include: {
-        user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true, verified: true } },
-        category: { select: { name: true } },
-        images: { select: { image_url: true, is_free_preview: true } },
-        videos: { select: { video_url: true, cover_url: true, preview_video_url: true }, take: 1 },
-        tags: { include: { tag: { select: { id: true, name: true } } } },
-        paymentSettings: true
-      },
-      orderBy: [
-        { like_count: 'desc' },
-        { collect_count: 'desc' },
-        { comment_count: 'desc' }
-      ],
-      take: Math.min(HOT_THRESHOLD, totalCount),
-      skip: 0
-    });
+  // 获取所有符合条件的笔记，用于热门算法排序
+  // 所有数据都使用热门算法智能排序
+  const posts = await prisma.post.findMany({
+    where: whereCondition,
+    include: {
+      user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true, verified: true } },
+      category: { select: { name: true } },
+      images: { select: { image_url: true, is_free_preview: true } },
+      videos: { select: { video_url: true, cover_url: true, preview_video_url: true }, take: 1 },
+      tags: { include: { tag: { select: { id: true, name: true } } } },
+      paymentSettings: true
+    },
+    orderBy: [
+      { like_count: 'desc' },
+      { collect_count: 'desc' },
+      { comment_count: 'desc' }
+    ]
+  });
 
-    // 计算综合热门分数
-    const scoredPosts = posts.map(post => ({
-      post,
-      hotScore: calculatePopularityScore(post) * calculateTimeDecay(post.created_at)
-    }));
+  const totalCount = posts.length;
 
-    scoredPosts.sort((a, b) => b.hotScore - a.hotScore);
+  // 计算综合热门分数（所有数据都使用热门算法智能排序）
+  const scoredPosts = posts.map(post => ({
+    post,
+    hotScore: calculatePopularityScore(post) * calculateTimeDecay(post.created_at)
+  }));
 
-    const startIndex = (page - 1) * limit;
-    const paginatedPosts = scoredPosts.slice(startIndex, startIndex + limit);
+  scoredPosts.sort((a, b) => b.hotScore - a.hotScore);
 
-    return {
-      posts: paginatedPosts.map(sp => sp.post),
-      pagination: {
-        page,
-        limit,
-        total: totalCount,
-        pages: Math.ceil(totalCount / limit)
-      }
-    };
-  } else {
-    // 超过热门阈值后，直接使用数据库分页
-    let dbSkip = (page - 1) * limit - HOT_THRESHOLD;
-    if (dbSkip < 0) dbSkip = 0;
-    
-    posts = await prisma.post.findMany({
-      where: whereCondition,
-      include: {
-        user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true, verified: true } },
-        category: { select: { name: true } },
-        images: { select: { image_url: true, is_free_preview: true } },
-        videos: { select: { video_url: true, cover_url: true, preview_video_url: true }, take: 1 },
-        tags: { include: { tag: { select: { id: true, name: true } } } },
-        paymentSettings: true
-      },
-      orderBy: { created_at: 'desc' },
-      skip: HOT_THRESHOLD + dbSkip,
-      take: limit
-    });
+  // 分页
+  const startIndex = (page - 1) * limit;
+  const paginatedPosts = scoredPosts.slice(startIndex, startIndex + limit);
 
-    return {
-      posts: posts,
-      pagination: {
-        page,
-        limit,
-        total: totalCount,
-        pages: Math.ceil(totalCount / limit)
-      }
-    };
-  }
+  return {
+    posts: paginatedPosts.map(sp => sp.post),
+    pagination: {
+      page,
+      limit,
+      total: totalCount,
+      pages: Math.ceil(totalCount / limit)
+    }
+  };
 }
 
 module.exports = {
