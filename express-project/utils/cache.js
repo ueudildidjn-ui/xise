@@ -34,6 +34,10 @@ class SimpleCache {
    * @param {string} key - 缓存键
    * @param {any} value - 缓存值
    * @param {number} ttlMs - 过期时间（毫秒），默认5分钟
+   * 
+   * 注意：每个缓存项使用独立的定时器进行自动清理。
+   * 对于少量缓存项（<1000）这种方式简单高效。
+   * 如果需要处理大量缓存项，建议改用周期性清理机制。
    */
   set(key, value, ttlMs = 5 * 60 * 1000) {
     // 清除旧的定时器
@@ -45,10 +49,13 @@ class SimpleCache {
     this.cache.set(key, { value, expireAt });
 
     // 设置自动清理定时器
+    // 使用 unref() 确保定时器不会阻止 Node.js 进程退出
     if (ttlMs > 0) {
       const timer = setTimeout(() => {
         this.delete(key);
       }, ttlMs);
+      // 确保定时器不会阻止进程退出
+      if (timer.unref) timer.unref();
       this.timers.set(key, timer);
     }
   }
@@ -106,23 +113,48 @@ const CACHE_TTL = {
   SYSTEM_SETTINGS: 30 * 60 * 1000   // 系统设置缓存30分钟
 };
 
+// 用于防止并发加载的锁
+const loadingPromises = new Map();
+
 /**
- * 获取或设置缓存（带自动加载）
+ * 获取或设置缓存（带自动加载和并发控制）
+ * 
+ * 使用简单的锁机制防止并发请求重复加载同一资源：
+ * - 如果有正在加载的请求，后续请求会等待该加载完成
+ * - 这避免了 "thundering herd" 问题
+ * 
  * @param {string} key - 缓存键
  * @param {Function} loader - 数据加载函数
  * @param {number} ttlMs - 过期时间
  * @returns {Promise<any>} 缓存值
  */
 async function getOrSet(key, loader, ttlMs = 5 * 60 * 1000) {
+  // 检查缓存是否存在
   let value = globalCache.get(key);
   if (value !== undefined) {
     return value;
   }
 
-  // 缓存不存在，调用加载函数
-  value = await loader();
-  globalCache.set(key, value, ttlMs);
-  return value;
+  // 检查是否有正在进行的加载
+  if (loadingPromises.has(key)) {
+    // 等待正在进行的加载完成
+    return await loadingPromises.get(key);
+  }
+
+  // 创建加载 Promise 并存储
+  const loadPromise = (async () => {
+    try {
+      const result = await loader();
+      globalCache.set(key, result, ttlMs);
+      return result;
+    } finally {
+      // 加载完成后清除锁
+      loadingPromises.delete(key);
+    }
+  })();
+
+  loadingPromises.set(key, loadPromise);
+  return await loadPromise;
 }
 
 /**
