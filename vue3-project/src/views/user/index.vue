@@ -62,12 +62,28 @@ const toolbarItems = ref([])
 const toolbarExpanded = ref(false)
 const TOOLBAR_VISIBLE_COUNT = 4 // 默认显示的工具数量
 
-// 获取可见的工具栏项
+// 验证图标名称（只允许字母、数字、下划线和连字符）
+const isValidIconName = (icon) => {
+  if (!icon || typeof icon !== 'string') return false
+  return /^[a-zA-Z0-9_-]+$/.test(icon)
+}
+
+// 安全的图标名称（防止XSS）
+const getSafeIcon = (icon) => {
+  return isValidIconName(icon) ? icon : 'setting'
+}
+
+// 获取可见的工具栏项（包含安全处理）
 const visibleToolbarItems = computed(() => {
-  if (toolbarExpanded.value || toolbarItems.value.length <= TOOLBAR_VISIBLE_COUNT) {
-    return toolbarItems.value
-  }
-  return toolbarItems.value.slice(0, TOOLBAR_VISIBLE_COUNT)
+  const items = toolbarExpanded.value || toolbarItems.value.length <= TOOLBAR_VISIBLE_COUNT
+    ? toolbarItems.value
+    : toolbarItems.value.slice(0, TOOLBAR_VISIBLE_COUNT)
+  
+  // 对每个项进行安全处理
+  return items.map(item => ({
+    ...item,
+    icon: getSafeIcon(item.icon)
+  }))
 })
 
 // 是否需要显示展开按钮
@@ -82,14 +98,14 @@ const loadToolbarItems = async () => {
     if (response.success && response.data && response.data.length > 0) {
       toolbarItems.value = response.data
     } else {
-      // 没有配置时使用默认工具栏项
+      // 没有配置或配置为空时使用默认工具栏项，确保用户始终有可用工具
       toolbarItems.value = [
         { id: 0, name: '浏览历史', icon: 'history', url: '/history' }
       ]
     }
   } catch (error) {
     console.error('获取工具栏配置失败:', error)
-    // 设置默认工具栏项（浏览历史）
+    // API错误时使用默认工具栏项（浏览历史）
     toolbarItems.value = [
       { id: 0, name: '浏览历史', icon: 'history', url: '/history' }
     ]
@@ -101,16 +117,36 @@ const toggleToolbarExpand = () => {
   toolbarExpanded.value = !toolbarExpanded.value
 }
 
+// 验证是否是安全的URL
+const isValidUrl = (url) => {
+  if (!url || typeof url !== 'string') return false
+  // 内部路由 (以 / 开头)
+  if (url.startsWith('/')) return true
+  // 只允许 http 和 https 协议
+  try {
+    const parsed = new URL(url)
+    return ['http:', 'https:'].includes(parsed.protocol)
+  } catch {
+    // 可能是路由名称，必须以字母开头，允许字母数字、下划线和连字符
+    return /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(url)
+  }
+}
+
 // 处理工具栏项点击
 const handleToolbarClick = (item) => {
+  if (!item.url || !isValidUrl(item.url)) {
+    console.warn('无效的工具栏URL:', item.url)
+    return
+  }
+  
   if (item.url.startsWith('/')) {
     // 内部路由
     router.push(item.url)
-  } else if (item.url.startsWith('http')) {
-    // 外部链接
-    window.open(item.url, '_blank')
-  } else {
-    // 尝试作为路由名称
+  } else if (item.url.startsWith('http://') || item.url.startsWith('https://')) {
+    // 外部链接，使用 noopener noreferrer 提高安全性
+    window.open(item.url, '_blank', 'noopener,noreferrer')
+  } else if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(item.url)) {
+    // 路由名称
     router.push({ name: item.url })
   }
 }

@@ -3597,7 +3597,7 @@ router.post('/user-toolbar', adminAuth, async (req, res) => {
         icon: icon.trim(),
         url: url.trim(),
         sort_order: parseInt(sort_order) || 0,
-        is_active: is_active !== false
+        is_active: is_active === undefined ? true : Boolean(is_active)
       }
     })
 
@@ -3639,7 +3639,7 @@ router.put('/user-toolbar/:id', adminAuth, async (req, res) => {
       updateData.url = url.trim()
     }
     if (sort_order !== undefined) updateData.sort_order = parseInt(sort_order) || 0
-    if (is_active !== undefined) updateData.is_active = !!is_active
+    if (is_active !== undefined) updateData.is_active = is_active === true || is_active === 'true'
 
     await prisma.userToolbar.update({ where: { id: toolbarId }, data: updateData })
     res.json({ code: RESPONSE_CODES.SUCCESS, message: '更新成功' })
