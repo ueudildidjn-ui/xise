@@ -127,6 +127,10 @@
                   {{ item.type === 2 ? '视频' : '图片' }}
                 </span>
               </span>
+              <span v-else-if="column.type === 'icon' && item[column.key]" class="icon-cell">
+                <SvgIcon :name="item[column.key]" width="18" height="18" />
+                <span class="icon-name">{{ item[column.key] }}</span>
+              </span>
               <span v-else-if="column.type === 'date'">
                 {{ formatDate(item[column.key]) }}
               </span>
@@ -1568,6 +1572,18 @@ const handleCustomAction = (action, item) => {
 
 .table-image:hover {
   transform: scale(1.1);
+}
+
+.icon-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-color-primary);
+}
+
+.icon-cell .icon-name {
+  font-size: 13px;
+  color: var(--text-color-secondary);
 }
 
 .pagination {

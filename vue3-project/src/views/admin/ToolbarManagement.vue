@@ -15,7 +15,7 @@ import CrudTable from '@/views/admin/components/CrudTable.vue'
 const columns = [
   { key: 'id', label: 'ID', sortable: true },
   { key: 'name', label: '工具名称', sortable: false },
-  { key: 'icon', label: '图标', sortable: false },
+  { key: 'icon', label: '图标', type: 'icon', sortable: false },
   { key: 'url', label: '跳转链接', type: 'link', maxLength: 30, sortable: false },
   { key: 'sort_order', label: '排序', sortable: true },
   { key: 'is_active', label: '启用状态', type: 'boolean', trueText: '启用', falseText: '禁用', sortable: false },
