@@ -655,7 +655,8 @@ async function getHotPosts(options = {}) {
     };
   } else {
     // 超过热门阈值后，直接使用数据库分页
-    const dbSkip = (page - 1) * limit - HOT_THRESHOLD;
+    let dbSkip = (page - 1) * limit - HOT_THRESHOLD;
+    if (dbSkip < 0) dbSkip = 0;
     
     posts = await prisma.post.findMany({
       where: whereCondition,
@@ -668,7 +669,7 @@ async function getHotPosts(options = {}) {
         paymentSettings: true
       },
       orderBy: { created_at: 'desc' },
-      skip: HOT_THRESHOLD + (dbSkip >= 0 ? dbSkip : 0),
+      skip: HOT_THRESHOLD + dbSkip,
       take: limit
     });
 

@@ -65,6 +65,10 @@ const pageSize = 20
 // 添加初次加载标识
 const isInitialLoad = ref(true)
 
+// 加载重试控制
+const loadRetryCount = ref(0)
+const MAX_LOAD_RETRIES = 3  // 最大重试次数
+
 // DetailCard 相关状态
 const showDetailCard = ref(false)
 const selectedItem = ref(null)
@@ -248,6 +252,7 @@ async function initContent() {
 
     currentPage.value = 1
     hasMore.value = true
+    loadRetryCount.value = 0  // 重置重试计数
     try {
         let content = []
         let result = null
@@ -453,13 +458,27 @@ async function loadMoreContent() {
         })
 
         console.log(`📊 [WaterfallFlow] 加载完成 - 当前页: ${currentPage.value}, 总数: ${contentList.value.length}, 还有更多: ${hasMore.value}`)
+        
+        // 成功加载后重置重试计数
+        loadRetryCount.value = 0
 
     } catch (error) {
         console.error('加载更多内容失败:', error)
         // 发生错误时回退页码
         currentPage.value--
-        // 网络错误时保持 hasMore 为 true，允许用户重试
-        hasMore.value = true
+        
+        // 增加重试计数
+        loadRetryCount.value++
+        
+        // 如果未超过最大重试次数，保持 hasMore 为 true 允许重试
+        if (loadRetryCount.value < MAX_LOAD_RETRIES) {
+            hasMore.value = true
+            console.log(`📊 [WaterfallFlow] 加载失败，将在下次滚动时重试 (${loadRetryCount.value}/${MAX_LOAD_RETRIES})`)
+        } else {
+            // 超过最大重试次数，停止尝试加载更多
+            hasMore.value = false
+            console.log(`📊 [WaterfallFlow] 已达到最大重试次数，停止加载更多`)
+        }
     } finally {
         loadingMore.value = false
     }
@@ -471,6 +490,8 @@ let resizeTimer = null
 // 是否正在处理滚动事件
 let isScrollHandling = ref(false)
 // 滚动触发阈值（距离底部多少像素时开始加载）
+// 设置为300px以便在用户滚动接近底部时提前开始加载，提供更流畅的体验
+// 这个值需要在响应速度和减少不必要请求之间取得平衡
 const SCROLL_THRESHOLD = 300
 
 // 滚动监听函数
