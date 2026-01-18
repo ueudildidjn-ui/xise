@@ -811,24 +811,38 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // Handle tags
+    // Handle tags (optimized batch operations)
     if (tags.length > 0) {
-      const tagIds = [];
-      for (const tagName of tags) {
-        let tag = await prisma.tag.findUnique({ where: { name: tagName } });
-        if (!tag) {
-          tag = await prisma.tag.create({ data: { name: tagName } });
+      // Step 1: Batch query existing tags
+      const existingTags = await prisma.tag.findMany({
+        where: { name: { in: tags } },
+        select: { id: true, name: true }
+      });
+      const existingTagMap = new Map(existingTags.map(t => [t.name, t.id]));
+      
+      // Step 2: Identify and create missing tags
+      const missingTagNames = tags.filter(name => !existingTagMap.has(name));
+      if (missingTagNames.length > 0) {
+        // Create missing tags one by one (Prisma createMany doesn't return created IDs)
+        for (const name of missingTagNames) {
+          const newTag = await prisma.tag.create({ data: { name } });
+          existingTagMap.set(name, newTag.id);
         }
-        await prisma.postTag.create({ data: { post_id: postId, tag_id: tag.id } });
-        tagIds.push(tag.id);
       }
-      // 使用批量更新增加标签计数
-      if (tagIds.length > 0) {
-        await prisma.tag.updateMany({
-          where: { id: { in: tagIds } },
-          data: { use_count: { increment: 1 } }
-        });
-      }
+      
+      // Step 3: Get all tag IDs and batch create postTag associations
+      const tagIds = tags.map(name => existingTagMap.get(name));
+      await prisma.postTag.createMany({
+        data: tagIds.map(tag_id => ({ post_id: postId, tag_id })),
+        skipDuplicates: true
+      });
+      
+      // Step 4: Batch update tag counts
+      await prisma.tag.updateMany({
+        where: { id: { in: tagIds } },
+        data: { use_count: { increment: 1 } }
+      });
+      
       // 使标签缓存失效
       invalidate('tags:*');
     }
@@ -959,7 +973,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    // Update tags
+    // Update tags (optimized batch operations)
     if (tags !== undefined) {
       const oldTags = await prisma.postTag.findMany({ where: { post_id: postId }, select: { tag_id: true } });
       
@@ -974,19 +988,32 @@ router.put('/:id', authenticateToken, async (req, res) => {
       
       await prisma.postTag.deleteMany({ where: { post_id: postId } });
       
-      // 添加新标签（需要逐个处理以检查是否需要创建新标签）
-      const newTagIds = [];
-      for (const tagName of tags) {
-        let tag = await prisma.tag.findUnique({ where: { name: tagName } });
-        if (!tag) {
-          tag = await prisma.tag.create({ data: { name: tagName } });
+      // 添加新标签（使用批量操作优化）
+      if (tags.length > 0) {
+        // Step 1: Batch query existing tags
+        const existingTags = await prisma.tag.findMany({
+          where: { name: { in: tags } },
+          select: { id: true, name: true }
+        });
+        const existingTagMap = new Map(existingTags.map(t => [t.name, t.id]));
+        
+        // Step 2: Identify and create missing tags
+        const missingTagNames = tags.filter(name => !existingTagMap.has(name));
+        if (missingTagNames.length > 0) {
+          for (const name of missingTagNames) {
+            const newTag = await prisma.tag.create({ data: { name } });
+            existingTagMap.set(name, newTag.id);
+          }
         }
-        await prisma.postTag.create({ data: { post_id: postId, tag_id: tag.id } });
-        newTagIds.push(tag.id);
-      }
-      
-      // 使用批量更新增加新标签计数
-      if (newTagIds.length > 0) {
+        
+        // Step 3: Get all tag IDs and batch create postTag associations
+        const newTagIds = tags.map(name => existingTagMap.get(name));
+        await prisma.postTag.createMany({
+          data: newTagIds.map(tag_id => ({ post_id: postId, tag_id })),
+          skipDuplicates: true
+        });
+        
+        // Step 4: Batch update tag counts
         await prisma.tag.updateMany({
           where: { id: { in: newTagIds } },
           data: { use_count: { increment: 1 } }

@@ -100,20 +100,52 @@ const CACHE_TTL = {
 
 ---
 
-### 5. 标签计数批量更新优化
+### 5. 标签处理批量优化
 
 #### 问题描述
-创建、更新、删除笔记时，标签的 use_count 更新是在循环中逐个执行的。
+创建、更新笔记时，对每个标签都进行单独的 `findUnique` 查询和 `create` 操作。
 
 #### 解决方案
-使用 `updateMany` 进行批量更新：
-- 创建笔记时：收集所有标签 ID，最后一次性更新计数
-- 更新笔记时：批量减少旧标签计数，批量增加新标签计数
-- 删除笔记时：使用 `updateMany` 一次性减少所有相关标签计数
+实现四步批量操作策略：
+1. **批量查询现有标签**：使用 `findMany` 一次性查询所有需要的标签
+2. **创建缺失标签**：仅对不存在的标签进行创建
+3. **批量创建关联**：使用 `createMany` 批量创建 postTag 关联
+4. **批量更新计数**：使用 `updateMany` 一次性更新所有标签的 use_count
+
+#### 代码示例
+```javascript
+// Step 1: Batch query existing tags
+const existingTags = await prisma.tag.findMany({
+  where: { name: { in: tags } },
+  select: { id: true, name: true }
+});
+const existingTagMap = new Map(existingTags.map(t => [t.name, t.id]));
+
+// Step 2: Create missing tags
+const missingTagNames = tags.filter(name => !existingTagMap.has(name));
+for (const name of missingTagNames) {
+  const newTag = await prisma.tag.create({ data: { name } });
+  existingTagMap.set(name, newTag.id);
+}
+
+// Step 3: Batch create postTag associations
+const tagIds = tags.map(name => existingTagMap.get(name));
+await prisma.postTag.createMany({
+  data: tagIds.map(tag_id => ({ post_id: postId, tag_id })),
+  skipDuplicates: true
+});
+
+// Step 4: Batch update tag counts
+await prisma.tag.updateMany({
+  where: { id: { in: tagIds } },
+  data: { use_count: { increment: 1 } }
+});
+```
 
 #### 性能收益
-- 将 N 次 update 操作减少为 1-2 次 updateMany
-- 减少数据库往返次数
+- 对于 N 个标签：从 3N 次查询减少到 2 + M 次查询（M 为新标签数量）
+- 使用 `createMany` 批量创建关联记录
+- 使用 `updateMany` 批量更新计数
 
 ---
 
@@ -128,7 +160,8 @@ const CACHE_TTL = {
 
 ### 阶段2：中等风险优化
 - [x] 使用 `updateMany` 批量更新标签计数
-- [ ] 使用 `createMany` 替代循环 `create` 处理批量标签关联
+- [x] 使用 `createMany` 批量创建标签关联
+- [x] 使用批量查询优化标签处理
 - [ ] 添加数据库连接池配置优化
 - [ ] 实现 Redis 缓存支持（可选）
 
