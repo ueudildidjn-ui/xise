@@ -108,7 +108,7 @@ model Collection {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   post Post @relation(fields: [post_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, post_id], name: "uk_collection_user_post")
+  @@unique([user_id, post_id], name: "uk_user_post")
   @@index([user_id], name: "idx_collection_user_id")
   @@index([post_id], name: "idx_collection_post_id")
   @@map("collections")
@@ -169,7 +169,7 @@ model Like {
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, target_type, target_id], name: "uk_like_user_target")
+  @@unique([user_id, target_type, target_id], name: "uk_user_target")
   @@index([user_id], name: "idx_like_user_id")
   @@index([target_type, target_id], name: "idx_like_target")
   @@index([user_id, target_type, target_id], name: "idx_like_user_target_type")
@@ -440,7 +440,7 @@ model UserAuthorSubscription {
   user   User @relation("SubscriptionUser", fields: [user_id], references: [id], onDelete: Cascade)
   author User @relation("SubscriptionAuthor", fields: [author_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, author_id], name: "uk_user_author_subscription")
+  @@unique([user_id, author_id], name: "uk_user_author")
   @@index([user_id], name: "idx_user_author_subscription_user_id")
   @@index([author_id], name: "idx_user_author_subscription_author_id")
   @@map("user_author_subscriptions")
@@ -475,7 +475,7 @@ model UserPurchasedContent {
   post   Post @relation(fields: [post_id], references: [id], onDelete: Cascade)
   author User @relation("PurchasedContentAuthor", fields: [author_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, post_id], name: "uk_user_purchased_content")
+  @@unique([user_id, post_id], name: "uk_user_post")
   @@index([user_id], name: "idx_user_purchased_content_user_id")
   @@index([post_id], name: "idx_user_purchased_content_post_id")
   @@index([author_id], name: "idx_user_purchased_content_author_id")
@@ -513,7 +513,7 @@ model BrowsingHistory {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   post Post @relation(fields: [post_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, post_id], name: "uk_browsing_history_user_post")
+  @@unique([user_id, post_id], name: "uk_user_post_history")
   @@index([user_id], name: "idx_browsing_history_user_id")
   @@index([post_id], name: "idx_browsing_history_post_id")
   @@index([updated_at], name: "idx_browsing_history_updated_at")
