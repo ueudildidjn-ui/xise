@@ -37,6 +37,16 @@ const WEIGHTS = {
   TIME_DECAY_HALF_LIFE: 7     // 半衰期（天）
 };
 
+// 候选池配置（用于限制内存使用和提高查询效率）
+const CANDIDATE_POOL_CONFIG = {
+  // 候选池大小倍率：实际候选池大小 = page * limit * MULTIPLIER
+  MULTIPLIER: 5,
+  // 推荐服务最大候选池大小
+  MAX_RECOMMENDED: 500,
+  // 热门服务最大候选池大小
+  MAX_HOT: 300
+};
+
 // 调试日志开关（可通过环境变量控制）
 const DEBUG_ENABLED = process.env.RECOMMENDATION_DEBUG === 'true';
 
@@ -348,11 +358,11 @@ async function getRecommendedPosts(options = {}) {
     type = null
   } = options;
 
-  // 候选池大小限制（避免全表扫描）
-  // 使用 limit * multiplier 作为候选池大小，确保有足够的候选进行评分和排序
-  const CANDIDATE_POOL_MULTIPLIER = 5;
-  const MAX_CANDIDATE_POOL = 500;
-  const candidatePoolSize = Math.min(page * limit * CANDIDATE_POOL_MULTIPLIER, MAX_CANDIDATE_POOL);
+  // 使用配置常量计算候选池大小
+  const candidatePoolSize = Math.min(
+    page * limit * CANDIDATE_POOL_CONFIG.MULTIPLIER, 
+    CANDIDATE_POOL_CONFIG.MAX_RECOMMENDED
+  );
 
   debugLog.userId = userId ? Number(userId) : null;
   addDebugPhase(debugLog, 'INIT', { options: { page, limit, type, excludePostIds: excludePostIds.length }, candidatePoolSize });
@@ -555,9 +565,11 @@ async function getHotPosts(options = {}) {
   } = options;
 
   // 候选池大小限制（避免全表扫描）
-  const CANDIDATE_POOL_MULTIPLIER = 5;
-  const MAX_CANDIDATE_POOL = 300;
-  const candidatePoolSize = Math.min(page * limit * CANDIDATE_POOL_MULTIPLIER, MAX_CANDIDATE_POOL);
+  // 使用配置常量计算候选池大小
+  const candidatePoolSize = Math.min(
+    page * limit * CANDIDATE_POOL_CONFIG.MULTIPLIER, 
+    CANDIDATE_POOL_CONFIG.MAX_HOT
+  );
 
   const whereCondition = {
     is_draft: false,
@@ -625,5 +637,6 @@ module.exports = {
   getHotPosts,
   calculateTimeDecay,
   calculatePopularityScore,
-  WEIGHTS
+  WEIGHTS,
+  CANDIDATE_POOL_CONFIG
 };

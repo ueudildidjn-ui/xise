@@ -37,14 +37,14 @@
 - 在候选池内应用推荐/热门算法进行评分和排序
 
 #### 配置参数
+配置统一定义在 `utils/recommendationService.js` 中：
 ```javascript
-// 推荐服务
-const CANDIDATE_POOL_MULTIPLIER = 5;
-const MAX_CANDIDATE_POOL = 500;
-
-// 热门服务
-const CANDIDATE_POOL_MULTIPLIER = 5;
-const MAX_CANDIDATE_POOL = 300;
+// 候选池配置（用于限制内存使用和提高查询效率）
+const CANDIDATE_POOL_CONFIG = {
+  MULTIPLIER: 5,        // 候选池大小倍率
+  MAX_RECOMMENDED: 500, // 推荐服务最大候选池
+  MAX_HOT: 300          // 热门服务最大候选池
+};
 ```
 
 #### 性能收益

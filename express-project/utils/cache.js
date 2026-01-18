@@ -54,8 +54,8 @@ class SimpleCache {
       const timer = setTimeout(() => {
         this.delete(key);
       }, ttlMs);
-      // 确保定时器不会阻止进程退出
-      if (timer.unref) timer.unref();
+      // 确保定时器不会阻止进程退出（使用可选链）
+      timer.unref?.();
       this.timers.set(key, timer);
     }
   }
