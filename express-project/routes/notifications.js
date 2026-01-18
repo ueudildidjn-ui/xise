@@ -4,19 +4,6 @@ const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
 const { prisma } = require('../config/config');
 const { authenticateToken } = require('../middleware/auth');
 
-// Helper function to format notification with related data
-async function formatNotification(notification) {
-  const result = {
-    ...notification,
-    id: Number(notification.id),
-    user_id: Number(notification.user_id),
-    sender_id: Number(notification.sender_id),
-    target_id: notification.target_id ? Number(notification.target_id) : null,
-    comment_id: notification.comment_id ? Number(notification.comment_id) : null
-  };
-  return result;
-}
-
 // 获取评论通知
 router.get('/comments', authenticateToken, async (req, res) => {
   try {
@@ -55,8 +42,45 @@ router.get('/comments', authenticateToken, async (req, res) => {
       skip: skip
     });
 
-    // Get post info for each notification
-    const formattedNotifications = await Promise.all(notifications.map(async (n) => {
+    // 批量获取所有需要的帖子信息（优化N+1查询）
+    const postIds = notifications.filter(n => n.target_id).map(n => n.target_id);
+    const posts = postIds.length > 0 ? await prisma.post.findMany({
+      where: { id: { in: postIds } },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        user_id: true,
+        images: { select: { image_url: true }, take: 1 },
+        videos: { select: { cover_url: true }, take: 1 }
+      }
+    }) : [];
+    const postMap = new Map(posts.map(p => [p.id, p]));
+
+    // 批量获取评论点赞状态
+    const commentIds = notifications.filter(n => n.comment_id).map(n => n.comment_id);
+    const commentLikes = commentIds.length > 0 ? await prisma.like.findMany({
+      where: {
+        user_id: userId,
+        target_type: 2,
+        target_id: { in: commentIds }
+      },
+      select: { target_id: true }
+    }) : [];
+    const likedCommentIds = new Set(commentLikes.map(l => l.target_id));
+
+    // 批量获取父评论内容（用于回复通知）
+    const parentCommentIds = notifications
+      .filter(n => n.type === 5 && n.comment?.parent_id)
+      .map(n => n.comment.parent_id);
+    const parentComments = parentCommentIds.length > 0 ? await prisma.comment.findMany({
+      where: { id: { in: parentCommentIds } },
+      select: { id: true, content: true }
+    }) : [];
+    const parentCommentMap = new Map(parentComments.map(c => [c.id, c.content]));
+
+    // 格式化通知（无需额外数据库查询）
+    const formattedNotifications = notifications.map(n => {
       const formatted = {
         id: Number(n.id),
         user_id: Number(n.user_id),
@@ -74,18 +98,9 @@ router.get('/comments', authenticateToken, async (req, res) => {
         from_verified: n.sender?.verified
       };
 
-      // Get post info if target_id exists
+      // 从预加载的帖子 Map 中获取帖子信息
       if (n.target_id) {
-        const post = await prisma.post.findUnique({
-          where: { id: n.target_id },
-          select: {
-            title: true,
-            type: true,
-            user_id: true,
-            images: { select: { image_url: true }, take: 1 },
-            videos: { select: { cover_url: true }, take: 1 }
-          }
-        });
+        const post = postMap.get(n.target_id);
         if (post) {
           formatted.post_title = post.title;
           formatted.post_type = post.type;
@@ -96,36 +111,21 @@ router.get('/comments', authenticateToken, async (req, res) => {
         }
       }
 
-      // Get comment info
+      // 获取评论信息
       if (n.comment) {
         formatted.comment_content = n.comment.content;
         formatted.comment_created_at = n.comment.created_at;
         formatted.comment_like_count = n.comment.like_count;
+        formatted.comment_is_liked = likedCommentIds.has(n.comment_id) ? 1 : 0;
 
-        // Check if user liked the comment
-        const likeExists = await prisma.like.findUnique({
-          where: {
-            uk_user_target: {
-              user_id: userId,
-              target_type: 2,
-              target_id: n.comment_id
-            }
-          }
-        });
-        formatted.comment_is_liked = likeExists ? 1 : 0;
-
-        // Get parent comment content if this is a reply
+        // 获取父评论内容（用于回复通知）
         if (n.type === 5 && n.comment.parent_id) {
-          const parentComment = await prisma.comment.findUnique({
-            where: { id: n.comment.parent_id },
-            select: { content: true }
-          });
-          formatted.parent_comment_content = parentComment?.content || null;
+          formatted.parent_comment_content = parentCommentMap.get(n.comment.parent_id) || null;
         }
       }
 
       return formatted;
-    }));
+    });
 
     // Get total count
     const total = await prisma.notification.count({
@@ -183,8 +183,23 @@ router.get('/likes', authenticateToken, async (req, res) => {
       skip: skip
     });
 
-    // Get post info for each notification
-    const formattedNotifications = await Promise.all(notifications.map(async (n) => {
+    // 批量获取所有需要的帖子信息（优化N+1查询）
+    const postIds = notifications.filter(n => n.target_id).map(n => n.target_id);
+    const posts = postIds.length > 0 ? await prisma.post.findMany({
+      where: { id: { in: postIds } },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        user_id: true,
+        images: { select: { image_url: true }, take: 1 },
+        videos: { select: { cover_url: true }, take: 1 }
+      }
+    }) : [];
+    const postMap = new Map(posts.map(p => [p.id, p]));
+
+    // 格式化通知（无需额外数据库查询）
+    const formattedNotifications = notifications.map(n => {
       const formatted = {
         id: Number(n.id),
         user_id: Number(n.user_id),
@@ -203,18 +218,9 @@ router.get('/likes', authenticateToken, async (req, res) => {
         target_type: n.type === 1 ? 1 : (n.type === 2 ? 2 : 1)
       };
 
-      // Get post info if target_id exists
+      // 从预加载的帖子 Map 中获取帖子信息
       if (n.target_id) {
-        const post = await prisma.post.findUnique({
-          where: { id: n.target_id },
-          select: {
-            title: true,
-            type: true,
-            user_id: true,
-            images: { select: { image_url: true }, take: 1 },
-            videos: { select: { cover_url: true }, take: 1 }
-          }
-        });
+        const post = postMap.get(n.target_id);
         if (post) {
           formatted.post_title = post.title;
           formatted.post_type = post.type;
@@ -226,7 +232,7 @@ router.get('/likes', authenticateToken, async (req, res) => {
       }
 
       return formatted;
-    }));
+    });
 
     // Get total count
     const total = await prisma.notification.count({
@@ -357,8 +363,22 @@ router.get('/collections', authenticateToken, async (req, res) => {
       skip: skip
     });
 
-    // Get post info for each notification
-    const formattedNotifications = await Promise.all(notifications.map(async (n) => {
+    // 批量获取所有需要的帖子信息（优化N+1查询）
+    const postIds = notifications.filter(n => n.target_id).map(n => n.target_id);
+    const posts = postIds.length > 0 ? await prisma.post.findMany({
+      where: { id: { in: postIds } },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        images: { select: { image_url: true }, take: 1 },
+        videos: { select: { cover_url: true }, take: 1 }
+      }
+    }) : [];
+    const postMap = new Map(posts.map(p => [p.id, p]));
+
+    // 格式化通知（无需额外数据库查询）
+    const formattedNotifications = notifications.map(n => {
       const formatted = {
         id: Number(n.id),
         user_id: Number(n.user_id),
@@ -376,17 +396,9 @@ router.get('/collections', authenticateToken, async (req, res) => {
         from_verified: n.sender?.verified
       };
 
-      // Get post info if target_id exists
+      // 从预加载的帖子 Map 中获取帖子信息
       if (n.target_id) {
-        const post = await prisma.post.findUnique({
-          where: { id: n.target_id },
-          select: {
-            title: true,
-            type: true,
-            images: { select: { image_url: true }, take: 1 },
-            videos: { select: { cover_url: true }, take: 1 }
-          }
-        });
+        const post = postMap.get(n.target_id);
         if (post) {
           formatted.post_title = post.title;
           formatted.post_type = post.type;
@@ -397,7 +409,7 @@ router.get('/collections', authenticateToken, async (req, res) => {
       }
 
       return formatted;
-    }));
+    });
 
     // Get total count
     const total = await prisma.notification.count({

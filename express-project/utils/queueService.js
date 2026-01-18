@@ -9,6 +9,7 @@
 const { Queue, Worker, QueueEvents } = require('bullmq');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+const { getRedisConfig } = require('./redis');
 
 /**
  * 生成随机昵称（英文和数字组合）
@@ -25,12 +26,6 @@ function generateRandomNickname() {
 // 队列配置
 let queueConfig = {
   enabled: process.env.QUEUE_ENABLED === 'true',
-  redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT) || 6379,
-    password: process.env.REDIS_PASSWORD || undefined,
-    db: parseInt(process.env.REDIS_DB) || 0
-  },
   // 并发配置
   concurrency: {
     ipLocation: parseInt(process.env.QUEUE_IP_LOCATION_CONCURRENCY) || 5,
@@ -45,18 +40,9 @@ let queueConfig = {
   }
 };
 
-// 获取 Redis 连接配置
+// 获取 Redis 连接配置（使用共享的 Redis 配置）
 const getRedisConnection = () => {
-  const config = {
-    host: queueConfig.redis.host,
-    port: queueConfig.redis.port,
-    db: queueConfig.redis.db
-  };
-  // 只有当密码非空时才添加
-  if (queueConfig.redis.password && queueConfig.redis.password.trim()) {
-    config.password = queueConfig.redis.password;
-  }
-  return config;
+  return getRedisConfig();
 };
 
 // 队列名称常量
@@ -1023,6 +1009,9 @@ async function closeQueueService() {
   }
 }
 
+// 重新导出 Redis 辅助函数，方便其他模块使用
+const redisHelpers = require('./redis');
+
 module.exports = {
   initQueueService,
   addIPLocationTask,
@@ -1041,5 +1030,11 @@ module.exports = {
   closeQueueService,
   generateRandomNickname,
   QUEUE_NAMES,
-  BROWSING_HISTORY_CONFIG
+  BROWSING_HISTORY_CONFIG,
+  // Redis 辅助函数
+  redis: redisHelpers,
+  getRedisConfig: redisHelpers.getRedisConfig,
+  getRedisClient: redisHelpers.getRedisClient,
+  isRedisAvailable: redisHelpers.isRedisAvailable,
+  closeRedis: redisHelpers.closeRedis
 };
