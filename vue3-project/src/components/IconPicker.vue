@@ -55,7 +55,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { Icon } from '@iconify/vue'
 import SvgIcon from '@/components/SvgIcon.vue'
 
