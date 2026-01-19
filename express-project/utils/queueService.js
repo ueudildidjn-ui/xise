@@ -31,7 +31,8 @@ let queueConfig = {
     ipLocation: parseInt(process.env.QUEUE_IP_LOCATION_CONCURRENCY) || 5,
     contentAudit: parseInt(process.env.QUEUE_CONTENT_AUDIT_CONCURRENCY) || 3,
     generalTask: parseInt(process.env.QUEUE_GENERAL_TASK_CONCURRENCY) || 5,
-    videoTranscoding: parseInt(process.env.QUEUE_VIDEO_TRANSCODING_CONCURRENCY) || 1
+    videoTranscoding: parseInt(process.env.QUEUE_VIDEO_TRANSCODING_CONCURRENCY) || 1,
+    batchNoteCreate: parseInt(process.env.QUEUE_BATCH_NOTE_CREATE_CONCURRENCY) || 3
   },
   // 重试配置
   retry: {
@@ -52,7 +53,8 @@ const QUEUE_NAMES = {
   AUDIT_LOG: 'audit-log',
   GENERAL_TASK: 'general-task',
   BROWSING_HISTORY: 'browsing-history',
-  VIDEO_TRANSCODING: 'video-transcoding'
+  VIDEO_TRANSCODING: 'video-transcoding',
+  BATCH_NOTE_CREATE: 'batch-note-create'
 };
 
 // 内容截断长度常量
@@ -468,6 +470,104 @@ async function initWorkers(connection) {
     { connection, concurrency: queueConfig.concurrency.videoTranscoding }
   );
 
+  // 批量创建笔记 Worker
+  workers[QUEUE_NAMES.BATCH_NOTE_CREATE] = new Worker(
+    QUEUE_NAMES.BATCH_NOTE_CREATE,
+    async (job) => {
+      const { note, userId, type, tags, isDraft, batchId, noteIndex, totalNotes } = job.data;
+      console.log(`🔄 处理批量笔记创建任务 - 用户: ${userId}, 批次: ${batchId}, 笔记 ${noteIndex + 1}/${totalNotes}`);
+      
+      try {
+        const { prisma } = require('../config/config');
+        const config = require('../config/config');
+        const fs = require('fs');
+        const pathModule = require('path');
+        const { generateVideoThumbnail } = require('./videoThumbnailHelper');
+        
+        const baseUrl = config?.upload?.image?.local?.baseUrl || config?.api?.baseUrl || 'http://localhost:3001';
+        
+        // 创建笔记
+        const post = await prisma.post.create({
+          data: {
+            user_id: BigInt(userId),
+            title: note.title || '',
+            content: note.content || '',
+            type: type,
+            is_draft: isDraft !== undefined ? Boolean(isDraft) : false
+          }
+        });
+        
+        if (type === 1) {
+          // 图文笔记：添加图片
+          const imageUrls = note.files.map(file => `${baseUrl}${file.path}`);
+          if (imageUrls.length > 0) {
+            await prisma.postImage.createMany({
+              data: imageUrls.map(url => ({
+                post_id: post.id,
+                image_url: url
+              }))
+            });
+          }
+        } else {
+          // 视频笔记：添加视频
+          const file = note.files[0];
+          const videoUrl = `${baseUrl}${file.path}`;
+          let coverUrl = note.coverUrl || '';
+          
+          // 如果没有封面图，尝试生成
+          if (!coverUrl) {
+            try {
+              const videoPath = pathModule.join(process.cwd(), file.path);
+              if (fs.existsSync(videoPath)) {
+                const thumbnailResult = await generateVideoThumbnail(videoPath, userId);
+                if (thumbnailResult.success) {
+                  coverUrl = thumbnailResult.url;
+                  console.log(`✅ 视频封面生成成功: ${coverUrl}`);
+                }
+              }
+            } catch (thumbnailError) {
+              console.warn(`⚠️ 视频封面生成失败: ${thumbnailError.message}`);
+            }
+          }
+          
+          await prisma.postVideo.create({
+            data: {
+              post_id: post.id,
+              video_url: videoUrl,
+              cover_url: coverUrl
+            }
+          });
+        }
+        
+        // 添加标签
+        if (tags && tags.length > 0) {
+          for (const tag of tags) {
+            let tagId;
+            let tagName = typeof tag === 'string' ? tag : tag.name;
+            
+            const existingTag = await prisma.tag.findUnique({ where: { name: tagName } });
+            if (existingTag) {
+              tagId = existingTag.id;
+            } else {
+              const newTag = await prisma.tag.create({ data: { name: tagName } });
+              tagId = newTag.id;
+            }
+            
+            await prisma.postTag.create({ data: { post_id: post.id, tag_id: tagId } });
+            await prisma.tag.update({ where: { id: tagId }, data: { use_count: { increment: 1 } } });
+          }
+        }
+        
+        console.log(`✅ 批量笔记创建成功 - 笔记ID: ${post.id}, 批次: ${batchId}`);
+        return { success: true, postId: Number(post.id), noteIndex };
+      } catch (error) {
+        console.error(`❌ 批量笔记创建失败 - 用户: ${userId}, 批次: ${batchId}`, error.message);
+        throw error;
+      }
+    },
+    { connection, concurrency: queueConfig.concurrency.batchNoteCreate }
+  );
+
   console.log('● 队列 Workers 初始化完成');
 }
 
@@ -633,6 +733,118 @@ async function addVideoTranscodingTask(filePath, userId, originalVideoUrl) {
   } catch (error) {
     console.error('添加视频转码任务失败:', error.message);
     return null;
+  }
+}
+
+/**
+ * 添加批量笔记创建任务到队列
+ * @param {Array} notes - 笔记数组，每个笔记包含 {title, content, files, coverUrl}
+ * @param {number|string} userId - 用户 ID
+ * @param {number} type - 笔记类型 (1=图文, 2=视频)
+ * @param {Array} tags - 标签数组
+ * @param {boolean} isDraft - 是否为草稿
+ * @returns {Object} - 返回 { batchId, jobs, success }
+ */
+async function addBatchNoteCreateTask(notes, userId, type, tags = [], isDraft = false) {
+  const batchId = `batch_${userId}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  
+  // 如果队列未启用，返回 null 让调用方使用同步处理
+  if (!queueConfig.enabled || !isInitialized) {
+    console.log('⚠️ 队列服务未启用，批量笔记创建将使用同步处理');
+    return { batchId, jobs: null, queueEnabled: false };
+  }
+
+  try {
+    const queue = queues[QUEUE_NAMES.BATCH_NOTE_CREATE];
+    const jobs = [];
+    const totalNotes = notes.length;
+
+    for (let i = 0; i < notes.length; i++) {
+      const note = notes[i];
+      const job = await queue.add('create-note', {
+        note: {
+          title: note.title || '',
+          content: note.content || '',
+          files: note.files || [],
+          coverUrl: note.coverUrl || ''
+        },
+        userId: String(userId),
+        type,
+        tags,
+        isDraft,
+        batchId,
+        noteIndex: i,
+        totalNotes
+      }, {
+        attempts: queueConfig.retry.attempts + 2, // 额外重试次数
+        backoff: { type: 'exponential', delay: queueConfig.retry.backoffDelay },
+        removeOnComplete: 100,
+        removeOnFail: 100
+      });
+      jobs.push(job);
+    }
+
+    console.log(`📝 批量笔记创建任务已加入队列 - 用户: ${userId}, 批次: ${batchId}, 笔记数: ${totalNotes}`);
+    return { batchId, jobs, queueEnabled: true };
+  } catch (error) {
+    console.error('添加批量笔记创建任务失败:', error.message);
+    return { batchId, jobs: null, error: error.message, queueEnabled: true };
+  }
+}
+
+/**
+ * 获取批量笔记创建任务的状态
+ * @param {string} batchId - 批次 ID
+ * @returns {Object} - 返回批次状态 { total, completed, failed, pending, jobs }
+ */
+async function getBatchNoteCreateStatus(batchId) {
+  if (!queueConfig.enabled || !isInitialized) {
+    return { enabled: false };
+  }
+
+  try {
+    const queue = queues[QUEUE_NAMES.BATCH_NOTE_CREATE];
+    
+    // 获取所有状态的任务
+    const [waiting, active, completed, failed] = await Promise.all([
+      queue.getWaiting(0, 100),
+      queue.getActive(0, 100),
+      queue.getCompleted(0, 100),
+      queue.getFailed(0, 100)
+    ]);
+
+    // 过滤出该批次的任务
+    const filterByBatch = (jobs) => jobs.filter(job => job.data && job.data.batchId === batchId);
+    
+    const batchWaiting = filterByBatch(waiting);
+    const batchActive = filterByBatch(active);
+    const batchCompleted = filterByBatch(completed);
+    const batchFailed = filterByBatch(failed);
+
+    const total = batchWaiting.length + batchActive.length + batchCompleted.length + batchFailed.length;
+
+    return {
+      enabled: true,
+      batchId,
+      total,
+      waiting: batchWaiting.length,
+      active: batchActive.length,
+      completed: batchCompleted.length,
+      failed: batchFailed.length,
+      completedJobs: batchCompleted.map(job => ({
+        id: job.id,
+        noteIndex: job.data.noteIndex,
+        postId: job.returnvalue?.postId
+      })),
+      failedJobs: batchFailed.map(job => ({
+        id: job.id,
+        noteIndex: job.data.noteIndex,
+        error: job.failedReason
+      }))
+    };
+  } catch (error) {
+    console.error(`获取批量笔记创建状态失败 [${batchId}]:`, error.message);
+    return { enabled: true, error: error.message };
   }
 }
 
@@ -1019,6 +1231,8 @@ module.exports = {
   addAuditLogTask,
   addGeneralTask,
   addVideoTranscodingTask,
+  addBatchNoteCreateTask,
+  getBatchNoteCreateStatus,
   addBrowsingHistoryTask,
   cleanupExpiredBrowsingHistory,
   getQueueStats,

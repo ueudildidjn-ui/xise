@@ -187,10 +187,24 @@
       <h3>创建历史</h3>
       <div class="history-list">
         <div v-for="(item, index) in uploadHistory" :key="index" class="history-item"
-          :class="{ success: item.success, error: !item.success }">
+          :class="{ success: item.success && item.status !== 'processing', error: !item.success && item.status !== 'processing', processing: item.status === 'processing' }">
           <span class="history-type">{{ item.type === 1 ? '图文' : '视频' }}</span>
-          <span class="history-count">{{ item.count }}条笔记</span>
-          <span class="history-status">{{ item.success ? '成功' : '失败' }}</span>
+          <span class="history-count">
+            <template v-if="item.status === 'processing'">
+              {{ item.completed || 0 }}/{{ item.total || item.count }}条笔记
+            </template>
+            <template v-else>
+              {{ item.count }}条笔记
+            </template>
+          </span>
+          <span class="history-status">
+            <template v-if="item.status === 'processing'">
+              <SvgIcon name="loading" width="14" height="14" class="loading-icon" /> 处理中
+            </template>
+            <template v-else>
+              {{ item.success ? '成功' : '失败' }}
+            </template>
+          </span>
           <span class="history-time">{{ formatTime(item.time) }}</span>
         </div>
       </div>
@@ -629,91 +643,102 @@ const handleBatchCreate = async () => {
 
   isSubmitting.value = true
   progressPercent.value = 0
+  progressText.value = '正在准备上传...'
   
   const totalNotes = notePreviews.value.length
-  let successCount = 0
-  let failCount = 0
 
   try {
+    // Prepare notes data with cover URLs for videos
+    const notesData = []
+    
     for (let i = 0; i < notePreviews.value.length; i++) {
       const note = notePreviews.value[i]
-      progressText.value = `正在创建笔记 ${i + 1}/${totalNotes}...`
+      const noteData = {
+        title: note.title || '',
+        content: note.content || '',
+        files: note.files.map(f => ({ path: f.path, name: f.name })),
+        coverUrl: ''
+      }
       
-      try {
-        // Upload files first
-        const uploadedUrls = []
-        let videoUrl = null
-        let coverUrl = null
-        
-        for (const file of note.files) {
-          if (formData.type === 1) {
-            const url = await uploadFile(file, false)
-            uploadedUrls.push(url)
-          } else {
-            const result = await uploadFile(file, true)
-            videoUrl = result.url
-            coverUrl = result.coverUrl
-          }
+      // For video notes, include the generated thumbnail if available
+      if (formData.type === 2 && note.files.length > 0) {
+        const file = note.files[0]
+        const thumbnail = videoThumbnails.value[file.path]
+        if (thumbnail) {
+          // We'll let the backend generate server-side thumbnails
+          // The frontend thumbnail is just for preview
         }
+      }
+      
+      notesData.push(noteData)
+    }
+
+    progressText.value = '正在提交创建任务...'
+    
+    // Call the async batch create API
+    const response = await fetch(`${apiConfig.baseURL}/admin/batch-upload/async-create`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        user_id: formData.user_id,
+        type: formData.type,
+        tags: formData.tags,
+        is_draft: formData.is_draft,
+        notes: notesData
+      })
+    })
+    
+    const result = await response.json()
+    
+    if (result.code === 200) {
+      const data = result.data
+      
+      if (data.async) {
+        // Async processing - show success and start polling for status
+        messageManager.success(`已将 ${totalNotes} 条笔记加入创建队列，正在后台处理`)
         
-        // Create note via admin API
-        const postData = {
-          user_id: formData.user_id,
+        // Add to history with pending status
+        uploadHistory.value.unshift({
           type: formData.type,
-          title: note.title || '',
-          content: note.content || '',
-          tags: formData.tags,
-          is_draft: formData.is_draft
-        }
-        
-        if (formData.type === 1) {
-          postData.images = uploadedUrls
-        } else {
-          postData.video_url = videoUrl
-          postData.cover_url = coverUrl
-        }
-        
-        const response = await fetch(`${apiConfig.baseURL}/admin/posts`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify(postData)
+          count: totalNotes,
+          success: true,
+          time: new Date(),
+          batchId: data.batchId,
+          status: 'processing'
         })
         
-        const result = await response.json()
-        if (result.code === 200) {
-          successCount++
+        // Start polling for status
+        if (data.batchId) {
+          pollBatchStatus(data.batchId)
+        }
+      } else {
+        // Sync processing completed
+        const successCount = data.count || 0
+        const failedCount = data.failed?.length || 0
+        
+        if (failedCount === 0) {
+          messageManager.success(`成功创建 ${successCount} 条笔记`)
         } else {
-          failCount++
-          console.error(`笔记 ${i + 1} 创建失败:`, result.message)
+          messageManager.warning(`成功 ${successCount} 条，失败 ${failedCount} 条`)
         }
         
-        // Update progress after each note is processed
-        progressPercent.value = Math.round(((i + 1) / totalNotes) * 100)
-      } catch (error) {
-        failCount++
-        console.error(`笔记 ${i + 1} 创建失败:`, error)
-        progressPercent.value = Math.round(((i + 1) / totalNotes) * 100)
+        // Add to history
+        uploadHistory.value.unshift({
+          type: formData.type,
+          count: successCount,
+          success: failedCount === 0,
+          time: new Date()
+        })
       }
-    }
-    
-    if (failCount === 0) {
-      messageManager.success(`成功创建 ${successCount} 条笔记`)
-    } else {
-      messageManager.warning(`成功 ${successCount} 条，失败 ${failCount} 条`)
-    }
-    
-    // Add to history
-    uploadHistory.value.unshift({
-      type: formData.type,
-      count: successCount,
-      success: failCount === 0,
-      time: new Date()
-    })
 
-    // Reset selection and refresh file list
-    selectedFiles.value = []
-    notePreviews.value = []
-    await fetchServerFiles()
+      // Reset selection and refresh file list
+      selectedFiles.value = []
+      notePreviews.value = []
+      progressPercent.value = 100
+      await fetchServerFiles()
+    } else {
+      throw new Error(result.message || '批量创建失败')
+    }
     
   } catch (error) {
     console.error('批量创建失败:', error)
@@ -729,6 +754,59 @@ const handleBatchCreate = async () => {
     isSubmitting.value = false
     progressText.value = ''
   }
+}
+
+// Poll for batch creation status
+const pollBatchStatus = async (batchId) => {
+  const maxPolls = 60 // Max 60 polls (5 minutes with 5s interval)
+  let pollCount = 0
+  
+  const poll = async () => {
+    try {
+      const response = await fetch(`${apiConfig.baseURL}/admin/batch-upload/status/${batchId}`, {
+        headers: getAuthHeaders()
+      })
+      
+      const result = await response.json()
+      
+      if (result.code === 200 && result.data) {
+        const status = result.data
+        
+        // Update history item
+        const historyItem = uploadHistory.value.find(h => h.batchId === batchId)
+        if (historyItem) {
+          historyItem.completed = status.completed || 0
+          historyItem.failed = status.failed || 0
+          historyItem.total = status.total || 0
+          
+          // Check if all done
+          const pendingCount = (status.waiting || 0) + (status.active || 0)
+          if (pendingCount === 0 && status.total > 0) {
+            historyItem.status = 'completed'
+            historyItem.count = status.completed || 0
+            historyItem.success = (status.failed || 0) === 0
+            
+            if (status.failed > 0) {
+              messageManager.warning(`批量创建完成：成功 ${status.completed} 条，失败 ${status.failed} 条`)
+            } else {
+              messageManager.success(`批量创建完成：成功创建 ${status.completed} 条笔记`)
+            }
+            return // Stop polling
+          }
+        }
+        
+        pollCount++
+        if (pollCount < maxPolls) {
+          setTimeout(poll, 5000) // Poll every 5 seconds
+        }
+      }
+    } catch (error) {
+      console.error('查询批量创建状态失败:', error)
+    }
+  }
+  
+  // Start polling after 2 seconds
+  setTimeout(poll, 2000)
 }
 
 // Fetch files on mount
@@ -1298,6 +1376,21 @@ watch(() => formData.type, () => {
   border-left: 3px solid #f56c6c;
 }
 
+.history-item.processing {
+  border-left: 3px solid #e6a23c;
+}
+
+.history-status {
+  color: var(--text-color-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.history-status .loading-icon {
+  animation: spin 1s linear infinite;
+}
+
 .history-type {
   padding: 2px 8px;
   background: var(--bg-color-tertiary);
@@ -1309,10 +1402,6 @@ watch(() => formData.type, () => {
 .history-count {
   flex: 1;
   color: var(--text-color-primary);
-}
-
-.history-status {
-  color: var(--text-color-secondary);
 }
 
 .history-time {

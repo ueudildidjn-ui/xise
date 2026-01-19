@@ -3262,6 +3262,178 @@ router.delete('/batch-upload/files', adminAuth, async (req, res) => {
   }
 })
 
+// 异步批量创建笔记（使用队列，点击后自动上传无需等待）
+router.post('/batch-upload/async-create', adminAuth, async (req, res) => {
+  try {
+    const { user_id, type, images_per_note, tags, is_draft, notes } = req.body
+    
+    if (!user_id) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少用户ID' })
+    }
+    
+    if (!notes || !Array.isArray(notes) || notes.length === 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '没有笔记数据' })
+    }
+    
+    const user = await prisma.user.findUnique({ where: { id: BigInt(user_id) } })
+    if (!user) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' })
+    }
+    
+    const postType = parseInt(type) || 1
+    const { addBatchNoteCreateTask, isQueueEnabled } = require('../utils/queueService')
+    
+    // 尝试使用队列进行异步处理
+    const queueResult = await addBatchNoteCreateTask(notes, user_id, postType, tags || [], is_draft || false)
+    
+    if (queueResult.queueEnabled && queueResult.jobs) {
+      // 队列成功添加任务，立即返回
+      res.json({
+        code: RESPONSE_CODES.SUCCESS,
+        data: {
+          batchId: queueResult.batchId,
+          totalNotes: notes.length,
+          async: true,
+          message: '笔记创建任务已加入队列，正在后台处理'
+        },
+        message: `已将 ${notes.length} 条笔记加入创建队列`
+      })
+    } else {
+      // 队列未启用，使用同步处理
+      const config = require('../config/config')
+      const baseUrl = config?.upload?.image?.local?.baseUrl || config?.api?.baseUrl || 'http://localhost:3001'
+      const createdPosts = []
+      const failedNotes = []
+      
+      for (let i = 0; i < notes.length; i++) {
+        const note = notes[i]
+        try {
+          const post = await prisma.post.create({
+            data: {
+              user_id: BigInt(user_id),
+              title: note.title || '',
+              content: note.content || '',
+              type: postType,
+              is_draft: is_draft !== undefined ? Boolean(is_draft) : false
+            }
+          })
+          
+          if (postType === 1 && note.files && note.files.length > 0) {
+            // 图文笔记
+            const imageUrls = note.files.map(file => `${baseUrl}${file.path}`)
+            await prisma.postImage.createMany({
+              data: imageUrls.map(url => ({
+                post_id: post.id,
+                image_url: url
+              }))
+            })
+          } else if (postType === 2 && note.files && note.files.length > 0) {
+            // 视频笔记
+            const file = note.files[0]
+            let coverUrl = note.coverUrl || ''
+            
+            // 如果没有封面图，尝试生成
+            if (!coverUrl) {
+              try {
+                const { generateVideoThumbnail } = require('../utils/videoThumbnailHelper')
+                const videoPath = pathModule.join(process.cwd(), file.path)
+                if (fs.existsSync(videoPath)) {
+                  const thumbnailResult = await generateVideoThumbnail(videoPath, user_id)
+                  if (thumbnailResult.success) {
+                    coverUrl = thumbnailResult.url
+                  }
+                }
+              } catch (thumbnailError) {
+                console.warn(`视频封面生成失败: ${thumbnailError.message}`)
+              }
+            }
+            
+            await prisma.postVideo.create({
+              data: {
+                post_id: post.id,
+                video_url: `${baseUrl}${file.path}`,
+                cover_url: coverUrl
+              }
+            })
+          }
+          
+          // 添加标签
+          if (tags && tags.length > 0) {
+            for (const tag of tags) {
+              let tagId
+              let tagName = typeof tag === 'string' ? tag : tag.name
+              
+              const existingTag = await prisma.tag.findUnique({ where: { name: tagName } })
+              if (existingTag) {
+                tagId = existingTag.id
+              } else {
+                const newTag = await prisma.tag.create({ data: { name: tagName } })
+                tagId = newTag.id
+              }
+              
+              await prisma.postTag.create({ data: { post_id: post.id, tag_id: tagId } })
+              await prisma.tag.update({ where: { id: tagId }, data: { use_count: { increment: 1 } } })
+            }
+          }
+          
+          createdPosts.push({ id: Number(post.id), noteIndex: i })
+        } catch (noteError) {
+          console.error(`笔记 ${i + 1} 创建失败:`, noteError)
+          failedNotes.push({ noteIndex: i, error: noteError.message })
+        }
+      }
+      
+      res.json({
+        code: RESPONSE_CODES.SUCCESS,
+        data: {
+          posts: createdPosts,
+          count: createdPosts.length,
+          failed: failedNotes,
+          async: false
+        },
+        message: failedNotes.length === 0 
+          ? `成功创建 ${createdPosts.length} 条笔记` 
+          : `成功 ${createdPosts.length} 条，失败 ${failedNotes.length} 条`
+      })
+    }
+  } catch (error) {
+    console.error('异步批量创建笔记失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '批量创建失败' })
+  }
+})
+
+// 查询批量创建任务状态
+router.get('/batch-upload/status/:batchId', adminAuth, async (req, res) => {
+  try {
+    const { batchId } = req.params
+    
+    if (!batchId) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少批次ID' })
+    }
+    
+    const { getBatchNoteCreateStatus, isQueueEnabled } = require('../utils/queueService')
+    
+    if (!isQueueEnabled()) {
+      return res.json({
+        code: RESPONSE_CODES.SUCCESS,
+        data: { enabled: false, message: '队列服务未启用' },
+        message: '队列服务未启用'
+      })
+    }
+    
+    const status = await getBatchNoteCreateStatus(batchId)
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: status,
+      message: 'success'
+    })
+  } catch (error) {
+    console.error('查询批量创建状态失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '查询状态失败' })
+  }
+})
+
 // ===================== 系统通知管理 =====================
 
 // 系统通知类型映射
