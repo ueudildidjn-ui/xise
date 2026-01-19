@@ -2,11 +2,11 @@
   <div class="layout-container">
     <Sidebar v-if="showSidebar" />
     <div class="main-content" :class="{ 'with-sidebar': showSidebar }">
-      <LayoutHeader v-if="!isPostDetailPage" />
-      <div class="content-wrapper" :class="{ 'no-footer-padding': isPostDetailPage }">
+      <LayoutHeader v-if="!isPostDetailPage && !isSearchPage" />
+      <div class="content-wrapper" :class="{ 'no-footer-padding': isPostDetailPage || isSearchPage }">
         <router-view />
       </div>
-      <LayoutFooter v-if="!showSidebar && !isPostDetailPage" />
+      <LayoutFooter v-if="!showSidebar && !isPostDetailPage && !isSearchPage" />
     </div>
   </div>
 </template>
@@ -22,6 +22,9 @@ const route = useRoute()
 
 // Check if current route is post detail page
 const isPostDetailPage = computed(() => route.name === 'post_detail')
+
+// Check if current route is search page
+const isSearchPage = computed(() => route.name === 'search')
 
 const showSidebar = ref(window.innerWidth > 960)
 const handleResize = () => {

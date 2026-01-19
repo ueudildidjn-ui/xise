@@ -144,6 +144,11 @@ const displaySearch = computed(() => {
 })
 
 function openSearch() {
+    // 在小屏幕下，点击搜索图标导航到搜索页面
+    if (!isLargeScreen.value) {
+        router.push({ name: 'search' })
+        return
+    }
     showSearch.value = true
 }
 function closeSearch() {

@@ -11,6 +11,7 @@ import ChannelPage from '@/views/explore/ChannelPage.vue'
 import FollowingPage from '@/views/explore/FollowingPage.vue'
 import PostDetail from '@/views/PostDetail.vue'
 import SearchResult from '@/views/search/SearchResult.vue'
+import SearchPage from '@/views/search/SearchPage.vue'
 import PostManagementPage from '@/views/post-management/index.vue'
 import DraftBoxPage from '@/views/draft-box/index.vue'
 import NotFound from '@/views/NotFound.vue'
@@ -131,6 +132,11 @@ const router = createRouter({
           path: 'history',
           name: 'browsing_history',
           component: BrowsingHistory
+        },
+        {
+          path: 'search',
+          name: 'search',
+          component: SearchPage
         },
         {
           path: 'search_result',
