@@ -5012,9 +5012,12 @@ function handleAvatarError(event) {
   /* 移动端视频容器样式 */
   .mobile-video-container {
     display: flex;
-    height: 40vh;
     width: 100%;
+    /* Use aspect-ratio based height for better video sizing */
+    /* For landscape videos: max-height prevents excessive enlargement */
+    /* For portrait videos: container adapts to content */
     min-height: 200px;
+    max-height: 50vh;
     margin-bottom: 16px;
     position: relative;
     background: var(--bg-color-secondary);
@@ -5026,7 +5029,7 @@ function handleAvatarError(event) {
   .mobile-video-player {
     width: 100%;
     height: 100%;
-    max-width: 1000px;
+    max-height: 50vh;
     object-fit: contain;
     background: #000;
   }

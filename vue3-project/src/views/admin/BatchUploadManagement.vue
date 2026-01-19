@@ -74,7 +74,7 @@
           <div class="file-list-header">
             <label class="checkbox-label">
               <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
-              全选 ({{ selectedFiles.length }}/{{ currentFiles.length }})
+              全选 ({{ selectedFiles.length }}/{{ allFiles.length }})
             </label>
             <span class="file-count">
               {{ formData.type === 1 
@@ -82,16 +82,23 @@
                 : `将创建 ${selectedFiles.length} 条笔记` }}
             </span>
           </div>
+          
+          <!-- Thumbnail generation progress -->
+          <div v-if="thumbnailsGenerating" class="thumbnail-progress">
+            <span>正在生成预览图 {{ thumbnailsProgress.current }}/{{ thumbnailsProgress.total }}</span>
+          </div>
+          
           <div class="file-grid">
             <div v-for="file in currentFiles" :key="file.path" 
               :class="['file-item', { selected: isSelected(file) }]"
               @click="toggleSelect(file)">
               <div class="file-preview">
-                <img v-if="formData.type === 1" :src="getFileUrl(file)" :alt="file.name" />
+                <img v-if="formData.type === 1" :src="getFileUrl(file)" :alt="file.name" loading="lazy" />
                 <template v-else>
                   <img v-if="getVideoThumbnail(file)" :src="getVideoThumbnail(file)" :alt="file.name" class="video-thumbnail-img" />
                   <div v-else class="video-placeholder">
                     <SvgIcon name="video" width="32" height="32" />
+                    <span v-if="thumbnailsGenerating" class="loading-text">加载中</span>
                   </div>
                 </template>
               </div>
@@ -103,6 +110,13 @@
                 <input type="checkbox" :checked="isSelected(file)" @click.stop />
               </div>
             </div>
+          </div>
+          
+          <!-- Load more files button -->
+          <div v-if="hasMoreFiles" class="load-more-section">
+            <button class="btn btn-outline load-more-btn" @click="loadMoreFiles" :disabled="isLoadingMore">
+              {{ isLoadingMore ? '加载中...' : `加载更多 (还有 ${allFiles.length - displayedFilesCount} 个文件)` }}
+            </button>
           </div>
         </div>
       </div>
@@ -210,14 +224,58 @@ const progressText = ref('')
 const progressPercent = ref(0)
 const videoThumbnails = ref({}) // Store video thumbnail URLs keyed by file path
 
-// Current files based on type
-const currentFiles = computed(() => {
+// Pagination state for lazy loading files
+const displayedFilesCount = ref(20) // Initial number of files to display
+const filesPerPage = 20 // Number of files to load per batch
+const isLoadingMore = ref(false) // Loading state for loading more files
+const thumbnailsGenerating = ref(false) // State for thumbnail generation progress
+const thumbnailsProgress = ref({ current: 0, total: 0 }) // Progress for thumbnail generation
+
+// All files based on type
+const allFiles = computed(() => {
   return formData.type === 1 ? serverImages.value : serverVideos.value
 })
 
+// Current files based on type (with pagination for display)
+const currentFiles = computed(() => {
+  const files = formData.type === 1 ? serverImages.value : serverVideos.value
+  return files.slice(0, displayedFilesCount.value)
+})
+
+// Check if there are more files to load
+const hasMoreFiles = computed(() => {
+  return displayedFilesCount.value < allFiles.value.length
+})
+
+// Load more files function
+const loadMoreFiles = async () => {
+  if (isLoadingMore.value || !hasMoreFiles.value) return
+  
+  isLoadingMore.value = true
+  
+  // Simulate a small delay to prevent blocking UI
+  await new Promise(resolve => setTimeout(resolve, 50))
+  
+  const previousCount = displayedFilesCount.value
+  displayedFilesCount.value = Math.min(
+    displayedFilesCount.value + filesPerPage,
+    allFiles.value.length
+  )
+  
+  // Generate thumbnails for newly visible video files
+  if (formData.type === 2) {
+    const newVideos = serverVideos.value.slice(previousCount, displayedFilesCount.value)
+    if (newVideos.length > 0) {
+      generateVideoThumbnails(newVideos)
+    }
+  }
+  
+  isLoadingMore.value = false
+}
+
 // Check if all files are selected
 const allSelected = computed(() => {
-  return currentFiles.value.length > 0 && selectedFiles.value.length === currentFiles.value.length
+  return allFiles.value.length > 0 && selectedFiles.value.length === allFiles.value.length
 })
 
 // Check if form can be submitted
@@ -265,6 +323,13 @@ const selectType = (type) => {
   formData.type = type
   selectedFiles.value = []
   notePreviews.value = []
+  // Reset pagination when switching types
+  displayedFilesCount.value = filesPerPage
+  // Generate thumbnails for initially visible video files if switching to video type
+  if (type === 2 && serverVideos.value.length > 0) {
+    const initialVideos = serverVideos.value.slice(0, filesPerPage)
+    generateVideoThumbnails(initialVideos)
+  }
 }
 
 // Check if file is selected
@@ -289,7 +354,8 @@ const toggleSelectAll = () => {
   if (allSelected.value) {
     selectedFiles.value = []
   } else {
-    selectedFiles.value = [...currentFiles.value]
+    // Select all files, not just displayed ones
+    selectedFiles.value = [...allFiles.value]
   }
   // Clear note previews when selection changes
   notePreviews.value = []
@@ -372,6 +438,10 @@ const handleTxtImport = (event) => {
 // Fetch server files
 const fetchServerFiles = async () => {
   isLoading.value = true
+  // Reset pagination when fetching new files
+  displayedFilesCount.value = filesPerPage
+  videoThumbnails.value = {}
+  
   try {
     const response = await fetch(`${apiConfig.baseURL}/admin/batch-upload/files`, {
       headers: getAuthHeaders()
@@ -384,9 +454,10 @@ const fetchServerFiles = async () => {
       selectedFiles.value = []
       notePreviews.value = []
       
-      // Generate thumbnails for video files
+      // Generate thumbnails only for initially visible video files (lazy loading)
       if (result.data.videos && result.data.videos.length > 0) {
-        generateVideoThumbnails(result.data.videos)
+        const initialVideos = result.data.videos.slice(0, filesPerPage)
+        generateVideoThumbnails(initialVideos)
       }
     } else {
       messageManager.error(result.message || '获取文件列表失败')
@@ -401,8 +472,13 @@ const fetchServerFiles = async () => {
 
 // Generate thumbnails for video files (for UI preview)
 const generateVideoThumbnails = async (videos) => {
+  if (videos.length === 0) return
+  
   // Process videos in parallel batches for better performance
   const batchSize = 3 // Process 3 videos at a time to avoid overwhelming the browser
+  
+  thumbnailsGenerating.value = true
+  thumbnailsProgress.value = { current: 0, total: videos.length }
   
   const generateSingleThumbnail = async (video) => {
     try {
@@ -426,14 +502,20 @@ const generateVideoThumbnails = async (videos) => {
       }
     } catch (error) {
       console.warn(`生成视频预览失败 [${video.name}]:`, error.message || error)
+    } finally {
+      thumbnailsProgress.value.current++
     }
   }
   
-  // Process in batches
+  // Process in batches with small delays to prevent UI blocking
   for (let i = 0; i < videos.length; i += batchSize) {
     const batch = videos.slice(i, i + batchSize)
     await Promise.all(batch.map(generateSingleThumbnail))
+    // Small delay between batches to allow UI to update
+    await new Promise(resolve => setTimeout(resolve, 50))
   }
+  
+  thumbnailsGenerating.value = false
 }
 
 // Get video thumbnail URL for preview
@@ -472,10 +554,10 @@ const generateThumbnailFromBlob = async (videoBlob, filename) => {
     // Note: generateVideoThumbnail uses URL.createObjectURL which accepts both File and Blob
     const videoFile = new File([videoBlob], filename, { type: videoBlob.type })
     
+    // Use original video size to preserve aspect ratio
+    // This ensures thumbnail dimensions match the actual video dimensions
     const result = await generateVideoThumbnail(videoFile, {
-      useOriginalSize: false,
-      width: 640,
-      height: 360,
+      useOriginalSize: true,
       quality: 0.8,
       seekTime: 1
     })
@@ -915,8 +997,15 @@ watch(() => formData.type, () => {
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  color: var(--text-color-tertiary);
+  gap: 4px;
+}
+
+.video-placeholder .loading-text {
+  font-size: 10px;
   color: var(--text-color-tertiary);
 }
 
@@ -924,6 +1013,27 @@ watch(() => formData.type, () => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Thumbnail generation progress */
+.thumbnail-progress {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-color-secondary);
+  background: var(--bg-color-secondary);
+  text-align: center;
+}
+
+/* Load more section */
+.load-more-section {
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--border-color-primary);
+}
+
+.load-more-btn {
+  min-width: 200px;
 }
 
 .file-info {
