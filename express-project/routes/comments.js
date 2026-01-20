@@ -9,25 +9,7 @@ const { sanitizeContent } = require('../utils/contentSecurity');
 const { auditComment, isAuditEnabled } = require('../utils/contentAudit');
 const { addContentAuditTask, addAuditLogTask, isQueueEnabled } = require('../utils/queueService');
 const { checkCommentBannedWords, getBannedWordAuditResult } = require('../utils/bannedWordsChecker');
-
-// 获取AI自动审核状态（延迟加载以避免循环依赖）
-// 获取AI自动审核开关状态（延迟加载以避免循环依赖）
-let adminRoutesCache = null;
-const getAdminRoutes = () => {
-  if (!adminRoutesCache) {
-    try {
-      adminRoutesCache = require('./admin');
-    } catch (e) {
-      return null;
-    }
-  }
-  return adminRoutesCache;
-};
-// 内容AI审核开关（评论、简介等）
-const isAiContentReviewEnabled = () => {
-  const adminRoutes = getAdminRoutes();
-  return adminRoutes?.isAiContentReviewEnabled ? adminRoutes.isAiContentReviewEnabled() : false;
-};
+const { isAiContentReviewEnabled } = require('../utils/aiReviewHelper');
 
 // 递归删除评论及其子评论，返回删除的评论总数
 async function deleteCommentRecursive(commentId) {

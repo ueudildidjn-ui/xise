@@ -10,27 +10,10 @@ const { sendEmailCode } = require('../utils/email');
 const { auditNickname, isAuditEnabled } = require('../utils/contentAudit');
 const { addIPLocationTask, addContentAuditTask, isQueueEnabled } = require('../utils/queueService');
 const { checkUsernameBannedWords } = require('../utils/bannedWordsChecker');
+const { isAiUsernameReviewEnabled } = require('../utils/aiReviewHelper');
 const svgCaptcha = require('svg-captcha');
 const path = require('path');
 const fs = require('fs');
-
-// 获取AI自动审核开关状态（延迟加载以避免循环依赖）
-let adminRoutesCache = null;
-const getAdminRoutes = () => {
-  if (!adminRoutesCache) {
-    try {
-      adminRoutesCache = require('./admin');
-    } catch (e) {
-      return null;
-    }
-  }
-  return adminRoutesCache;
-};
-// 用户名AI审核开关
-const isAiUsernameReviewEnabled = () => {
-  const adminRoutes = getAdminRoutes();
-  return adminRoutes?.isAiUsernameReviewEnabled ? adminRoutes.isAiUsernameReviewEnabled() : false;
-};
 
 // 存储验证码的临时对象
 const captchaStore = new Map();

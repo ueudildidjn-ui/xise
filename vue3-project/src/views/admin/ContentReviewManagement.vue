@@ -76,16 +76,27 @@ onMounted(async () => {
       method: 'GET',
       headers: getAuthHeaders()
     })
+    if (!response.ok) {
+      console.error(`获取AI审核设置失败: HTTP ${response.status} ${response.statusText}`)
+      // 回退到localStorage
+      aiUsernameReview.value = localStorage.getItem('ai_username_review') === 'true'
+      aiContentReview.value = localStorage.getItem('ai_content_review') === 'true'
+      return
+    }
     const result = await response.json()
     if (result.code === 200 && result.data) {
-      aiUsernameReview.value = result.data.ai_username_review || false
-      aiContentReview.value = result.data.ai_content_review || false
-      // 同步到localStorage
-      localStorage.setItem('ai_username_review', aiUsernameReview.value.toString())
-      localStorage.setItem('ai_content_review', aiContentReview.value.toString())
+      // 只有当API返回了明确的值时才更新
+      if (result.data.ai_username_review !== undefined) {
+        aiUsernameReview.value = result.data.ai_username_review
+        localStorage.setItem('ai_username_review', aiUsernameReview.value.toString())
+      }
+      if (result.data.ai_content_review !== undefined) {
+        aiContentReview.value = result.data.ai_content_review
+        localStorage.setItem('ai_content_review', aiContentReview.value.toString())
+      }
     }
   } catch (error) {
-    console.error('获取AI审核设置失败:', error)
+    console.error('获取AI审核设置失败:', error.message || error)
     // 回退到localStorage
     aiUsernameReview.value = localStorage.getItem('ai_username_review') === 'true'
     aiContentReview.value = localStorage.getItem('ai_content_review') === 'true'
@@ -100,14 +111,19 @@ const toggleAiUsernameReview = async () => {
   
   // 调用后端API更新设置
   try {
-    await fetch(`${apiConfig.baseURL}/admin/content-review/settings`, {
+    const response = await fetch(`${apiConfig.baseURL}/admin/content-review/settings`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify({ ai_username_review: newValue })
     })
+    if (!response.ok) {
+      showMessage(`更新设置失败: HTTP ${response.status}`, 'error')
+      return
+    }
     showMessage(newValue ? '用户名AI审核已开启' : '用户名AI审核已关闭')
   } catch (error) {
-    console.error('更新设置失败:', error)
+    console.error('更新设置失败:', error.message || error)
+    showMessage('更新设置失败', 'error')
   }
 }
 
@@ -119,14 +135,19 @@ const toggleAiContentReview = async () => {
   
   // 调用后端API更新设置
   try {
-    await fetch(`${apiConfig.baseURL}/admin/content-review/settings`, {
+    const response = await fetch(`${apiConfig.baseURL}/admin/content-review/settings`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify({ ai_content_review: newValue })
     })
+    if (!response.ok) {
+      showMessage(`更新设置失败: HTTP ${response.status}`, 'error')
+      return
+    }
     showMessage(newValue ? '内容AI审核已开启' : '内容AI审核已关闭')
   } catch (error) {
-    console.error('更新设置失败:', error)
+    console.error('更新设置失败:', error.message || error)
+    showMessage('更新设置失败', 'error')
   }
 }
 

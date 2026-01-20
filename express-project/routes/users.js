@@ -9,29 +9,7 @@ const { protectPostListItem } = require('../utils/paidContentHelper');
 const { auditNickname, auditBio, isAuditEnabled } = require('../utils/contentAudit');
 const { addContentAuditTask, addAuditLogTask, isQueueEnabled, generateRandomNickname, addBrowsingHistoryTask, cleanupExpiredBrowsingHistory, BROWSING_HISTORY_CONFIG } = require('../utils/queueService');
 const { checkUsernameBannedWords, checkBioBannedWords, getBannedWordAuditResult } = require('../utils/bannedWordsChecker');
-
-// 获取AI自动审核开关状态（延迟加载以避免循环依赖）
-let adminRoutesCache = null;
-const getAdminRoutes = () => {
-  if (!adminRoutesCache) {
-    try {
-      adminRoutesCache = require('./admin');
-    } catch (e) {
-      return null;
-    }
-  }
-  return adminRoutesCache;
-};
-// 用户名AI审核开关
-const isAiUsernameReviewEnabled = () => {
-  const adminRoutes = getAdminRoutes();
-  return adminRoutes?.isAiUsernameReviewEnabled ? adminRoutes.isAiUsernameReviewEnabled() : false;
-};
-// 内容AI审核开关（评论、简介等）
-const isAiContentReviewEnabled = () => {
-  const adminRoutes = getAdminRoutes();
-  return adminRoutes?.isAiContentReviewEnabled ? adminRoutes.isAiContentReviewEnabled() : false;
-};
+const { isAiUsernameReviewEnabled, isAiContentReviewEnabled } = require('../utils/aiReviewHelper');
 
 // 内容最大长度限制
 const MAX_CONTENT_LENGTH = 1000;
@@ -727,6 +705,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
             reason: auditResult?.passed ? '[AI审核通过] 昵称审核通过' : `[AI审核拒绝] ${auditResult?.reason || '昵称审核未通过'}，已自动替换为随机昵称: ${replacementNickname}`,
             status: auditResult?.passed ? AUDIT_STATUS.APPROVED : AUDIT_STATUS.REJECTED
           });
+        }
       }
       // 如果isAuditEnabled()为false或用户名AI审核关闭，则只使用本地违禁词检查（已在上面完成）
     }
