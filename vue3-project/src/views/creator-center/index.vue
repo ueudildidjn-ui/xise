@@ -192,7 +192,7 @@ onMounted(async () => {
         <!-- 用户信息 -->
         <div class="user-info" v-if="!loading">
           <div class="avatar-wrapper">
-            <img :src="userStore.userInfo?.avatar || '/default-avatar.png'" alt="" class="avatar" />
+            <img :src="userStore.userInfo?.avatar || '/default-avatar.png'" :alt="userStore.userInfo?.nickname || '用户头像'" class="avatar" />
             <div class="verified-badge"><Icon icon="mdi:check" /></div>
           </div>
           <div class="user-details">

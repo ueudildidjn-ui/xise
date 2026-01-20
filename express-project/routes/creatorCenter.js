@@ -330,10 +330,14 @@ router.get('/overview', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const userIdBigInt = BigInt(userId);
     
-    // 自动发放今日激励奖励
+    // 自动发放今日激励奖励（静默处理，不影响主流程）
     const config = getExtendedEarningsConfig();
     if (config.enabled) {
-      await claimExtendedEarnings(userId); // 自动领取，忽略结果
+      try {
+        await claimExtendedEarnings(userId);
+      } catch (e) {
+        console.error('自动发放激励奖励失败:', e.message);
+      }
     }
     
     // 获取收益账户信息
