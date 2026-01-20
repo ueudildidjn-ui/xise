@@ -1,13 +1,18 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { creatorCenterApi } from '@/api/index.js'
 import { useUserStore } from '@/stores/user'
 import BackToTopButton from '@/components/BackToTopButton.vue'
+import * as echarts from 'echarts'
 
 const router = useRouter()
 const userStore = useUserStore()
+
+// 图表实例
+let earningsChartInstance = null
+let trendsChartInstance = null
 
 // 数据状态
 const loading = ref(true)
@@ -38,6 +43,16 @@ const overview = ref({
     total_buyers: 0
   }
 })
+
+// 趋势数据
+const trends = ref({
+  labels: [],
+  earnings: [],
+  views: [],
+  interactions: [],
+  followers: []
+})
+const trendsLoading = ref(false)
 
 // 收益明细
 const earningsLog = ref([])
@@ -133,6 +148,234 @@ const loadOverview = async () => {
     console.error('获取创作者收益概览失败:', error)
   } finally {
     loading.value = false
+  }
+}
+
+// 加载趋势数据
+const loadTrends = async () => {
+  try {
+    trendsLoading.value = true
+    const response = await creatorCenterApi.getTrends()
+    if (response.success) {
+      trends.value = response.data
+      // 延迟初始化图表，确保DOM已渲染
+      setTimeout(() => {
+        initEarningsChart()
+        initTrendsChart()
+      }, 100)
+    }
+  } catch (error) {
+    console.error('获取趋势数据失败:', error)
+  } finally {
+    trendsLoading.value = false
+  }
+}
+
+// 初始化收益趋势图表
+const initEarningsChart = () => {
+  const chartDom = document.getElementById('earnings-chart')
+  if (!chartDom) return
+  
+  if (earningsChartInstance) {
+    earningsChartInstance.dispose()
+  }
+  
+  earningsChartInstance = echarts.init(chartDom)
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: {
+        type: 'shadow'
+      }
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '3%',
+      top: '10%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: trends.value.labels,
+      axisLine: {
+        lineStyle: {
+          color: '#e0e0e0'
+        }
+      },
+      axisLabel: {
+        color: '#666'
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: {
+        show: false
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#f0f0f0'
+        }
+      },
+      axisLabel: {
+        color: '#666'
+      }
+    },
+    series: [
+      {
+        name: '收益',
+        type: 'bar',
+        data: trends.value.earnings,
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: '#667eea' },
+            { offset: 1, color: '#764ba2' }
+          ]),
+          borderRadius: [4, 4, 0, 0]
+        },
+        emphasis: {
+          itemStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#8b9df0' },
+              { offset: 1, color: '#9a6fc2' }
+            ])
+          }
+        }
+      }
+    ]
+  }
+  
+  earningsChartInstance.setOption(option)
+}
+
+// 初始化综合趋势图表
+const initTrendsChart = () => {
+  const chartDom = document.getElementById('trends-chart')
+  if (!chartDom) return
+  
+  if (trendsChartInstance) {
+    trendsChartInstance.dispose()
+  }
+  
+  trendsChartInstance = echarts.init(chartDom)
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis'
+    },
+    legend: {
+      data: ['浏览量', '互动数', '新粉丝'],
+      bottom: 0,
+      textStyle: {
+        color: '#666'
+      }
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '15%',
+      top: '10%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: trends.value.labels,
+      axisLine: {
+        lineStyle: {
+          color: '#e0e0e0'
+        }
+      },
+      axisLabel: {
+        color: '#666'
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: {
+        show: false
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#f0f0f0'
+        }
+      },
+      axisLabel: {
+        color: '#666'
+      }
+    },
+    series: [
+      {
+        name: '浏览量',
+        type: 'line',
+        smooth: true,
+        data: trends.value.views,
+        lineStyle: {
+          color: '#10b981',
+          width: 2
+        },
+        itemStyle: {
+          color: '#10b981'
+        },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
+            { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
+          ])
+        }
+      },
+      {
+        name: '互动数',
+        type: 'line',
+        smooth: true,
+        data: trends.value.interactions,
+        lineStyle: {
+          color: '#f59e0b',
+          width: 2
+        },
+        itemStyle: {
+          color: '#f59e0b'
+        },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(245, 158, 11, 0.3)' },
+            { offset: 1, color: 'rgba(245, 158, 11, 0.05)' }
+          ])
+        }
+      },
+      {
+        name: '新粉丝',
+        type: 'line',
+        smooth: true,
+        data: trends.value.followers,
+        lineStyle: {
+          color: '#6366f1',
+          width: 2
+        },
+        itemStyle: {
+          color: '#6366f1'
+        },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(99, 102, 241, 0.3)' },
+            { offset: 1, color: 'rgba(99, 102, 241, 0.05)' }
+          ])
+        }
+      }
+    ]
+  }
+  
+  trendsChartInstance.setOption(option)
+}
+
+// 处理窗口大小变化
+const handleResize = () => {
+  if (earningsChartInstance) {
+    earningsChartInstance.resize()
+  }
+  if (trendsChartInstance) {
+    trendsChartInstance.resize()
   }
 }
 
@@ -258,6 +501,23 @@ onMounted(async () => {
   
   await loadConfig()
   await loadOverview()
+  await loadTrends()
+  
+  // 添加窗口大小变化监听
+  window.addEventListener('resize', handleResize)
+})
+
+// 清理
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (earningsChartInstance) {
+    earningsChartInstance.dispose()
+    earningsChartInstance = null
+  }
+  if (trendsChartInstance) {
+    trendsChartInstance.dispose()
+    trendsChartInstance = null
+  }
 })
 </script>
 
@@ -335,12 +595,20 @@ onMounted(async () => {
           <div class="stat-label">发布内容</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value">{{ formatNumber(overview.content_stats.paid_posts) }}</div>
-          <div class="stat-label">付费内容</div>
-        </div>
-        <div class="stat-item">
           <div class="stat-value">{{ formatNumber(overview.content_stats.total_views) }}</div>
           <div class="stat-label">总浏览量</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ formatNumber(overview.content_stats.total_likes) }}</div>
+          <div class="stat-label">获得点赞</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ formatNumber(overview.content_stats.total_collects) }}</div>
+          <div class="stat-label">获得收藏</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ formatNumber(overview.content_stats.paid_posts) }}</div>
+          <div class="stat-label">付费内容</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">{{ formatNumber(overview.content_stats.total_buyers) }}</div>
@@ -378,6 +646,29 @@ onMounted(async () => {
 
     <!-- 概览内容 -->
     <div class="tab-content" v-if="activeTab === 'overview'">
+      <!-- 收益趋势图表 -->
+      <div class="chart-section">
+        <h3 class="chart-title">
+          <Icon icon="mdi:chart-bar" class="chart-title-icon" />
+          近7天收益趋势
+        </h3>
+        <div class="chart-container">
+          <div id="earnings-chart" class="chart"></div>
+        </div>
+      </div>
+      
+      <!-- 综合数据趋势图表 -->
+      <div class="chart-section">
+        <h3 class="chart-title">
+          <Icon icon="mdi:chart-line-variant" class="chart-title-icon" />
+          数据分析
+        </h3>
+        <div class="chart-container">
+          <div id="trends-chart" class="chart"></div>
+        </div>
+      </div>
+      
+      <!-- 收益规则说明 -->
       <div class="overview-info">
         <div class="info-card">
           <Icon icon="mdi:information-outline" class="info-icon" />
@@ -722,7 +1013,7 @@ onMounted(async () => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
@@ -782,6 +1073,39 @@ onMounted(async () => {
 /* 标签内容 */
 .tab-content {
   min-height: 200px;
+}
+
+/* 图表区域 */
+.chart-section {
+  margin-bottom: 24px;
+  background: var(--bg-color-secondary);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.chart-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color-primary);
+  margin: 0 0 16px;
+}
+
+.chart-title-icon {
+  font-size: 20px;
+  color: #667eea;
+}
+
+.chart-container {
+  width: 100%;
+  overflow: hidden;
+}
+
+.chart {
+  width: 100%;
+  height: 280px;
 }
 
 /* 概览信息 */

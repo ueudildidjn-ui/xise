@@ -964,6 +964,11 @@ export const creatorCenterApi = {
     return request.get('/creator-center/overview')
   },
 
+  // 获取趋势数据（过去7天的每日统计）
+  getTrends() {
+    return request.get('/creator-center/trends')
+  },
+
   // 获取收益明细列表
   getEarningsLog(params = {}) {
     return request.get('/creator-center/earnings-log', { params })

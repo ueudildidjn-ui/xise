@@ -207,6 +207,148 @@ router.get('/overview', authenticateToken, async (req, res) => {
   }
 });
 
+// 获取趋势数据（过去7天的每日统计）
+router.get('/trends', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userIdBigInt = BigInt(userId);
+    
+    // 生成过去7天的日期列表
+    const dates = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      dates.push(date);
+    }
+    
+    // 获取每日收益数据
+    const earningsData = await Promise.all(dates.map(async (date) => {
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      const result = await prisma.creatorEarningsLog.aggregate({
+        where: {
+          user_id: userIdBigInt,
+          amount: { gt: 0 },
+          created_at: {
+            gte: date,
+            lt: nextDate
+          }
+        },
+        _sum: { amount: true }
+      });
+      
+      return parseFloat(result._sum?.amount) || 0;
+    }));
+    
+    // 获取每日浏览量数据（基于浏览历史）
+    const viewsData = await Promise.all(dates.map(async (date) => {
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      const result = await prisma.browsingHistory.count({
+        where: {
+          post: {
+            user_id: userIdBigInt
+          },
+          created_at: {
+            gte: date,
+            lt: nextDate
+          }
+        }
+      });
+      
+      return result;
+    }));
+    
+    // 获取每日互动数据（点赞+收藏）
+    const interactionsData = await Promise.all(dates.map(async (date) => {
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      // 获取用户发布的帖子ID列表
+      const userPosts = await prisma.post.findMany({
+        where: { user_id: userIdBigInt, is_draft: false },
+        select: { id: true }
+      });
+      const postIds = userPosts.map(p => p.id);
+      
+      if (postIds.length === 0) return 0;
+      
+      // 统计点赞数
+      const likes = await prisma.like.count({
+        where: {
+          target_type: 1, // 帖子点赞
+          target_id: { in: postIds },
+          created_at: {
+            gte: date,
+            lt: nextDate
+          }
+        }
+      });
+      
+      // 统计收藏数
+      const collects = await prisma.collection.count({
+        where: {
+          post_id: { in: postIds },
+          created_at: {
+            gte: date,
+            lt: nextDate
+          }
+        }
+      });
+      
+      return likes + collects;
+    }));
+    
+    // 获取每日新粉丝数
+    const followersData = await Promise.all(dates.map(async (date) => {
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      const result = await prisma.follow.count({
+        where: {
+          following_id: userIdBigInt,
+          created_at: {
+            gte: date,
+            lt: nextDate
+          }
+        }
+      });
+      
+      return result;
+    }));
+    
+    // 格式化日期标签
+    const labels = dates.map(date => {
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      return `${month}/${day}`;
+    });
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: {
+        labels: labels,
+        earnings: earningsData,
+        views: viewsData,
+        interactions: interactionsData,
+        followers: followersData
+      },
+      message: 'success'
+    });
+  } catch (error) {
+    console.error('获取趋势数据失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      code: RESPONSE_CODES.ERROR,
+      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR
+    });
+  }
+});
+
 // 获取收益明细列表
 router.get('/earnings-log', authenticateToken, async (req, res) => {
   try {
