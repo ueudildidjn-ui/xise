@@ -51,6 +51,20 @@
       {{ error }}
     </div>
 
+    <!-- 上传进度条 -->
+    <div v-if="isUploading && uploadProgress.total > 0" class="upload-progress-container">
+      <div class="progress-info">
+        <span class="progress-text">正在上传第 {{ uploadProgress.current }}/{{ uploadProgress.total }} 张</span>
+        <span class="progress-percent">{{ uploadProgress.percent }}%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" :style="{ width: uploadProgress.percent + '%' }"></div>
+      </div>
+      <div v-if="uploadProgress.currentFileName" class="progress-filename">
+        {{ uploadProgress.currentFileName }}
+      </div>
+    </div>
+
     <!-- 水印选项 -->
     <div class="watermark-option">
       <label class="watermark-checkbox">
@@ -125,6 +139,14 @@ const imageList = ref([])
 const error = ref('')
 const isDragOver = ref(false)
 const isUploading = ref(false)
+
+// 上传进度相关状态
+const uploadProgress = ref({
+  current: 0,        // 当前正在上传第几张
+  total: 0,          // 需要上传的总数
+  percent: 0,        // 整体上传百分比
+  currentFileName: '' // 当前正在上传的文件名
+})
 
 // 调试：监听paymentEnabled变化
 watch(() => props.paymentEnabled, (newValue) => {
@@ -564,32 +586,53 @@ const uploadAllImages = async () => {
 
   isUploading.value = true
   error.value = ''
+  
+  // 初始化上传进度
+  uploadProgress.value = {
+    current: 0,
+    total: unuploadedImages.length,
+    percent: 0,
+    currentFileName: ''
+  }
 
   try {
-    // 上传新图片 - 使用新的upload.js API，传递水印选项
+    // 上传新图片 - 使用新的upload.js API，传递水印选项和进度回调
     const files = unuploadedImages.map(item => item.file)
 
     const result = await uploadApi.uploadImages(files, { 
       watermark: enableWatermark.value,
-      watermarkOpacity: watermarkOpacity.value 
-    })
-
-    if (result.success && result.data && result.data.uploaded && result.data.uploaded.length > 0) {
-      // 更新上传成功的图片状态
-      let uploadIndex = 0
-      for (let i = 0; i < imageList.value.length; i++) {
-        const item = imageList.value[i]
-        if (!item.uploaded && item.file) {
-          if (uploadIndex < result.data.uploaded.length) {
-            const uploadedData = result.data.uploaded[uploadIndex]
-            item.uploaded = true
-            item.url = uploadedData.url
-
+      watermarkOpacity: watermarkOpacity.value,
+      // 进度回调：跟踪整体上传进度
+      onProgress: (progress) => {
+        uploadProgress.value.current = progress.current
+        uploadProgress.value.total = progress.total
+        uploadProgress.value.percent = progress.percent
+        // 获取当前正在上传的文件名
+        if (progress.current <= files.length) {
+          uploadProgress.value.currentFileName = files[progress.current - 1]?.name || ''
+        }
+      },
+      // 单个图片完成回调：实时更新图片状态
+      onSingleComplete: ({ index, result: uploadedResult, success }) => {
+        // 找到对应的未上传图片并更新状态
+        let uploadIndex = 0
+        for (let i = 0; i < imageList.value.length; i++) {
+          const item = imageList.value[i]
+          if (!item.uploaded && item.file) {
+            if (uploadIndex === index) {
+              if (success && uploadedResult) {
+                item.uploaded = true
+                item.url = uploadedResult.url
+              }
+              break
+            }
             uploadIndex++
           }
         }
       }
+    })
 
+    if (result.success && result.data && result.data.uploaded && result.data.uploaded.length > 0) {
       // 收集所有图片数据（包含url和isFreePreview属性）
       const allImages = imageList.value
         .filter(item => item.uploaded && item.url && !item.url.startsWith('data:'))
@@ -609,6 +652,13 @@ const uploadAllImages = async () => {
     throw err
   } finally {
     isUploading.value = false
+    // 重置上传进度
+    uploadProgress.value = {
+      current: 0,
+      total: 0,
+      percent: 0,
+      currentFileName: ''
+    }
   }
 }
 
@@ -1044,6 +1094,58 @@ defineExpose({
   color: var(--primary-color);
   font-size: 12px;
   margin-bottom: 10px;
+}
+
+/* 上传进度条样式 */
+.upload-progress-container {
+  background: var(--bg-color-secondary);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border-color-primary);
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-text {
+  font-size: 13px;
+  color: var(--text-color-primary);
+  font-weight: 500;
+}
+
+.progress-percent {
+  font-size: 13px;
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--border-color-primary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), #ff8a9b);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-filename {
+  font-size: 11px;
+  color: var(--text-color-secondary);
+  margin-top: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .upload-tips {
