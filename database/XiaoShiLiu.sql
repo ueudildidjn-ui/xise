@@ -384,6 +384,51 @@ CREATE TABLE `user_points`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
+-- Table structure for creator_earnings
+-- ----------------------------
+DROP TABLE IF EXISTS `creator_earnings`;
+CREATE TABLE `creator_earnings`  (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `balance` decimal(10, 2) NOT NULL DEFAULT 0.00,
+  `total_earnings` decimal(10, 2) NOT NULL DEFAULT 0.00,
+  `withdrawn_amount` decimal(10, 2) NOT NULL DEFAULT 0.00,
+  `created_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` datetime(3) NOT NULL,
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `creator_earnings_user_id_key`(`user_id` ASC) USING BTREE,
+  INDEX `idx_creator_earnings_user_id`(`user_id` ASC) USING BTREE,
+  CONSTRAINT `creator_earnings_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Table structure for creator_earnings_log
+-- ----------------------------
+DROP TABLE IF EXISTS `creator_earnings_log`;
+CREATE TABLE `creator_earnings_log`  (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `earnings_id` bigint NOT NULL,
+  `amount` decimal(10, 2) NOT NULL,
+  `balance_after` decimal(10, 2) NOT NULL,
+  `type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_id` bigint NULL DEFAULT NULL,
+  `source_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `buyer_id` bigint NULL DEFAULT NULL,
+  `reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `platform_fee` decimal(10, 2) NOT NULL DEFAULT 0.00,
+  `created_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_creator_earnings_log_user_id`(`user_id` ASC) USING BTREE,
+  INDEX `idx_creator_earnings_log_earnings_id`(`earnings_id` ASC) USING BTREE,
+  INDEX `idx_creator_earnings_log_type`(`type` ASC) USING BTREE,
+  INDEX `idx_creator_earnings_log_created_at`(`created_at` ASC) USING BTREE,
+  INDEX `idx_creator_earnings_log_source`(`source_id` ASC, `source_type` ASC) USING BTREE,
+  CONSTRAINT `creator_earnings_log_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `creator_earnings_log_earnings_id_fkey` FOREIGN KEY (`earnings_id`) REFERENCES `creator_earnings` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
 -- Table structure for user_purchased_content
 -- ----------------------------
 DROP TABLE IF EXISTS `user_purchased_content`;

@@ -385,6 +385,33 @@ const config = {
     exchangeRateOut: parseFloat(process.env.BALANCE_EXCHANGE_RATE_OUT) || 1.0
   },
 
+  // 创作者中心配置
+  creatorCenter: {
+    // 平台抽成比例 (0.1 = 10%)
+    platformFeeRate: parseFloat(process.env.CREATOR_PLATFORM_FEE_RATE) || 0.10,
+    // 是否允许提现到石榴点
+    withdrawEnabled: process.env.CREATOR_WITHDRAW_ENABLED === 'true',
+    // 最低提现金额
+    minWithdrawAmount: parseFloat(process.env.CREATOR_MIN_WITHDRAW_AMOUNT) || 10,
+    // 是否启用扩展收益计算（基于浏览、互动等）
+    extendedEarningsEnabled: process.env.CREATOR_EXTENDED_EARNINGS_ENABLED === 'true',
+    // 扩展收益计算配置
+    earningsRates: {
+      // 每次浏览获得的收益（石榴点）
+      perView: parseFloat(process.env.CREATOR_EARNINGS_PER_VIEW) || 0.01,
+      // 每次点赞获得的收益（石榴点）
+      perLike: parseFloat(process.env.CREATOR_EARNINGS_PER_LIKE) || 0.05,
+      // 每次收藏获得的收益（石榴点）
+      perCollect: parseFloat(process.env.CREATOR_EARNINGS_PER_COLLECT) || 0.10,
+      // 每次评论获得的收益（石榴点）
+      perComment: parseFloat(process.env.CREATOR_EARNINGS_PER_COMMENT) || 0.02,
+      // 每位新粉丝获得的收益（石榴点）
+      perFollower: parseFloat(process.env.CREATOR_EARNINGS_PER_FOLLOWER) || 0.20
+    },
+    // 每日最大扩展收益上限（0表示无上限）
+    dailyExtendedEarningsCap: parseFloat(process.env.CREATOR_DAILY_EXTENDED_EARNINGS_CAP) || 0
+  },
+
   // 内容审核配置
   contentAudit: {
     // 是否启用内容审核

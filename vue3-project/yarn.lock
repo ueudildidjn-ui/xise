@@ -1145,6 +1145,14 @@ dunder-proto@^1.0.0, dunder-proto@^1.0.1:
     es-errors "^1.3.0"
     gopd "^1.2.0"
 
+echarts@^6.0.0:
+  version "6.0.0"
+  resolved "https://registry.npmjs.org/echarts/-/echarts-6.0.0.tgz"
+  integrity sha512-Tte/grDQRiETQP4xz3iZWSvoHrkCQtwqd6hs+mifXcjrCuo2iKWbajFObuLJVBlDIJlOzgQPd1hsaKt/3+OMkQ==
+  dependencies:
+    tslib "2.3.0"
+    zrender "6.0.0"
+
 electron-to-chromium@^1.5.173:
   version "1.5.192"
   resolved "https://registry.npmmirror.com/electron-to-chromium/-/electron-to-chromium-1.5.192.tgz"
@@ -3205,6 +3213,11 @@ traverse@^0.6.6:
     typedarray.prototype.slice "^1.0.5"
     which-typed-array "^1.1.18"
 
+tslib@2.3.0:
+  version "2.3.0"
+  resolved "https://registry.npmjs.org/tslib/-/tslib-2.3.0.tgz"
+  integrity sha512-N82ooyxVNm6h1riLCoyS9e3fuJ3AMG2zIZs2Gd1ATcSFjSA23Q0fzjjZeh0jbJvWVDZ0cJT8yaNNaaXHzueNjg==
+
 typed-array-buffer@^1.0.3:
   version "1.0.3"
   resolved "https://registry.npmmirror.com/typed-array-buffer/-/typed-array-buffer-1.0.3.tgz"
@@ -3526,3 +3539,10 @@ yoctocolors@^2.1.1:
   version "2.1.1"
   resolved "https://registry.npmmirror.com/yoctocolors/-/yoctocolors-2.1.1.tgz"
   integrity sha512-GQHQqAopRhwU8Kt1DDM8NjibDXHC8eoh1erhGAJPEyveY9qqVeXvVikNKrDz69sHowPMorbPUrH/mx8c50eiBQ==
+
+zrender@6.0.0:
+  version "6.0.0"
+  resolved "https://registry.npmjs.org/zrender/-/zrender-6.0.0.tgz"
+  integrity sha512-41dFXEEXuJpNecuUQq6JlbybmnHaqqpGlbH1yxnA5V9MMP4SbohSVZsJIwz+zdjQXSSlR1Vc34EgH1zxyTDvhg==
+  dependencies:
+    tslib "2.3.0"

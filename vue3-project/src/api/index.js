@@ -952,6 +952,44 @@ export const balanceApi = {
   }
 }
 
+// 创作者中心API
+export const creatorCenterApi = {
+  // 获取创作者中心配置
+  getConfig() {
+    return request.get('/creator-center/config')
+  },
+
+  // 获取创作者收益概览
+  getOverview() {
+    return request.get('/creator-center/overview')
+  },
+
+  // 获取趋势数据（过去7天的每日统计）
+  getTrends() {
+    return request.get('/creator-center/trends')
+  },
+
+  // 获取收益明细列表
+  getEarningsLog(params = {}) {
+    return request.get('/creator-center/earnings-log', { params })
+  },
+
+  // 获取付费内容列表及销售统计
+  getPaidContent(params = {}) {
+    return request.get('/creator-center/paid-content', { params })
+  },
+
+  // 收益提现到石榴点余额
+  withdraw(amount) {
+    return request.post('/creator-center/withdraw', { amount })
+  },
+
+  // 领取今日激励奖励
+  claimIncentive() {
+    return request.post('/creator-center/claim-incentive')
+  }
+}
+
 // 系统通知API（用户端）
 export const systemNotificationApi = {
   // 获取未确认的系统通知

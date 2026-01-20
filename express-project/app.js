@@ -61,6 +61,7 @@ const uploadRoutes = require('./routes/upload');
 const statsRoutes = require('./routes/stats');
 const adminRoutes = require('./routes/admin');
 const balanceRoutes = require('./routes/balance');
+const creatorCenterRoutes = require('./routes/creatorCenter');
 
 const app = express();
 
@@ -108,6 +109,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/balance', balanceRoutes);
+app.use('/api/creator-center', creatorCenterRoutes);
 
 // 错误处理中间件
 app.use((err, req, res, next) => {

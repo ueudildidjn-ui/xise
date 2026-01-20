@@ -213,3 +213,32 @@
 | audit_time | TIMESTAMP | 审核时间 | 完成审核时间，可为空 |
 | status | TINYINT(1) | 审核状态 | 0-待审核，1-审核通过，默认0 |
 
+### 15. 创作者收益余额表 (creator_earnings)
+
+| 字段名 | 类型 | 说明 | 备注 |
+|--------|------|------|------|
+| id | BIGINT | 收益ID | 主键，自增 |
+| user_id | BIGINT | 用户ID | 外键关联users，唯一 |
+| balance | DECIMAL(10,2) | 可提现余额 | 当前可提现金额，默认0.00 |
+| total_earnings | DECIMAL(10,2) | 累计总收益 | 历史累计收益，默认0.00 |
+| withdrawn_amount | DECIMAL(10,2) | 已提现金额 | 累计已提现金额，默认0.00 |
+| created_at | TIMESTAMP | 创建时间 | 账户创建时间 |
+| updated_at | TIMESTAMP | 更新时间 | 自动更新 |
+
+### 16. 创作者收益变动记录表 (creator_earnings_log)
+
+| 字段名 | 类型 | 说明 | 备注 |
+|--------|------|------|------|
+| id | BIGINT | 记录ID | 主键，自增 |
+| user_id | BIGINT | 用户ID | 外键关联users |
+| earnings_id | BIGINT | 收益账户ID | 外键关联creator_earnings |
+| amount | DECIMAL(10,2) | 变动金额 | 正数为收入，负数为提现 |
+| balance_after | DECIMAL(10,2) | 变动后余额 | 操作后的账户余额 |
+| type | VARCHAR(50) | 变动类型 | content_sale(内容销售), subscription(订阅), tip(打赏), withdraw(提现) |
+| source_id | BIGINT | 来源ID | 帖子ID/订阅ID等，可为空 |
+| source_type | VARCHAR(50) | 来源类型 | post, subscription等，可为空 |
+| buyer_id | BIGINT | 购买者ID | 外键关联users，可为空 |
+| reason | VARCHAR(255) | 描述/原因 | 变动描述，可为空 |
+| platform_fee | DECIMAL(10,2) | 平台抽成金额 | 平台收取的费用，默认0.00 |
+| created_at | TIMESTAMP | 创建时间 | 记录创建时间 |
+

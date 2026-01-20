@@ -8,6 +8,7 @@ const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
 const { prisma, balanceCenter: balanceCenterConfig } = require('../config/config');
 const { authenticateToken } = require('../middleware/auth');
+const { addCreatorEarnings } = require('./creatorCenter');
 
 // 获取或初始化用户石榴点
 const getOrCreateUserPoints = async (userId) => {
@@ -479,16 +480,20 @@ router.post('/purchase-content', authenticateToken, async (req, res) => {
 
     console.log(`✅ [购买内容] 用户 ${userId} 扣除 ${price} 石榴点，剩余: ${newPoints}`);
 
-    // 给作者增加石榴点（扣除平台手续费后）
-    const authorEarnings = price * 0.9; // 作者获得90%
-    await updateUserPoints(
-      Number(post.user_id),
-      authorEarnings,
-      'earning',
-      `付费内容收入: ${post.title} (ID: ${postId})`
+    // 给作者增加收益到创作者余额（扣除平台手续费后）
+    const earningsResult = await addCreatorEarnings(
+      post.user_id, // 保持BigInt类型，addCreatorEarnings内部会转换
+      price, // 总金额，平台抽成在 addCreatorEarnings 中计算
+      'content_sale',
+      {
+        sourceId: postId,
+        sourceType: 'post',
+        buyerId: userId,
+        reason: `付费内容销售: ${post.title}`
+      }
     );
 
-    console.log(`💵 [购买内容] 作者 ${post.user_id} 获得 ${authorEarnings} 石榴点`);
+    console.log(`💵 [购买内容] 作者 ${post.user_id} 获得 ${earningsResult.netAmount} 石榴点（扣除 ${earningsResult.platformFee} 平台费用）`);
 
     // 记录购买
     await prisma.userPurchasedContent.create({
@@ -509,7 +514,8 @@ router.post('/purchase-content', authenticateToken, async (req, res) => {
         postId: postId,
         price: price,
         newPoints: newPoints,
-        authorEarnings: authorEarnings
+        authorEarnings: earningsResult.netAmount,
+        platformFee: earningsResult.platformFee
       },
       message: '购买成功！'
     });
