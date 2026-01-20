@@ -95,10 +95,136 @@ const addCreatorEarnings = async (userId, grossAmount, type, options = {}) => {
   };
 };
 
+// 获取扩展收益计算配置
+const getExtendedEarningsConfig = () => {
+  return {
+    enabled: creatorCenterConfig?.extendedEarningsEnabled ?? false,
+    rates: creatorCenterConfig?.earningsRates ?? {
+      perView: 0.01,
+      perLike: 0.05,
+      perCollect: 0.10,
+      perComment: 0.02,
+      perFollower: 0.20
+    },
+    dailyCap: creatorCenterConfig?.dailyExtendedEarningsCap ?? 0
+  };
+};
+
+// 计算扩展收益（基于浏览、互动等）
+const calculateExtendedEarnings = async (userId, startDate, endDate) => {
+  const userIdBigInt = BigInt(userId);
+  const config = getExtendedEarningsConfig();
+  
+  if (!config.enabled) {
+    return {
+      enabled: false,
+      views: { count: 0, earnings: 0 },
+      likes: { count: 0, earnings: 0 },
+      collects: { count: 0, earnings: 0 },
+      comments: { count: 0, earnings: 0 },
+      followers: { count: 0, earnings: 0 },
+      total: 0
+    };
+  }
+  
+  // 获取用户发布的帖子ID列表
+  const userPosts = await prisma.post.findMany({
+    where: { user_id: userIdBigInt, is_draft: false },
+    select: { id: true }
+  });
+  const postIds = userPosts.map(p => p.id);
+  
+  let viewCount = 0;
+  let likeCount = 0;
+  let collectCount = 0;
+  let commentCount = 0;
+  let followerCount = 0;
+  
+  if (postIds.length > 0) {
+    // 统计浏览量
+    viewCount = await prisma.browsingHistory.count({
+      where: {
+        post_id: { in: postIds },
+        created_at: { gte: startDate, lt: endDate }
+      }
+    });
+    
+    // 统计点赞数
+    likeCount = await prisma.like.count({
+      where: {
+        target_type: 1, // 帖子点赞
+        target_id: { in: postIds },
+        created_at: { gte: startDate, lt: endDate }
+      }
+    });
+    
+    // 统计收藏数
+    collectCount = await prisma.collection.count({
+      where: {
+        post_id: { in: postIds },
+        created_at: { gte: startDate, lt: endDate }
+      }
+    });
+    
+    // 统计评论数
+    commentCount = await prisma.comment.count({
+      where: {
+        post_id: { in: postIds },
+        created_at: { gte: startDate, lt: endDate }
+      }
+    });
+  }
+  
+  // 统计新粉丝数
+  followerCount = await prisma.follow.count({
+    where: {
+      following_id: userIdBigInt,
+      created_at: { gte: startDate, lt: endDate }
+    }
+  });
+  
+  // 计算各项收益
+  const viewEarnings = viewCount * config.rates.perView;
+  const likeEarnings = likeCount * config.rates.perLike;
+  const collectEarnings = collectCount * config.rates.perCollect;
+  const commentEarnings = commentCount * config.rates.perComment;
+  const followerEarnings = followerCount * config.rates.perFollower;
+  
+  let totalEarnings = viewEarnings + likeEarnings + collectEarnings + commentEarnings + followerEarnings;
+  
+  // 应用每日上限
+  if (config.dailyCap > 0 && totalEarnings > config.dailyCap) {
+    totalEarnings = config.dailyCap;
+  }
+  
+  return {
+    enabled: true,
+    rates: config.rates,
+    dailyCap: config.dailyCap,
+    views: { count: viewCount, earnings: parseFloat(viewEarnings.toFixed(2)) },
+    likes: { count: likeCount, earnings: parseFloat(likeEarnings.toFixed(2)) },
+    collects: { count: collectCount, earnings: parseFloat(collectEarnings.toFixed(2)) },
+    comments: { count: commentCount, earnings: parseFloat(commentEarnings.toFixed(2)) },
+    followers: { count: followerCount, earnings: parseFloat(followerEarnings.toFixed(2)) },
+    total: parseFloat(totalEarnings.toFixed(2))
+  };
+};
+
 // 获取创作者中心配置
 router.get('/config', (req, res) => {
   const platformFeeRate = getPlatformFeeRate();
   const creatorShareRate = 1 - platformFeeRate;
+  
+  // 获取扩展收益配置
+  const extendedEarningsEnabled = creatorCenterConfig?.extendedEarningsEnabled ?? false;
+  const earningsRates = creatorCenterConfig?.earningsRates ?? {
+    perView: 0.01,
+    perLike: 0.05,
+    perCollect: 0.10,
+    perComment: 0.02,
+    perFollower: 0.20
+  };
+  const dailyExtendedEarningsCap = creatorCenterConfig?.dailyExtendedEarningsCap ?? 0;
   
   res.json({
     code: RESPONSE_CODES.SUCCESS,
@@ -106,7 +232,13 @@ router.get('/config', (req, res) => {
       platformFeeRate: platformFeeRate,
       creatorShareRate: creatorShareRate,
       withdrawEnabled: creatorCenterConfig?.withdrawEnabled ?? false,
-      minWithdrawAmount: creatorCenterConfig?.minWithdrawAmount ?? 10
+      minWithdrawAmount: creatorCenterConfig?.minWithdrawAmount ?? 10,
+      // 扩展收益配置
+      extendedEarnings: {
+        enabled: extendedEarningsEnabled,
+        rates: earningsRates,
+        dailyCap: dailyExtendedEarningsCap
+      }
     },
     message: 'success'
   });
@@ -179,6 +311,15 @@ router.get('/overview', authenticateToken, async (req, res) => {
       }
     });
     
+    // 计算今日扩展收益
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const todayExtendedEarnings = await calculateExtendedEarnings(userId, today, tomorrow);
+    
+    // 计算本月扩展收益
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const monthExtendedEarnings = await calculateExtendedEarnings(userId, monthStart, nextMonth);
+    
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       data: {
@@ -194,6 +335,11 @@ router.get('/overview', authenticateToken, async (req, res) => {
           total_likes: contentStats._sum?.like_count || 0,
           total_collects: contentStats._sum?.collect_count || 0,
           total_buyers: buyerCount.length
+        },
+        // 扩展收益数据
+        extended_earnings: {
+          today: todayExtendedEarnings,
+          month: monthExtendedEarnings
         }
       },
       message: 'success'
