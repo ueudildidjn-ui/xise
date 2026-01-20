@@ -1,14 +1,28 @@
 <template>
   <div class="content-review-page">
-    <!-- AI自动审核开关 -->
-    <div class="ai-auto-review-toggle">
-      <label class="toggle-label">
-        <span class="toggle-text">AI自动审核</span>
-        <div class="toggle-switch" :class="{ active: aiAutoReview }" @click="toggleAiAutoReview">
-          <div class="toggle-slider"></div>
-        </div>
-        <span class="toggle-hint">{{ aiAutoReview ? '开启：由AI自动决定通过或拒绝' : '关闭：需人工审核' }}</span>
-      </label>
+    <!-- AI审核开关区域 -->
+    <div class="ai-review-toggles">
+      <!-- 用户名AI审核开关 -->
+      <div class="ai-auto-review-toggle">
+        <label class="toggle-label">
+          <span class="toggle-text">用户名AI审核</span>
+          <div class="toggle-switch" :class="{ active: aiUsernameReview }" @click="toggleAiUsernameReview">
+            <div class="toggle-slider"></div>
+          </div>
+          <span class="toggle-hint">{{ aiUsernameReview ? '开启：用户名由AI自动审核' : '关闭：仅使用本地违禁词' }}</span>
+        </label>
+      </div>
+      
+      <!-- 内容AI审核开关 -->
+      <div class="ai-auto-review-toggle">
+        <label class="toggle-label">
+          <span class="toggle-text">内容AI审核</span>
+          <div class="toggle-switch" :class="{ active: aiContentReview }" @click="toggleAiContentReview">
+            <div class="toggle-slider"></div>
+          </div>
+          <span class="toggle-hint">{{ aiContentReview ? '开启：评论/简介由AI自动审核' : '关闭：仅使用本地违禁词' }}</span>
+        </label>
+      </div>
     </div>
     
     <CrudTable title="审核管理" entity-name="内容审核" api-endpoint="/admin/content-review" :columns="columns" :form-fields="formFields"
@@ -51,29 +65,66 @@ import { apiConfig } from '@/config/api'
 // 声明组件事件
 const emit = defineEmits(['closeFilter'])
 
-// AI自动审核开关状态
-const aiAutoReview = ref(false)
+// AI审核开关状态
+const aiUsernameReview = ref(false)  // 用户名AI审核
+const aiContentReview = ref(false)   // 内容AI审核
 
-// 初始化时从localStorage读取开关状态
-onMounted(() => {
-  const saved = localStorage.getItem('ai_auto_review')
-  aiAutoReview.value = saved === 'true'
+// 初始化时从后端获取开关状态
+onMounted(async () => {
+  try {
+    const response = await fetch(`${apiConfig.baseURL}/admin/content-review/settings`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    })
+    const result = await response.json()
+    if (result.code === 200 && result.data) {
+      aiUsernameReview.value = result.data.ai_username_review || false
+      aiContentReview.value = result.data.ai_content_review || false
+      // 同步到localStorage
+      localStorage.setItem('ai_username_review', aiUsernameReview.value.toString())
+      localStorage.setItem('ai_content_review', aiContentReview.value.toString())
+    }
+  } catch (error) {
+    console.error('获取AI审核设置失败:', error)
+    // 回退到localStorage
+    aiUsernameReview.value = localStorage.getItem('ai_username_review') === 'true'
+    aiContentReview.value = localStorage.getItem('ai_content_review') === 'true'
+  }
 })
 
-// 切换AI自动审核开关
-const toggleAiAutoReview = async () => {
-  const newValue = !aiAutoReview.value
-  aiAutoReview.value = newValue
-  localStorage.setItem('ai_auto_review', newValue.toString())
+// 切换用户名AI审核开关
+const toggleAiUsernameReview = async () => {
+  const newValue = !aiUsernameReview.value
+  aiUsernameReview.value = newValue
+  localStorage.setItem('ai_username_review', newValue.toString())
   
   // 调用后端API更新设置
   try {
     await fetch(`${apiConfig.baseURL}/admin/content-review/settings`, {
       method: 'PUT',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ ai_auto_review: newValue })
+      body: JSON.stringify({ ai_username_review: newValue })
     })
-    showMessage(newValue ? 'AI自动审核已开启' : 'AI自动审核已关闭')
+    showMessage(newValue ? '用户名AI审核已开启' : '用户名AI审核已关闭')
+  } catch (error) {
+    console.error('更新设置失败:', error)
+  }
+}
+
+// 切换内容AI审核开关
+const toggleAiContentReview = async () => {
+  const newValue = !aiContentReview.value
+  aiContentReview.value = newValue
+  localStorage.setItem('ai_content_review', newValue.toString())
+  
+  // 调用后端API更新设置
+  try {
+    await fetch(`${apiConfig.baseURL}/admin/content-review/settings`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ai_content_review: newValue })
+    })
+    showMessage(newValue ? '内容AI审核已开启' : '内容AI审核已关闭')
   } catch (error) {
     console.error('更新设置失败:', error)
   }
@@ -389,10 +440,23 @@ const handleCustomAction = async ({ action, item }) => {
   height: 100%;
 }
 
-.ai-auto-review-toggle {
+/* AI审核开关区域 */
+.ai-review-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
   padding: 16px 24px;
   background: var(--bg-color-primary);
   border-bottom: 1px solid var(--border-color-primary);
+}
+
+.ai-auto-review-toggle {
+  flex: 1;
+  min-width: 280px;
+  padding: 12px 16px;
+  background: var(--bg-color-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color-primary);
 }
 
 .toggle-label {

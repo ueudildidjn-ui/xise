@@ -10,6 +10,29 @@ const { auditNickname, auditBio, isAuditEnabled } = require('../utils/contentAud
 const { addContentAuditTask, addAuditLogTask, isQueueEnabled, generateRandomNickname, addBrowsingHistoryTask, cleanupExpiredBrowsingHistory, BROWSING_HISTORY_CONFIG } = require('../utils/queueService');
 const { checkUsernameBannedWords, checkBioBannedWords, getBannedWordAuditResult } = require('../utils/bannedWordsChecker');
 
+// 获取AI自动审核开关状态（延迟加载以避免循环依赖）
+let adminRoutesCache = null;
+const getAdminRoutes = () => {
+  if (!adminRoutesCache) {
+    try {
+      adminRoutesCache = require('./admin');
+    } catch (e) {
+      return null;
+    }
+  }
+  return adminRoutesCache;
+};
+// 用户名AI审核开关
+const isAiUsernameReviewEnabled = () => {
+  const adminRoutes = getAdminRoutes();
+  return adminRoutes?.isAiUsernameReviewEnabled ? adminRoutes.isAiUsernameReviewEnabled() : false;
+};
+// 内容AI审核开关（评论、简介等）
+const isAiContentReviewEnabled = () => {
+  const adminRoutes = getAdminRoutes();
+  return adminRoutes?.isAiContentReviewEnabled ? adminRoutes.isAiContentReviewEnabled() : false;
+};
+
 // 内容最大长度限制
 const MAX_CONTENT_LENGTH = 1000;
 
@@ -680,8 +703,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
           reason: `[本地违禁词拒绝] 昵称触发违禁词: ${nicknameCheck.matchedWords.join(', ')}，已自动替换为随机昵称: ${randomNickname}`,
           status: AUDIT_STATUS.REJECTED
         });
-      } else if (isAuditEnabled()) {
-        // 如果启用了审核，添加异步审核任务
+      } else if (isAuditEnabled() && isAiUsernameReviewEnabled()) {
+        // 如果启用了审核且用户名AI审核开关开启，添加异步审核任务
         if (isQueueEnabled()) {
           addContentAuditTask(trimmedNickname, Number(targetUserId), 'nickname', Number(targetUserId));
         } else {
@@ -704,8 +727,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
             reason: auditResult?.passed ? '[AI审核通过] 昵称审核通过' : `[AI审核拒绝] ${auditResult?.reason || '昵称审核未通过'}，已自动替换为随机昵称: ${replacementNickname}`,
             status: auditResult?.passed ? AUDIT_STATUS.APPROVED : AUDIT_STATUS.REJECTED
           });
-        }
       }
+      // 如果isAuditEnabled()为false或用户名AI审核关闭，则只使用本地违禁词检查（已在上面完成）
     }
 
     // 检查个人简介违禁词
@@ -726,8 +749,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
           reason: `[本地违禁词拒绝] 个人简介触发违禁词: ${bioCheck.matchedWords.join(', ')}，已自动清空简介`,
           status: AUDIT_STATUS.REJECTED
         });
-      } else if (isAuditEnabled()) {
-        // 需要审核，设置为待审核状态
+      } else if (isAuditEnabled() && isAiContentReviewEnabled()) {
+        // 需要审核且内容AI审核开关开启，设置为待审核状态
         updateData.bio_audit_status = AUDIT_STATUS.PENDING;
         if (isQueueEnabled()) {
           addContentAuditTask(trimmedBio, Number(targetUserId), 'bio', Number(targetUserId));
@@ -753,7 +776,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
           });
         }
       } else {
-        // 未启用审核，直接通过
+        // 未启用审核或内容AI审核关闭，只使用本地违禁词检查，直接通过
         updateData.bio_audit_status = AUDIT_STATUS.APPROVED;
       }
     }

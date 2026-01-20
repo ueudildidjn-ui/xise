@@ -14,6 +14,24 @@ const svgCaptcha = require('svg-captcha');
 const path = require('path');
 const fs = require('fs');
 
+// 获取AI自动审核开关状态（延迟加载以避免循环依赖）
+let adminRoutesCache = null;
+const getAdminRoutes = () => {
+  if (!adminRoutesCache) {
+    try {
+      adminRoutesCache = require('./admin');
+    } catch (e) {
+      return null;
+    }
+  }
+  return adminRoutesCache;
+};
+// 用户名AI审核开关
+const isAiUsernameReviewEnabled = () => {
+  const adminRoutes = getAdminRoutes();
+  return adminRoutes?.isAiUsernameReviewEnabled ? adminRoutes.isAiUsernameReviewEnabled() : false;
+};
+
 // 存储验证码的临时对象
 const captchaStore = new Map();
 // 存储邮箱验证码的临时对象
@@ -672,9 +690,9 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // 审核昵称（如果启用了内容审核）
+    // 审核昵称（如果启用了内容审核且用户名AI审核开关开启）
     // 如果队列启用，使用异步审核；否则使用同步审核
-    if (isAuditEnabled() && !isQueueEnabled()) {
+    if (isAuditEnabled() && isAiUsernameReviewEnabled() && !isQueueEnabled()) {
       // 同步审核（当队列未启用时使用，可能会阻塞）
       try {
         const nicknameAuditResult = await auditNickname(nickname, user_id);
@@ -695,7 +713,7 @@ router.post('/register', async (req, res) => {
         // 审核异常时不阻塞注册，继续流程
       }
     }
-    // 注意：如果队列启用，昵称审核将在注册完成后异步进行
+    // 注意：如果队列启用且用户名AI审核开启，昵称审核将在注册完成后异步进行
 
     // 获取用户IP和User-Agent
     const userIP = getRealIP(req);
@@ -738,9 +756,9 @@ router.post('/register', async (req, res) => {
       addIPLocationTask(Number(userId), userIP);
     }
 
-    // 如果启用了内容审核和异步队列，将昵称审核任务加入队列
+    // 如果启用了内容审核、用户名AI审核和异步队列，将昵称审核任务加入队列
     // 审核不通过时，队列处理器会自动将昵称修改为随机昵称
-    if (isAuditEnabled() && isQueueEnabled()) {
+    if (isAuditEnabled() && isAiUsernameReviewEnabled() && isQueueEnabled()) {
       addContentAuditTask(nickname, Number(userId), 'nickname', Number(userId));
       console.log(`📝 昵称审核任务已加入队列 - 用户ID: ${userId}`);
     }
@@ -1581,8 +1599,8 @@ router.get('/oauth2/callback', async (req, res) => {
         addIPLocationTask(Number(newUser.id), userIP);
       }
 
-      // 如果启用了内容审核和异步队列，将昵称审核任务加入队列
-      if (isAuditEnabled() && isQueueEnabled()) {
+      // 如果启用了内容审核、用户名AI审核和异步队列，将昵称审核任务加入队列
+      if (isAuditEnabled() && isAiUsernameReviewEnabled() && isQueueEnabled()) {
         addContentAuditTask(defaultNickname, Number(newUser.id), 'nickname', Number(newUser.id));
       }
 

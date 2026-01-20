@@ -11,17 +11,22 @@ const { addContentAuditTask, addAuditLogTask, isQueueEnabled } = require('../uti
 const { checkCommentBannedWords, getBannedWordAuditResult } = require('../utils/bannedWordsChecker');
 
 // 获取AI自动审核状态（延迟加载以避免循环依赖）
-let getAiAutoReviewStatus = null;
-const isAiAutoReviewEnabled = () => {
-  if (!getAiAutoReviewStatus) {
+// 获取AI自动审核开关状态（延迟加载以避免循环依赖）
+let adminRoutesCache = null;
+const getAdminRoutes = () => {
+  if (!adminRoutesCache) {
     try {
-      const adminRoutes = require('./admin');
-      getAiAutoReviewStatus = adminRoutes.isAiAutoReviewEnabled || (() => false);
+      adminRoutesCache = require('./admin');
     } catch (e) {
-      return false;
+      return null;
     }
   }
-  return getAiAutoReviewStatus();
+  return adminRoutesCache;
+};
+// 内容AI审核开关（评论、简介等）
+const isAiContentReviewEnabled = () => {
+  const adminRoutes = getAdminRoutes();
+  return adminRoutes?.isAiContentReviewEnabled ? adminRoutes.isAiContentReviewEnabled() : false;
 };
 
 // 递归删除评论及其子评论，返回删除的评论总数
@@ -264,22 +269,24 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // 进行内容审核
-    let auditStatus = isAuditEnabled() ? AUDIT_STATUS.PENDING : AUDIT_STATUS.APPROVED;
-    let isPublic = isAuditEnabled() ? false : true;
+    // 判断是否需要进行AI审核：需要同时满足 isAuditEnabled()（配置启用）和 isAiContentReviewEnabled()（内容AI审核开关开启）
+    const shouldUseAiAudit = isAuditEnabled() && isAiContentReviewEnabled();
+    let auditStatus = shouldUseAiAudit ? AUDIT_STATUS.PENDING : AUDIT_STATUS.APPROVED;
+    let isPublic = shouldUseAiAudit ? false : true;
     let auditResult = null;
     let auditRecordStatus = AUDIT_STATUS.PENDING;
     let shouldDeleteComment = false;
     let useAsyncAudit = false;
 
     // 判断是否使用异步审核
-    // 条件：启用了内容审核 + 启用了异步队列
-    if (isAuditEnabled() && isQueueEnabled()) {
+    // 条件：启用了内容审核 + 内容AI审核开关开启 + 启用了异步队列
+    if (shouldUseAiAudit && isQueueEnabled()) {
       // 使用异步审核：评论先创建为待审核状态，后台处理审核
       useAsyncAudit = true;
       auditStatus = AUDIT_STATUS.PENDING;
       isPublic = false;
       console.log('📝 使用异步队列进行内容审核');
-    } else if (isAuditEnabled()) {
+    } else if (shouldUseAiAudit) {
       // 使用同步审核
       try {
         auditResult = await auditComment(sanitizedContent, Number(userId));
@@ -342,6 +349,7 @@ router.post('/', authenticateToken, async (req, res) => {
         });
       }
     }
+    // 如果 shouldUseAiAudit 为 false，则只使用本地违禁词检查（已在上面完成），评论直接公开
 
     // 如果AI自动审核拒绝，不创建评论
     if (shouldDeleteComment) {
@@ -371,7 +379,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const commentId = newComment.id;
     
     // 更新audit表中的target_id为评论ID（仅同步审核时需要）
-    if (isAuditEnabled() && !useAsyncAudit) {
+    if (shouldUseAiAudit && !useAsyncAudit) {
       await prisma.audit.updateMany({
         where: {
           user_id: userId,

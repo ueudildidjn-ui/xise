@@ -9,16 +9,37 @@ const { getQueueStats, getQueueJobs, getJobDetails, retryJob, cleanQueue, isQueu
 const crypto = require('crypto')
 
 // ===================== AI审核设置 =====================
-let aiAutoReviewEnabled = false
+// 分开的AI审核开关：用户名审核和内容审核
+let aiUsernameReviewEnabled = false  // 用户名/昵称是否使用AI审核
+let aiContentReviewEnabled = false   // 内容（评论、简介等）是否使用AI审核
+
+// 兼容旧接口：获取整体AI审核状态
 router.get('/ai-review-status', adminAuth, (req, res) => {
-  res.json({ code: RESPONSE_CODES.SUCCESS, data: { enabled: aiAutoReviewEnabled }, message: 'success' })
+  res.json({ 
+    code: RESPONSE_CODES.SUCCESS, 
+    data: { 
+      enabled: aiUsernameReviewEnabled || aiContentReviewEnabled,
+      username_enabled: aiUsernameReviewEnabled,
+      content_enabled: aiContentReviewEnabled
+    }, 
+    message: 'success' 
+  })
 })
+
+// 兼容旧接口：切换整体AI审核（同时切换用户名和内容审核）
 router.post('/ai-review-toggle', adminAuth, (req, res) => {
   const { enabled } = req.body
-  aiAutoReviewEnabled = Boolean(enabled)
-  res.json({ code: RESPONSE_CODES.SUCCESS, message: `AI自动审核已${aiAutoReviewEnabled ? '开启' : '关闭'}` })
+  const newValue = Boolean(enabled)
+  aiUsernameReviewEnabled = newValue
+  aiContentReviewEnabled = newValue
+  res.json({ code: RESPONSE_CODES.SUCCESS, message: `AI自动审核已${newValue ? '开启' : '关闭'}` })
 })
-const isAiAutoReviewEnabled = () => aiAutoReviewEnabled
+
+// 导出函数供其他模块使用
+const isAiUsernameReviewEnabled = () => aiUsernameReviewEnabled
+const isAiContentReviewEnabled = () => aiContentReviewEnabled
+// 兼容旧的函数名
+const isAiAutoReviewEnabled = () => aiUsernameReviewEnabled || aiContentReviewEnabled
 
 // ===================== 笔记管理 =====================
 router.get('/posts', adminAuth, async (req, res) => {
@@ -2467,19 +2488,51 @@ router.get('/content-review/settings', adminAuth, async (req, res) => {
   res.json({
     code: RESPONSE_CODES.SUCCESS,
     message: '获取设置成功',
-    data: { ai_auto_review: aiAutoReviewEnabled }
+    data: { 
+      ai_auto_review: aiUsernameReviewEnabled || aiContentReviewEnabled,
+      ai_username_review: aiUsernameReviewEnabled,
+      ai_content_review: aiContentReviewEnabled
+    }
   })
 })
 
 router.put('/content-review/settings', adminAuth, async (req, res) => {
   try {
-    const { ai_auto_review } = req.body
-    aiAutoReviewEnabled = !!ai_auto_review
+    const { ai_auto_review, ai_username_review, ai_content_review } = req.body
+    
+    // 支持分开设置用户名审核和内容审核
+    if (ai_username_review !== undefined) {
+      aiUsernameReviewEnabled = !!ai_username_review
+    }
+    if (ai_content_review !== undefined) {
+      aiContentReviewEnabled = !!ai_content_review
+    }
+    // 兼容旧接口：如果只传了ai_auto_review，则同时设置两个开关
+    if (ai_auto_review !== undefined && ai_username_review === undefined && ai_content_review === undefined) {
+      const newValue = !!ai_auto_review
+      aiUsernameReviewEnabled = newValue
+      aiContentReviewEnabled = newValue
+    }
+
+    const messages = []
+    if (ai_username_review !== undefined) {
+      messages.push(`用户名AI审核已${aiUsernameReviewEnabled ? '开启' : '关闭'}`)
+    }
+    if (ai_content_review !== undefined) {
+      messages.push(`内容AI审核已${aiContentReviewEnabled ? '开启' : '关闭'}`)
+    }
+    if (messages.length === 0 && ai_auto_review !== undefined) {
+      messages.push(`AI自动审核已${aiUsernameReviewEnabled ? '开启' : '关闭'}`)
+    }
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
-      message: aiAutoReviewEnabled ? 'AI自动审核已开启' : 'AI自动审核已关闭',
-      data: { ai_auto_review: aiAutoReviewEnabled }
+      message: messages.join('，') || '设置已更新',
+      data: { 
+        ai_auto_review: aiUsernameReviewEnabled || aiContentReviewEnabled,
+        ai_username_review: aiUsernameReviewEnabled,
+        ai_content_review: aiContentReviewEnabled
+      }
     })
   } catch (error) {
     console.error('更新设置失败:', error)
@@ -3958,3 +4011,5 @@ router.put('/user-toolbar/:id/toggle-active', adminAuth, async (req, res) => {
 
 module.exports = router
 module.exports.isAiAutoReviewEnabled = isAiAutoReviewEnabled
+module.exports.isAiUsernameReviewEnabled = isAiUsernameReviewEnabled
+module.exports.isAiContentReviewEnabled = isAiContentReviewEnabled
