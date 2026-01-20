@@ -750,12 +750,10 @@ router.get('/:id', optionalAuth, async (req, res) => {
 // 创建笔记
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { title, content, category_id, type = 1, images = [], video, tags = [], is_draft = false, paymentSettings, attachment, visibility = VISIBILITY_PUBLIC } = req.body;
+    const { title = '', content = '', category_id, type = 1, images = [], video, tags = [], is_draft = false, paymentSettings, attachment, visibility = VISIBILITY_PUBLIC } = req.body;
     const userId = BigInt(req.user.id);
 
-    if (!title || !content) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '标题和内容不能为空' });
-    }
+    // 标题和内容不再强制要求，允许为空
 
     // Validate visibility value
     const validVisibility = [VISIBILITY_PUBLIC, VISIBILITY_PRIVATE, VISIBILITY_FRIENDS_ONLY].includes(visibility) ? visibility : VISIBILITY_PUBLIC;
