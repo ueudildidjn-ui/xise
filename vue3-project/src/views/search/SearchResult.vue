@@ -3,17 +3,30 @@ import { ref, onMounted, watch, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNavigationStore } from '@/stores/navigation'
 import { useEventStore } from '@/stores/event'
+import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
 import TagContainer from './components/TagContainer.vue'
 import UserList from './components/UserList.vue'
 import WaterfallFlow from '@/components/WaterfallFlow.vue'
 import LoadingSpinner from '@/components/spinner/LoadingSpinner.vue'
 import SearchFloatingBtn from './components/SearchFloatingBtn.vue'
+import SvgIcon from '@/components/SvgIcon.vue'
 import apiConfig from '@/config/api.js'
 
 const route = useRoute()
 const router = useRouter()
 const navigationStore = useNavigationStore()
 const eventStore = useEventStore()
+const userStore = useUserStore()
+const authStore = useAuthStore()
+
+// 登录状态
+const isLoggedIn = computed(() => userStore.isLoggedIn)
+
+// 打开登录弹窗
+function openLogin() {
+  authStore.openLoginModal()
+}
 
 const keyword = ref('')
 const selectedTag = ref('')
@@ -473,6 +486,12 @@ onMounted(() => {
     keyword.value = route.query.keyword || ''
     activeTab.value = route.params.tab || 'all'
     
+    // 未登录时不执行搜索
+    if (!isLoggedIn.value) {
+        isInitialLoad.value = false
+        return
+    }
+    
     // 如果URL中有tag参数，清除它（刷新页面时也要清除tag）
     // 这样确保第二个tab-container始终从默认的"全部"状态开始
     if (route.query.tag) {
@@ -500,6 +519,13 @@ onMounted(() => {
     eventListenerKey = eventStore.addEventListener('floating-btn-reload-request', handleFloatingBtnReload)
 })
 
+// 当用户登录后自动执行搜索
+watch(isLoggedIn, (newValue, oldValue) => {
+    if (newValue && !oldValue && keyword.value) {
+        searchContent(activeTab.value)
+    }
+})
+
 onUnmounted(() => {
     if (eventListenerKey) {
         eventStore.removeEventListener(eventListenerKey)
@@ -509,27 +535,39 @@ onUnmounted(() => {
 
 <template>
     <div class="search-container">
-
-        <TagContainer v-if="shouldShowTagContainer" :tagStats="currentTagStats" :activeTag="selectedTag" :activeTab="activeTab"
-            @tag-reload="handleTagReload" />
-
-
-        <LoadingSpinner v-if="isTagLoading" />
-
-
-        <div class="search-main" :class="{ 'with-loading': isTagLoading }">
-
-            <div v-if="activeTab === 'users'">
-                <UserList :users="userResults" :loading="loading" @follow="handleUserFollow"
-                    @unfollow="handleUserUnfollow" @userClick="handleUserClick" />
-            </div>
-
-
-            <div v-else>
-                <WaterfallFlow :searchKeyword="keyword" :searchTag="selectedTag" :preloadedPosts="postResults" :type="activeTab" />
+        <!-- 未登录提示 -->
+        <div class="login-prompt" v-if="!isLoggedIn">
+            <div class="prompt-content">
+                <SvgIcon name="search" width="48" height="48" class="prompt-icon" />
+                <h3>请先登录</h3>
+                <p>登录后可查看所有搜索结果</p>
+                <button class="login-btn" @click="openLogin">立即登录</button>
             </div>
         </div>
-        <SearchFloatingBtn @reload="handleFloatingBtnReloadRequest" />
+
+        <!-- 登录后才显示搜索结果 -->
+        <template v-if="isLoggedIn">
+            <TagContainer v-if="shouldShowTagContainer" :tagStats="currentTagStats" :activeTag="selectedTag" :activeTab="activeTab"
+                @tag-reload="handleTagReload" />
+
+
+            <LoadingSpinner v-if="isTagLoading" />
+
+
+            <div class="search-main" :class="{ 'with-loading': isTagLoading }">
+
+                <div v-if="activeTab === 'users'">
+                    <UserList :users="userResults" :loading="loading" @follow="handleUserFollow"
+                        @unfollow="handleUserUnfollow" @userClick="handleUserClick" />
+                </div>
+
+
+                <div v-else>
+                    <WaterfallFlow :searchKeyword="keyword" :searchTag="selectedTag" :preloadedPosts="postResults" :type="activeTab" />
+                </div>
+            </div>
+            <SearchFloatingBtn @reload="handleFloatingBtnReloadRequest" />
+        </template>
     </div>
 </template>
 
@@ -553,6 +591,57 @@ onUnmounted(() => {
 
 .search-main.with-loading {
     margin-top: 40px;
+}
+
+/* 登录提示样式 */
+.login-prompt {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 120px 20px;
+    min-height: calc(100vh - 72px);
+}
+
+.prompt-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    color: var(--text-color-tertiary);
+}
+
+.prompt-content .prompt-icon {
+    margin-bottom: 16px;
+    opacity: 0.6;
+}
+
+.prompt-content h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-color-primary);
+}
+
+.prompt-content p {
+    margin: 8px 0 20px 0;
+    font-size: 14px;
+}
+
+.login-btn {
+    padding: 10px 32px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.login-btn:hover {
+    opacity: 0.9;
+    transform: scale(1.02);
 }
 
 

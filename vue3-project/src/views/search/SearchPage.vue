@@ -1,12 +1,24 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/SvgIcon.vue'
 import { useSearchHistoryStore } from '@/stores/searchHistory'
+import { useUserStore } from '@/stores/user'
+import { useAuthStore } from '@/stores/auth'
 import apiConfig from '@/config/api.js'
 
 const router = useRouter()
 const searchHistoryStore = useSearchHistoryStore()
+const userStore = useUserStore()
+const authStore = useAuthStore()
+
+// 登录状态
+const isLoggedIn = computed(() => userStore.isLoggedIn)
+
+// 打开登录弹窗
+function openLogin() {
+  authStore.openLoginModal()
+}
 
 const searchText = ref('')
 const searchInputRef = ref(null)
@@ -117,15 +129,30 @@ function handleKeyPress(event) {
 }
 
 onMounted(() => {
-  // 自动聚焦搜索框
-  nextTick(() => {
-    if (searchInputRef.value) {
-      searchInputRef.value.focus()
-    }
-  })
-  
-  // 获取热门搜索
-  fetchHotSearches()
+  // 只有登录用户才自动聚焦和获取数据
+  if (isLoggedIn.value) {
+    // 自动聚焦搜索框
+    nextTick(() => {
+      if (searchInputRef.value) {
+        searchInputRef.value.focus()
+      }
+    })
+    
+    // 获取热门搜索
+    fetchHotSearches()
+  }
+})
+
+// 当用户登录后自动获取热门搜索
+watch(isLoggedIn, (newValue, oldValue) => {
+  if (newValue && !oldValue) {
+    nextTick(() => {
+      if (searchInputRef.value) {
+        searchInputRef.value.focus()
+      }
+    })
+    fetchHotSearches()
+  }
 })
 </script>
 
@@ -143,6 +170,7 @@ onMounted(() => {
           type="text" 
           placeholder="搜索笔记、用户" 
           @keypress="handleKeyPress"
+          :disabled="!isLoggedIn"
         />
         <div class="input-controls">
           <div 
@@ -159,8 +187,18 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 搜索内容区域 -->
-    <div class="search-content">
+    <!-- 未登录提示 -->
+    <div class="login-prompt" v-if="!isLoggedIn">
+      <div class="prompt-content">
+        <SvgIcon name="search" width="48" height="48" class="prompt-icon" />
+        <h3>请先登录</h3>
+        <p>登录后可搜索全部笔记和用户</p>
+        <button class="login-btn" @click="openLogin">立即登录</button>
+      </div>
+    </div>
+
+    <!-- 搜索内容区域 - 仅登录用户可见 -->
+    <div class="search-content" v-if="isLoggedIn">
       <!-- 搜索历史 -->
       <div v-if="recentSearches.length > 0" class="search-section">
         <div class="section-header">
@@ -435,6 +473,56 @@ onMounted(() => {
 .empty-state p {
   margin-top: 16px;
   font-size: 15px;
+}
+
+/* 登录提示样式 */
+.login-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+}
+
+.prompt-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  color: var(--text-color-tertiary);
+}
+
+.prompt-content .prompt-icon {
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.prompt-content h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-color-primary);
+}
+
+.prompt-content p {
+  margin: 8px 0 20px 0;
+  font-size: 14px;
+}
+
+.login-btn {
+  padding: 10px 32px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.login-btn:hover {
+  opacity: 0.9;
+  transform: scale(1.02);
 }
 
 @media (min-width: 696px) {
