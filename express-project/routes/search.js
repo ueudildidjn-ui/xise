@@ -237,6 +237,9 @@ router.get('/', optionalAuth, async (req, res) => {
           _count: {
             tag_id: true
           },
+          orderBy: {
+            tag_id: 'asc'
+          },
           take: 10
         });
 
