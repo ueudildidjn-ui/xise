@@ -210,6 +210,86 @@ const calculateExtendedEarnings = async (userId, startDate, endDate) => {
   };
 };
 
+// 领取扩展收益（将扩展收益添加到可提现余额并记录日志）
+const claimExtendedEarnings = async (userId) => {
+  const userIdBigInt = BigInt(userId);
+  const config = getExtendedEarningsConfig();
+  
+  if (!config.enabled) {
+    return { success: false, message: '扩展收益功能未启用' };
+  }
+  
+  // 获取今日日期范围
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  // 检查今日是否已领取
+  const existingClaim = await prisma.creatorEarningsLog.findFirst({
+    where: {
+      user_id: userIdBigInt,
+      type: 'extended_daily',
+      created_at: { gte: today, lt: tomorrow }
+    }
+  });
+  
+  if (existingClaim) {
+    return { success: false, message: '今日激励奖励已领取', alreadyClaimed: true };
+  }
+  
+  // 计算今日扩展收益
+  const extendedEarnings = await calculateExtendedEarnings(userId, today, tomorrow);
+  
+  if (extendedEarnings.total <= 0) {
+    return { success: false, message: '今日暂无可领取的激励奖励', noEarnings: true };
+  }
+  
+  // 获取或创建收益账户
+  const earnings = await getOrCreateCreatorEarnings(userId);
+  const newBalance = earnings.balance + extendedEarnings.total;
+  const newTotalEarnings = earnings.total_earnings + extendedEarnings.total;
+  
+  // 更新收益余额
+  await prisma.creatorEarnings.update({
+    where: { user_id: userIdBigInt },
+    data: { 
+      balance: newBalance,
+      total_earnings: newTotalEarnings
+    }
+  });
+  
+  // 构建收益明细描述
+  const details = [];
+  if (extendedEarnings.views.count > 0) details.push(`浏览${extendedEarnings.views.count}次`);
+  if (extendedEarnings.likes.count > 0) details.push(`点赞${extendedEarnings.likes.count}次`);
+  if (extendedEarnings.collects.count > 0) details.push(`收藏${extendedEarnings.collects.count}次`);
+  if (extendedEarnings.comments.count > 0) details.push(`评论${extendedEarnings.comments.count}条`);
+  if (extendedEarnings.followers.count > 0) details.push(`新粉丝${extendedEarnings.followers.count}位`);
+  
+  // 记录收益日志
+  await prisma.creatorEarningsLog.create({
+    data: {
+      user_id: userIdBigInt,
+      earnings_id: earnings.id,
+      amount: extendedEarnings.total,
+      balance_after: newBalance,
+      type: 'extended_daily',
+      source_type: 'incentive',
+      reason: `今日激励奖励: ${details.join('、')}`,
+      platform_fee: 0
+    }
+  });
+  
+  return {
+    success: true,
+    message: '激励奖励领取成功',
+    earnings: extendedEarnings,
+    newBalance: newBalance,
+    details: details
+  };
+};
+
 // 获取创作者中心配置
 router.get('/config', (req, res) => {
   const platformFeeRate = getPlatformFeeRate();
@@ -783,6 +863,42 @@ router.post('/withdraw', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('提现失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      code: RESPONSE_CODES.ERROR,
+      message: error.message || ERROR_MESSAGES.INTERNAL_SERVER_ERROR
+    });
+  }
+});
+
+// 领取今日激励奖励（将扩展收益加入可提现余额）
+router.post('/claim-incentive', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const result = await claimExtendedEarnings(userId);
+    
+    if (!result.success) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: result.message,
+        data: {
+          alreadyClaimed: result.alreadyClaimed || false,
+          noEarnings: result.noEarnings || false
+        }
+      });
+    }
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: {
+        earnings: result.earnings,
+        newBalance: result.newBalance,
+        details: result.details
+      },
+      message: result.message
+    });
+  } catch (error) {
+    console.error('领取激励奖励失败:', error);
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       code: RESPONSE_CODES.ERROR,
       message: error.message || ERROR_MESSAGES.INTERNAL_SERVER_ERROR

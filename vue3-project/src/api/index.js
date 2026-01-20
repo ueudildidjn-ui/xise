@@ -982,6 +982,11 @@ export const creatorCenterApi = {
   // 收益提现到石榴点余额
   withdraw(amount) {
     return request.post('/creator-center/withdraw', { amount })
+  },
+
+  // 领取今日激励奖励
+  claimIncentive() {
+    return request.post('/creator-center/claim-incentive')
   }
 }
 
