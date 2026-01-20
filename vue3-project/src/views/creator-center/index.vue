@@ -1,10 +1,10 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
+import * as echarts from 'echarts'
 import { creatorCenterApi } from '@/api/index.js'
 import { useUserStore } from '@/stores/user'
-import BackToTopButton from '@/components/BackToTopButton.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -13,6 +13,19 @@ const userStore = useUserStore()
 const loading = ref(true)
 const withdrawLoading = ref(false)
 const activeTab = ref('earnings')
+
+// 图表引用
+const chartRef = ref(null)
+let chartInstance = null
+
+// 趋势数据
+const trends = ref({
+  labels: [],
+  views: [],
+  likes: [],
+  collects: [],
+  followers: []
+})
 
 // 配置信息
 const config = ref({
@@ -78,6 +91,94 @@ const getEarningsTypeLabel = (type) => {
   return typeMap[type] || type
 }
 
+// 初始化图表
+const initChart = () => {
+  if (!chartRef.value) return
+  
+  chartInstance = echarts.init(chartRef.value)
+  updateChart()
+  
+  // 响应窗口大小变化
+  window.addEventListener('resize', handleResize)
+}
+
+// 更新图表
+const updateChart = () => {
+  if (!chartInstance) return
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#e0e0e0',
+      borderWidth: 1,
+      textStyle: { color: '#333' },
+      axisPointer: { type: 'shadow' }
+    },
+    legend: {
+      data: ['关注', '浏览', '点赞', '收藏'],
+      bottom: 0,
+      textStyle: { fontSize: 12 }
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '15%',
+      top: '10%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: trends.value.labels,
+      axisLine: { lineStyle: { color: '#e0e0e0' } },
+      axisLabel: { color: '#666', fontSize: 11 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: '#f0f0f0' } },
+      axisLabel: { color: '#888', fontSize: 11 }
+    },
+    series: [
+      {
+        name: '关注',
+        type: 'bar',
+        data: trends.value.followers,
+        itemStyle: { color: '#f59e0b', borderRadius: [4, 4, 0, 0] },
+        barWidth: '15%'
+      },
+      {
+        name: '浏览',
+        type: 'bar',
+        data: trends.value.views,
+        itemStyle: { color: '#3b82f6', borderRadius: [4, 4, 0, 0] },
+        barWidth: '15%'
+      },
+      {
+        name: '点赞',
+        type: 'bar',
+        data: trends.value.likes,
+        itemStyle: { color: '#ef4444', borderRadius: [4, 4, 0, 0] },
+        barWidth: '15%'
+      },
+      {
+        name: '收藏',
+        type: 'bar',
+        data: trends.value.collects,
+        itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] },
+        barWidth: '15%'
+      }
+    ]
+  }
+  
+  chartInstance.setOption(option)
+}
+
+const handleResize = () => {
+  chartInstance?.resize()
+}
+
 // 加载配置
 const loadConfig = async () => {
   try {
@@ -98,6 +199,20 @@ const loadOverview = async () => {
     console.error('获取概览失败:', error)
   } finally {
     loading.value = false
+  }
+}
+
+// 加载趋势数据
+const loadTrends = async () => {
+  try {
+    const response = await creatorCenterApi.getTrends()
+    if (response.success) {
+      trends.value = response.data
+      await nextTick()
+      updateChart()
+    }
+  } catch (error) {
+    console.error('获取趋势失败:', error)
   }
 }
 
@@ -170,6 +285,11 @@ const doWithdraw = async () => {
   }
 }
 
+// 返回上一页
+const goBack = () => {
+  router.back()
+}
+
 // 跳转帖子
 const goToPost = (postId) => {
   router.push({ name: 'post_detail', query: { id: postId } })
@@ -179,89 +299,100 @@ onMounted(async () => {
   if (!userStore.isLoggedIn) { router.push('/user'); return }
   await loadConfig()
   await loadOverview()
+  await loadTrends()
   await loadEarningsLog()
+  await nextTick()
+  initChart()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  chartInstance?.dispose()
 })
 </script>
 
 <template>
   <div class="creator-center">
-    <!-- 顶部区域 -->
-    <div class="header-section">
-      <div class="header-bg"></div>
-      <div class="header-content">
-        <!-- 用户信息 -->
-        <div class="user-info" v-if="!loading">
-          <div class="avatar-wrapper">
-            <img :src="userStore.userInfo?.avatar || '/default-avatar.png'" :alt="userStore.userInfo?.nickname || '用户头像'" class="avatar" />
-            <div class="verified-badge"><Icon icon="mdi:check" /></div>
-          </div>
+    <!-- 自定义顶部栏 -->
+    <div class="top-bar">
+      <button class="back-btn" @click="goBack">
+        <Icon icon="mdi:arrow-left" />
+      </button>
+      <h1 class="title">创作者中心</h1>
+      <div class="spacer"></div>
+    </div>
+
+    <!-- 用户信息和余额 -->
+    <div class="header-section" v-if="!loading">
+      <div class="user-card">
+        <div class="user-info">
+          <img :src="userStore.userInfo?.avatar || '/default-avatar.png'" :alt="userStore.userInfo?.nickname || '用户头像'" class="avatar" />
           <div class="user-details">
-            <h1 class="username">{{ userStore.userInfo?.nickname || userStore.userInfo?.username || '创作者' }}</h1>
-            <span class="user-tag">创作者中心</span>
+            <h2 class="username">{{ userStore.userInfo?.nickname || userStore.userInfo?.username || '创作者' }}</h2>
+            <div class="balance-info">
+              <span class="balance-label">可提现</span>
+              <span class="balance-value">¥{{ formatMoney(overview.balance) }}</span>
+              <button v-if="config.withdrawEnabled" class="withdraw-btn" :disabled="overview.balance < config.minWithdrawAmount" @click="openWithdrawModal">
+                提现
+              </button>
+            </div>
           </div>
         </div>
-        
-        <!-- 余额卡片 -->
-        <div class="balance-card" v-if="!loading">
-          <div class="balance-row">
-            <div class="balance-main">
-              <span class="label">可提现余额</span>
-              <div class="amount">
-                <span class="currency">¥</span>
-                <span class="value">{{ formatMoney(overview.balance) }}</span>
-              </div>
-            </div>
-            <button v-if="config.withdrawEnabled" class="withdraw-btn" :disabled="overview.balance < config.minWithdrawAmount" @click="openWithdrawModal">
-              提现
-            </button>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-value">+{{ formatMoney(overview.today_earnings) }}</span>
+            <span class="stat-label">今日收益</span>
           </div>
-          <div class="stats-row">
-            <div class="stat">
-              <span class="stat-label">今日</span>
-              <span class="stat-value">+{{ formatMoney(overview.today_earnings) }}</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">本月</span>
-              <span class="stat-value">+{{ formatMoney(overview.month_earnings) }}</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">累计</span>
-              <span class="stat-value">{{ formatMoney(overview.total_earnings) }}</span>
-            </div>
+          <div class="stat-item">
+            <span class="stat-value">+{{ formatMoney(overview.month_earnings) }}</span>
+            <span class="stat-label">本月收益</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ formatMoney(overview.total_earnings) }}</span>
+            <span class="stat-label">累计收益</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 加载状态 -->
+    <!-- 加载骨架 -->
     <div class="loading-container" v-if="loading">
-      <div class="skeleton user"></div>
-      <div class="skeleton balance"></div>
+      <div class="skeleton card"></div>
+      <div class="skeleton chart"></div>
     </div>
 
-    <!-- 主内容区 -->
-    <div class="main-section" v-if="!loading">
-      <!-- 标签切换 -->
+    <!-- 图表区域 -->
+    <div class="chart-section" v-if="!loading">
+      <div class="section-header">
+        <h3>近7天数据趋势</h3>
+      </div>
+      <div class="chart-container">
+        <div ref="chartRef" class="chart"></div>
+      </div>
+    </div>
+
+    <!-- 标签和内容区 -->
+    <div class="content-section" v-if="!loading">
       <div class="tabs">
         <button class="tab" :class="{ active: activeTab === 'earnings' }" @click="switchTab('earnings')">
-          <Icon icon="mdi:format-list-bulleted" /> 收益明细
+          收益明细
         </button>
         <button class="tab" :class="{ active: activeTab === 'content' }" @click="switchTab('content')">
-          <Icon icon="mdi:file-document-outline" /> 付费内容
+          付费内容
         </button>
       </div>
 
       <!-- 收益明细 -->
       <div class="tab-content" v-show="activeTab === 'earnings'">
-        <div class="earnings-list" v-if="!earningsLoading && earningsLog.length > 0">
-          <div class="earnings-item" v-for="item in earningsLog" :key="item.id">
+        <div class="list" v-if="!earningsLoading && earningsLog.length > 0">
+          <div class="list-item" v-for="item in earningsLog" :key="item.id">
             <div class="item-icon" :class="item.amount >= 0 ? 'income' : 'expense'">
               <Icon :icon="item.amount >= 0 ? 'mdi:trending-up' : 'mdi:trending-down'" />
             </div>
             <div class="item-info">
-              <div class="item-title">{{ getEarningsTypeLabel(item.type) }}</div>
-              <div class="item-desc">{{ item.reason || '-' }}</div>
-              <div class="item-time">{{ formatDate(item.created_at) }}</div>
+              <span class="item-title">{{ getEarningsTypeLabel(item.type) }}</span>
+              <span class="item-desc">{{ item.reason || '-' }}</span>
+              <span class="item-time">{{ formatDate(item.created_at) }}</span>
             </div>
             <div class="item-amount" :class="item.amount >= 0 ? 'positive' : 'negative'">
               {{ item.amount >= 0 ? '+' : '' }}{{ formatMoney(item.amount) }}
@@ -274,11 +405,10 @@ onMounted(async () => {
           <p>暂无收益记录</p>
         </div>
 
-        <div class="loading" v-else>
+        <div class="loading-spinner" v-else>
           <Icon icon="mdi:loading" class="spin" />
         </div>
 
-        <!-- 分页 -->
         <div class="pagination" v-if="earningsLogPagination.totalPages > 1">
           <button :disabled="earningsLogPagination.page <= 1" @click="loadEarningsLog(earningsLogPagination.page - 1)">
             <Icon icon="mdi:chevron-left" />
@@ -297,10 +427,10 @@ onMounted(async () => {
             <div class="content-cover">
               <img v-if="item.cover" :src="item.cover" alt="" />
               <div v-else class="cover-placeholder"><Icon icon="mdi:image" /></div>
-              <div class="price-tag">¥{{ formatMoney(item.price) }}</div>
+              <div class="price-badge">¥{{ formatMoney(item.price) }}</div>
             </div>
             <div class="content-info">
-              <h3 class="content-title">{{ item.title || '无标题' }}</h3>
+              <h4 class="content-title">{{ item.title || '无标题' }}</h4>
               <div class="content-stats">
                 <span><Icon icon="mdi:eye-outline" /> {{ formatNumber(item.view_count || 0) }}</span>
                 <span><Icon icon="mdi:cart-outline" /> {{ item.sales_count || 0 }}人购买</span>
@@ -309,7 +439,6 @@ onMounted(async () => {
                 收入 <strong>¥{{ formatMoney(item.total_revenue || 0) }}</strong>
               </div>
             </div>
-            <Icon icon="mdi:chevron-right" class="arrow" />
           </div>
         </div>
 
@@ -318,11 +447,10 @@ onMounted(async () => {
           <p>暂无付费内容</p>
         </div>
 
-        <div class="loading" v-else>
+        <div class="loading-spinner" v-else>
           <Icon icon="mdi:loading" class="spin" />
         </div>
 
-        <!-- 分页 -->
         <div class="pagination" v-if="paidContentPagination.totalPages > 1">
           <button :disabled="paidContentPagination.page <= 1" @click="loadPaidContent(paidContentPagination.page - 1)">
             <Icon icon="mdi:chevron-left" />
@@ -344,13 +472,13 @@ onMounted(async () => {
             <button class="close" @click="closeWithdrawModal"><Icon icon="mdi:close" /></button>
           </div>
           <div class="modal-body">
-            <div class="balance-info">
+            <div class="modal-balance">
               <span>可提现</span>
               <strong>¥{{ formatMoney(overview.balance) }}</strong>
             </div>
-            <div class="input-row">
+            <div class="input-group">
               <input type="number" v-model="withdrawAmount" placeholder="输入金额" />
-              <button class="all" @click="withdrawAll">全部</button>
+              <button class="all-btn" @click="withdrawAll">全部</button>
             </div>
             <p class="hint">最低提现: {{ config.minWithdrawAmount }} 石榴点</p>
             <p class="error" v-if="withdrawError">{{ withdrawError }}</p>
@@ -365,40 +493,66 @@ onMounted(async () => {
         </div>
       </div>
     </Teleport>
-
-    <BackToTopButton />
   </div>
 </template>
 
 <style scoped>
 .creator-center {
   min-height: 100vh;
-  background: #f5f6fa;
-  padding-bottom: 80px;
+  background: #f8f9fc;
+  padding-bottom: 40px;
 }
 
-/* 顶部区域 */
-.header-section {
-  position: relative;
-}
-
-.header-bg {
-  position: absolute;
+/* 顶部栏 */
+.top-bar {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid #eee;
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
-  height: 180px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  z-index: 100;
 }
 
-.header-content {
-  position: relative;
-  padding: 60px 16px 20px;
-  max-width: 500px;
-  margin: 0 auto;
+.back-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #f5f5f5;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  cursor: pointer;
+  color: #333;
 }
 
-/* 用户信息 */
+.title {
+  flex: 1;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.spacer {
+  width: 36px;
+}
+
+/* 用户卡片 */
+.header-section {
+  padding: 16px;
+}
+
+.user-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 20px;
+  color: white;
+}
+
 .user-info {
   display: flex;
   align-items: center;
@@ -406,32 +560,12 @@ onMounted(async () => {
   margin-bottom: 20px;
 }
 
-.avatar-wrapper {
-  position: relative;
-}
-
 .avatar {
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  border: 3px solid rgba(255,255,255,0.3);
+  border: 2px solid rgba(255,255,255,0.3);
   object-fit: cover;
-}
-
-.verified-badge {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 20px;
-  height: 20px;
-  background: #10b981;
-  border-radius: 50%;
-  border: 2px solid white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 12px;
 }
 
 .user-details {
@@ -439,77 +573,36 @@ onMounted(async () => {
 }
 
 .username {
-  font-size: 20px;
-  font-weight: 700;
-  color: white;
-  margin: 0 0 4px;
-}
-
-.user-tag {
-  font-size: 12px;
-  color: rgba(255,255,255,0.8);
-  background: rgba(255,255,255,0.15);
-  padding: 2px 10px;
-  border-radius: 12px;
-}
-
-/* 余额卡片 */
-.balance-card {
-  background: white;
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-}
-
-.balance-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.balance-main .label {
-  font-size: 13px;
-  color: #888;
-  display: block;
-  margin-bottom: 6px;
-}
-
-.balance-main .amount {
-  display: flex;
-  align-items: baseline;
-}
-
-.balance-main .currency {
   font-size: 18px;
   font-weight: 600;
-  color: #1a1a2e;
+  margin: 0 0 8px;
 }
 
-.balance-main .value {
-  font-size: 32px;
+.balance-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.balance-label {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.balance-value {
+  font-size: 20px;
   font-weight: 700;
-  color: #1a1a2e;
-  margin-left: 2px;
 }
 
 .withdraw-btn {
-  padding: 10px 24px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  border: none;
-  border-radius: 25px;
+  padding: 4px 14px;
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 16px;
   color: white;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 12px;
   cursor: pointer;
-  transition: all 0.3s;
-}
-
-.withdraw-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+  margin-left: 8px;
 }
 
 .withdraw-btn:disabled {
@@ -517,33 +610,34 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 
-.stats-row {
+.stats-grid {
   display: flex;
   justify-content: space-around;
+  background: rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 14px;
 }
 
-.stat {
+.stat-item {
   text-align: center;
+}
+
+.stat-value {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .stat-label {
   display: block;
   font-size: 12px;
-  color: #888;
-  margin-bottom: 4px;
-}
-
-.stat-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: #10b981;
+  opacity: 0.8;
+  margin-top: 4px;
 }
 
 /* 加载骨架 */
 .loading-container {
-  padding: 60px 16px;
-  max-width: 500px;
-  margin: 0 auto;
+  padding: 16px;
 }
 
 .skeleton {
@@ -553,88 +647,103 @@ onMounted(async () => {
   border-radius: 16px;
 }
 
-.skeleton.user { height: 80px; margin-bottom: 16px; }
-.skeleton.balance { height: 150px; }
+.skeleton.card { height: 180px; margin-bottom: 16px; }
+.skeleton.chart { height: 260px; }
 
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
 
-/* 主内容 */
-.main-section {
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 0 16px;
+/* 图表区域 */
+.chart-section {
+  margin: 0 16px 16px;
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
-/* 标签 */
+.section-header {
+  padding: 16px 16px 0;
+}
+
+.section-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  color: #333;
+}
+
+.chart-container {
+  padding: 8px;
+}
+
+.chart {
+  width: 100%;
+  height: 220px;
+}
+
+/* 内容区域 */
+.content-section {
+  margin: 0 16px;
+}
+
 .tabs {
   display: flex;
   background: white;
   border-radius: 12px;
   padding: 4px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
 .tab {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 12px;
+  padding: 10px;
   border: none;
   border-radius: 10px;
   background: transparent;
-  color: #888;
   font-size: 14px;
+  color: #666;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
 }
 
 .tab.active {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: #667eea;
   color: white;
 }
 
-/* 收益列表 */
-.earnings-list {
+/* 列表 */
+.list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.earnings-item {
+.list-item {
   display: flex;
   align-items: center;
   gap: 12px;
   background: white;
   border-radius: 12px;
   padding: 14px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.03);
 }
 
 .item-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 18px;
 }
 
-.item-icon.income {
-  background: #d1fae5;
-  color: #10b981;
-}
-
-.item-icon.expense {
-  background: #fef3c7;
-  color: #f59e0b;
-}
+.item-icon.income { background: #e7f9ef; color: #10b981; }
+.item-icon.expense { background: #fef3c7; color: #f59e0b; }
 
 .item-info {
   flex: 1;
@@ -642,12 +751,14 @@ onMounted(async () => {
 }
 
 .item-title {
+  display: block;
   font-size: 14px;
-  font-weight: 600;
-  color: #1a1a2e;
+  font-weight: 500;
+  color: #333;
 }
 
 .item-desc {
+  display: block;
   font-size: 12px;
   color: #888;
   margin-top: 2px;
@@ -657,14 +768,15 @@ onMounted(async () => {
 }
 
 .item-time {
+  display: block;
   font-size: 11px;
   color: #aaa;
   margin-top: 2px;
 }
 
 .item-amount {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .item-amount.positive { color: #10b981; }
@@ -679,18 +791,12 @@ onMounted(async () => {
 
 .content-item {
   display: flex;
-  align-items: center;
   gap: 12px;
   background: white;
   border-radius: 14px;
   padding: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.03);
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.content-item:active {
-  transform: scale(0.98);
 }
 
 .content-cover {
@@ -719,16 +825,16 @@ onMounted(async () => {
   font-size: 28px;
 }
 
-.price-tag {
+.price-badge {
   position: absolute;
-  bottom: 6px;
-  left: 6px;
+  bottom: 4px;
+  left: 4px;
   background: rgba(0,0,0,0.7);
   color: white;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .content-info {
@@ -738,8 +844,8 @@ onMounted(async () => {
 
 .content-title {
   font-size: 14px;
-  font-weight: 600;
-  color: #1a1a2e;
+  font-weight: 500;
+  color: #333;
   margin: 0 0 6px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -768,26 +874,22 @@ onMounted(async () => {
 
 .content-revenue strong {
   color: #10b981;
-  font-weight: 700;
 }
 
-.arrow {
-  color: #ccc;
-  font-size: 20px;
-}
-
-/* 空状态 & 加载 */
-.empty, .loading {
+/* 空状态和加载 */
+.empty, .loading-spinner {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 60px 20px;
+  padding: 50px 20px;
   color: #aaa;
+  background: white;
+  border-radius: 12px;
 }
 
-.empty svg, .loading svg {
-  font-size: 48px;
-  margin-bottom: 12px;
+.empty svg, .loading-spinner svg {
+  font-size: 42px;
+  margin-bottom: 10px;
 }
 
 .spin { animation: spin 1s linear infinite; }
@@ -798,16 +900,16 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 20px;
-  margin-top: 20px;
-  padding: 16px 0;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 12px 0;
 }
 
 .pagination button {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border: 1px solid #e0e0e0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: white;
   display: flex;
   align-items: center;
@@ -843,7 +945,7 @@ onMounted(async () => {
   width: 100%;
   max-width: 340px;
   background: white;
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
 }
 
@@ -851,12 +953,12 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 14px 18px;
   border-bottom: 1px solid #f0f0f0;
 }
 
 .modal-header h3 {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   margin: 0;
 }
@@ -870,43 +972,43 @@ onMounted(async () => {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 18px;
 }
 
-.balance-info {
+.modal-balance {
   display: flex;
   justify-content: space-between;
-  padding: 14px;
-  background: #f8f9fa;
-  border-radius: 12px;
-  margin-bottom: 16px;
+  padding: 12px;
+  background: #f8f9fc;
+  border-radius: 10px;
+  margin-bottom: 14px;
 }
 
-.balance-info span { color: #666; font-size: 14px; }
-.balance-info strong { color: #6366f1; font-size: 18px; }
+.modal-balance span { color: #666; font-size: 14px; }
+.modal-balance strong { color: #667eea; font-size: 18px; }
 
-.input-row {
+.input-group {
   display: flex;
   gap: 10px;
 }
 
-.input-row input {
+.input-group input {
   flex: 1;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  font-size: 16px;
+  border-radius: 10px;
+  font-size: 15px;
 }
 
-.input-row input:focus {
+.input-group input:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #667eea;
 }
 
-.input-row .all {
-  padding: 14px 16px;
+.all-btn {
+  padding: 12px 14px;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #f0f0f0;
   font-size: 14px;
   cursor: pointer;
@@ -918,16 +1020,16 @@ onMounted(async () => {
 .modal-footer {
   display: flex;
   gap: 12px;
-  padding: 16px 20px;
+  padding: 14px 18px;
   border-top: 1px solid #f0f0f0;
 }
 
 .modal-footer button {
   flex: 1;
-  padding: 14px;
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 600;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -938,7 +1040,7 @@ onMounted(async () => {
 }
 
 .modal-footer .confirm {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: #667eea;
   border: none;
   color: white;
   display: flex;

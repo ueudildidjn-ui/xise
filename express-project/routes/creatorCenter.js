@@ -405,26 +405,6 @@ router.get('/trends', authenticateToken, async (req, res) => {
       dates.push(date);
     }
     
-    // 获取每日收益数据
-    const earningsData = await Promise.all(dates.map(async (date) => {
-      const nextDate = new Date(date);
-      nextDate.setDate(nextDate.getDate() + 1);
-      
-      const result = await prisma.creatorEarningsLog.aggregate({
-        where: {
-          user_id: userIdBigInt,
-          amount: { gt: 0 },
-          created_at: {
-            gte: date,
-            lt: nextDate
-          }
-        },
-        _sum: { amount: true }
-      });
-      
-      return parseFloat(result._sum?.amount) || 0;
-    }));
-    
     // 获取每日浏览量数据（基于浏览历史）
     const viewsData = await Promise.all(dates.map(async (date) => {
       const nextDate = new Date(date);
@@ -445,22 +425,21 @@ router.get('/trends', authenticateToken, async (req, res) => {
       return result;
     }));
     
-    // 获取每日互动数据（点赞+收藏）
-    const interactionsData = await Promise.all(dates.map(async (date) => {
+    // 获取用户发布的帖子ID列表（只查询一次，用于后续统计）
+    const userPosts = await prisma.post.findMany({
+      where: { user_id: userIdBigInt, is_draft: false },
+      select: { id: true }
+    });
+    const postIds = userPosts.map(p => p.id);
+    
+    // 获取每日点赞数据
+    const likesData = await Promise.all(dates.map(async (date) => {
       const nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
       
-      // 获取用户发布的帖子ID列表
-      const userPosts = await prisma.post.findMany({
-        where: { user_id: userIdBigInt, is_draft: false },
-        select: { id: true }
-      });
-      const postIds = userPosts.map(p => p.id);
-      
       if (postIds.length === 0) return 0;
       
-      // 统计点赞数
-      const likes = await prisma.like.count({
+      return await prisma.like.count({
         where: {
           target_type: 1, // 帖子点赞
           target_id: { in: postIds },
@@ -470,9 +449,16 @@ router.get('/trends', authenticateToken, async (req, res) => {
           }
         }
       });
+    }));
+    
+    // 获取每日收藏数据
+    const collectsData = await Promise.all(dates.map(async (date) => {
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
       
-      // 统计收藏数
-      const collects = await prisma.collection.count({
+      if (postIds.length === 0) return 0;
+      
+      return await prisma.collection.count({
         where: {
           post_id: { in: postIds },
           created_at: {
@@ -481,8 +467,6 @@ router.get('/trends', authenticateToken, async (req, res) => {
           }
         }
       });
-      
-      return likes + collects;
     }));
     
     // 获取每日新粉丝数
@@ -514,9 +498,9 @@ router.get('/trends', authenticateToken, async (req, res) => {
       code: RESPONSE_CODES.SUCCESS,
       data: {
         labels: labels,
-        earnings: earningsData,
         views: viewsData,
-        interactions: interactionsData,
+        likes: likesData,
+        collects: collectsData,
         followers: followersData
       },
       message: 'success'
