@@ -202,14 +202,14 @@ async function requireAuthIfGuestRestricted(req, res, next) {
  * 组合中间件：可选认证 + 游客访问限制检查
  * 用于需要在游客限制模式下要求登录的路由
  */
-async function optionalAuthWithGuestRestriction(req, res, next) {
+function optionalAuthWithGuestRestriction(req, res, next) {
   // 先执行 optionalAuth
-  await optionalAuth(req, res, async (err) => {
+  optionalAuth(req, res, (err) => {
     if (err) {
       return next(err);
     }
     // 再执行游客访问限制检查
-    await requireAuthIfGuestRestricted(req, res, next);
+    requireAuthIfGuestRestricted(req, res, next);
   });
 }
 

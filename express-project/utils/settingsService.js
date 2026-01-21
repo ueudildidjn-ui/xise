@@ -132,10 +132,15 @@ async function deleteSetting(key) {
  * @returns {Promise<Object>} 键值对对象
  */
 async function getSettings(keys) {
-  const result = {};
+  const promises = keys.map(async (key) => {
+    const value = await getSetting(key);
+    return { key, value };
+  });
   
-  for (const key of keys) {
-    result[key] = await getSetting(key);
+  const results = await Promise.all(promises);
+  const result = {};
+  for (const { key, value } of results) {
+    result[key] = value;
   }
   
   return result;
@@ -147,16 +152,10 @@ async function getSettings(keys) {
  * @returns {Promise<boolean>} 是否全部成功
  */
 async function setSettings(settings) {
-  let allSuccess = true;
-  
-  for (const [key, value] of Object.entries(settings)) {
-    const success = await setSetting(key, value);
-    if (!success) {
-      allSuccess = false;
-    }
-  }
-  
-  return allSuccess;
+  const entries = Object.entries(settings);
+  const promises = entries.map(([key, value]) => setSetting(key, value));
+  const results = await Promise.all(promises);
+  return results.every(success => success);
 }
 
 /**
@@ -164,13 +163,8 @@ async function setSettings(settings) {
  * @returns {Promise<Object>} 所有设置的键值对
  */
 async function getAllSettings() {
-  const result = {};
-  
-  for (const key of Object.keys(DEFAULT_SETTINGS)) {
-    result[key] = await getSetting(key);
-  }
-  
-  return result;
+  const keys = Object.keys(DEFAULT_SETTINGS);
+  return await getSettings(keys);
 }
 
 /**
