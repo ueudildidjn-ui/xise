@@ -112,6 +112,7 @@ async function authenticateToken(req, res, next) {
 
 /**
  * 可选认证中间件 - 如果有token则验证，没有则跳过
+ * 支持普通用户token和管理员token
  */
 async function optionalAuth(req, res, next) {
   try {
@@ -124,6 +125,35 @@ async function optionalAuth(req, res, next) {
 
     // 验证token
     const decoded = verifyToken(token);
+
+    // 检查是否为管理员token
+    if (decoded.type === 'admin') {
+      // 管理员token验证
+      const admin = await prisma.admin.findUnique({
+        where: { id: BigInt(decoded.adminId) },
+        select: { id: true, username: true }
+      });
+
+      if (admin) {
+        // 将管理员信息添加到请求对象
+        req.user = {
+          id: admin.id,
+          username: admin.username,
+          type: 'admin',
+          adminId: decoded.adminId
+        };
+        req.token = token;
+      } else {
+        req.user = null;
+      }
+      return next();
+    }
+
+    // 普通用户token验证
+    if (!decoded.userId) {
+      req.user = null;
+      return next();
+    }
 
     // 检查用户是否存在且活跃
     const user = await prisma.user.findFirst({
