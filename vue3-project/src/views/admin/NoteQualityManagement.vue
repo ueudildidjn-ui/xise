@@ -105,9 +105,15 @@
               <input type="checkbox" :value="post.id" v-model="selectedPosts" />
             </td>
             <td class="cover-col">
-              <img v-if="post.cover" :src="post.cover" alt="" class="post-cover" />
-              <div v-else class="no-cover">
-                <span>{{ post.type === 2 ? '视频' : '图片' }}</span>
+              <div class="cover-wrapper" @click="showMediaGallery(post)" :title="post.type === 2 ? '点击查看视频' : '点击查看图片'">
+                <img v-if="post.cover" :src="post.cover" alt="" class="post-cover" />
+                <div v-else class="no-cover">
+                  <span>{{ post.type === 2 ? '视频' : '图片' }}</span>
+                </div>
+                <div class="cover-overlay">
+                  <span v-if="loadingMedia === post.id">加载中...</span>
+                  <span v-else>{{ post.type === 2 ? '▶ 播放' : '🔍 查看' }}</span>
+                </div>
               </div>
             </td>
             <td class="title-col">
@@ -179,12 +185,30 @@
       <span>{{ pagination.page }} / {{ pagination.pages }}</span>
       <button @click="goToPage(pagination.page + 1)" :disabled="pagination.page >= pagination.pages">下一页</button>
     </div>
+
+    <!-- 图片查看器 -->
+    <ImageViewer 
+      v-model:visible="showImageViewer" 
+      :images="currentImages" 
+      :initial-index="0"
+      @close="closeImageViewer" 
+    />
+
+    <!-- 视频播放器 -->
+    <VideoPlayerModal 
+      v-model:visible="showVideoPlayer" 
+      :video-url="currentVideoUrl"
+      :poster-url="currentPosterUrl" 
+      @close="closeVideoPlayer" 
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import request from '@/api/request.js'
+import ImageViewer from '@/components/ImageViewer.vue'
+import VideoPlayerModal from '@/views/admin/components/VideoPlayerModal.vue'
 
 // 状态
 const loading = ref(false)
@@ -196,6 +220,14 @@ const selectedPosts = ref([])
 const batchQuality = ref('')
 const pagination = ref({ page: 1, limit: 20, total: 0, pages: 0 })
 const qualitySettings = ref([])
+
+// 媒体查看状态
+const loadingMedia = ref(null)
+const showImageViewer = ref(false)
+const showVideoPlayer = ref(false)
+const currentImages = ref([])
+const currentVideoUrl = ref('')
+const currentPosterUrl = ref('')
 
 // 筛选条件
 const filters = ref({
@@ -372,6 +404,46 @@ const goToPage = (page) => {
   if (page >= 1 && page <= pagination.value.pages) {
     loadPosts(page)
   }
+}
+
+// 媒体查看功能
+const showMediaGallery = async (post) => {
+  loadingMedia.value = post.id
+  try {
+    // 获取笔记详情
+    const response = await request.get(`/posts/${post.id}`)
+    if (response.success) {
+      if (post.type === 2) {
+        // 视频笔记
+        currentVideoUrl.value = response.data.video_url || ''
+        currentPosterUrl.value = response.data.images && response.data.images[0] ? response.data.images[0] : ''
+        showVideoPlayer.value = true
+      } else {
+        // 图文笔记
+        const images = response.data.images || []
+        currentImages.value = images
+        showImageViewer.value = true
+      }
+    } else {
+      alert(response.message || '获取媒体信息失败')
+    }
+  } catch (error) {
+    console.error('获取媒体信息失败:', error)
+    alert('获取媒体信息失败')
+  } finally {
+    loadingMedia.value = null
+  }
+}
+
+const closeImageViewer = () => {
+  showImageViewer.value = false
+  currentImages.value = []
+}
+
+const closeVideoPlayer = () => {
+  showVideoPlayer.value = false
+  currentVideoUrl.value = ''
+  currentPosterUrl.value = ''
 }
 
 onMounted(() => {
@@ -631,6 +703,35 @@ th {
 
 .cover-col {
   width: 80px;
+}
+
+.cover-wrapper {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cover-wrapper:hover .cover-overlay {
+  opacity: 1;
+}
+
+.cover-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 
 .post-cover {
