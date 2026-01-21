@@ -30,6 +30,7 @@ const config = require('./config/config');
 const { HTTP_STATUS, RESPONSE_CODES } = require('./constants');
 const prisma = require('./utils/prisma');
 const { initQueueService, closeQueueService, cleanupExpiredBrowsingHistory } = require('./utils/queueService');
+const { loadSettingsFromRedis } = require('./utils/settingsService');
 
 // 加载环境变量
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
@@ -231,6 +232,9 @@ const PORT = config.server.port;
 validatePrismaConnection().then(async (connected) => {
   // 初始化异步队列服务
   await initQueueService();
+  
+  // 从 Redis 加载后台设置
+  await loadSettingsFromRedis();
   
   // 启动定时清理过期浏览历史任务（每小时执行一次）
   if (connected) {

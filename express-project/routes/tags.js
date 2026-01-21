@@ -3,9 +3,10 @@ const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
 const { prisma } = require('../config/config');
 const { getOrSet, CACHE_TTL } = require('../utils/cache');
+const { optionalAuthWithGuestRestriction } = require('../middleware/auth');
 
 // 获取所有标签
-router.get('/', async (req, res) => {
+router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const rows = await getOrSet('tags:all', async () => {
       return await prisma.tag.findMany({
@@ -25,7 +26,7 @@ router.get('/', async (req, res) => {
 });
 
 // 获取热门标签
-router.get('/hot', async (req, res) => {
+router.get('/hot', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
     // 使用缓存获取热门标签（不同 limit 值使用不同的缓存键）

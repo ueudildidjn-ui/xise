@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
 const { prisma } = require('../config/config');
-const { optionalAuth } = require('../middleware/auth');
+const { optionalAuthWithGuestRestriction } = require('../middleware/auth');
 const { protectPostListItem } = require('../utils/paidContentHelper');
 
 // 搜索（通用搜索接口）
-router.get('/', optionalAuth, async (req, res) => {
+router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const keyword = req.query.keyword || '';
     const tag = req.query.tag || '';

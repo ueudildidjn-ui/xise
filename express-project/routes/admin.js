@@ -7,39 +7,77 @@ const { auditComment } = require('../utils/contentAudit')
 const { batchCleanupFiles } = require('../utils/fileCleanup')
 const { getQueueStats, getQueueJobs, getJobDetails, retryJob, cleanQueue, isQueueEnabled, QUEUE_NAMES } = require('../utils/queueService')
 const crypto = require('crypto')
+const settingsService = require('../utils/settingsService')
 
 // ===================== AI审核设置 =====================
-// 分开的AI审核开关：用户名审核和内容审核
-let aiUsernameReviewEnabled = false  // 用户名/昵称是否使用AI审核
-let aiContentReviewEnabled = false   // 内容（评论、简介等）是否使用AI审核
+// 使用 Redis 持久化的设置服务
 
 // 兼容旧接口：获取整体AI审核状态
 router.get('/ai-review-status', adminAuth, (req, res) => {
+  const usernameEnabled = settingsService.isAiUsernameReviewEnabled()
+  const contentEnabled = settingsService.isAiContentReviewEnabled()
   res.json({ 
     code: RESPONSE_CODES.SUCCESS, 
     data: { 
-      enabled: aiUsernameReviewEnabled || aiContentReviewEnabled,
-      username_enabled: aiUsernameReviewEnabled,
-      content_enabled: aiContentReviewEnabled
+      enabled: usernameEnabled || contentEnabled,
+      username_enabled: usernameEnabled,
+      content_enabled: contentEnabled
     }, 
     message: 'success' 
   })
 })
 
 // 兼容旧接口：切换整体AI审核（同时切换用户名和内容审核）
-router.post('/ai-review-toggle', adminAuth, (req, res) => {
+router.post('/ai-review-toggle', adminAuth, async (req, res) => {
   const { enabled } = req.body
   const newValue = Boolean(enabled)
-  aiUsernameReviewEnabled = newValue
-  aiContentReviewEnabled = newValue
+  await settingsService.setAiUsernameReviewEnabled(newValue)
+  await settingsService.setAiContentReviewEnabled(newValue)
   res.json({ code: RESPONSE_CODES.SUCCESS, message: `AI自动审核已${newValue ? '开启' : '关闭'}` })
 })
 
-// 导出函数供其他模块使用
-const isAiUsernameReviewEnabled = () => aiUsernameReviewEnabled
-const isAiContentReviewEnabled = () => aiContentReviewEnabled
+// 导出函数供其他模块使用（使用 settingsService）
+const isAiUsernameReviewEnabled = () => settingsService.isAiUsernameReviewEnabled()
+const isAiContentReviewEnabled = () => settingsService.isAiContentReviewEnabled()
 // 兼容旧的函数名
-const isAiAutoReviewEnabled = () => aiUsernameReviewEnabled || aiContentReviewEnabled
+const isAiAutoReviewEnabled = () => settingsService.isAiAutoReviewEnabled()
+
+// ===================== 游客访问限制设置 =====================
+
+// 获取游客访问限制状态
+router.get('/guest-access-status', adminAuth, (req, res) => {
+  const restricted = settingsService.isGuestAccessRestricted()
+  res.json({ 
+    code: RESPONSE_CODES.SUCCESS, 
+    data: { restricted }, 
+    message: 'success' 
+  })
+})
+
+// 切换游客访问限制
+router.post('/guest-access-toggle', adminAuth, async (req, res) => {
+  const { restricted } = req.body
+  const newValue = Boolean(restricted)
+  await settingsService.setGuestAccessRestricted(newValue)
+  res.json({ code: RESPONSE_CODES.SUCCESS, message: `游客访问限制已${newValue ? '开启' : '关闭'}` })
+})
+
+// ===================== 获取所有后台设置 =====================
+
+// 获取所有设置（用于管理后台显示）
+router.get('/settings', adminAuth, async (req, res) => {
+  try {
+    const allSettings = await settingsService.getAllSettings()
+    res.json({ 
+      code: RESPONSE_CODES.SUCCESS, 
+      data: allSettings, 
+      message: 'success' 
+    })
+  } catch (error) {
+    console.error('获取设置失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '获取设置失败' })
+  }
+})
 
 // ===================== 笔记管理 =====================
 router.get('/posts', adminAuth, async (req, res) => {

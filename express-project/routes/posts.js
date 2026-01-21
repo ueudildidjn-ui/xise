@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
 const { prisma } = require('../config/config');
-const { optionalAuth, authenticateToken } = require('../middleware/auth');
+const { optionalAuth, authenticateToken, optionalAuthWithGuestRestriction } = require('../middleware/auth');
 const NotificationHelper = require('../utils/notificationHelper');
 const { extractMentionedUsers, hasMentions } = require('../utils/mentionParser');
 const { batchCleanupFiles } = require('../utils/fileCleanup');
@@ -125,7 +125,7 @@ async function formatPost(post, currentUserId, prisma, options = {}) {
 }
 
 // 获取推荐笔记列表 - 精准推送算法
-router.get('/recommended', optionalAuth, async (req, res) => {
+router.get('/recommended', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -233,7 +233,7 @@ router.get('/recommended', optionalAuth, async (req, res) => {
 });
 
 // 获取热门笔记列表
-router.get('/hot', optionalAuth, async (req, res) => {
+router.get('/hot', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -328,7 +328,7 @@ router.get('/hot', optionalAuth, async (req, res) => {
 });
 
 // 获取笔记列表
-router.get('/', optionalAuth, async (req, res) => {
+router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -509,7 +509,7 @@ router.get('/', optionalAuth, async (req, res) => {
 
 // 获取笔记评论列表 (兼容路由 /posts/:id/comments)
 // 注意：此路由必须在 /:id 之前定义，否则会被 /:id 捕获
-router.get('/:id/comments', optionalAuth, async (req, res) => {
+router.get('/:id/comments', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const postId = BigInt(req.params.id);
     const page = parseInt(req.query.page) || 1;
@@ -620,7 +620,7 @@ router.get('/:id/comments', optionalAuth, async (req, res) => {
 });
 
 // 获取笔记详情
-router.get('/:id', optionalAuth, async (req, res) => {
+router.get('/:id', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const postId = BigInt(req.params.id);
     const currentUserId = req.user ? BigInt(req.user.id) : null;
