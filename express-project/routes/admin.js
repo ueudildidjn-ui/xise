@@ -4210,6 +4210,14 @@ router.put('/posts/:id/quality', adminAuth, async (req, res) => {
       return res.json({ code: RESPONSE_CODES.SUCCESS, message: '已清除质量标记' })
     }
 
+    // 检查是否已经标记过质量（仅允许标记一次）
+    if (post.quality_level && post.quality_level !== 'none') {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: '该笔记已标记过质量等级，每篇笔记仅可标记一次'
+      })
+    }
+
     // 获取奖励金额
     let rewardAmount = 0
     try {
@@ -4347,6 +4355,7 @@ router.put('/posts-quality/batch', adminAuth, async (req, res) => {
 
     let successCount = 0
     let totalReward = 0
+    let skippedCount = 0
 
     for (const id of ids) {
       try {
@@ -4357,6 +4366,12 @@ router.put('/posts-quality/batch', adminAuth, async (req, res) => {
         })
 
         if (!post) continue
+
+        // 如果不是清除操作，检查是否已经标记过（仅允许标记一次）
+        if (quality_level !== 'none' && post.quality_level && post.quality_level !== 'none') {
+          skippedCount++
+          continue
+        }
 
         // 更新笔记质量
         await prisma.post.update({
@@ -4424,8 +4439,8 @@ router.put('/posts-quality/batch', adminAuth, async (req, res) => {
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
-      message: `成功设置 ${successCount} 篇笔记${totalReward > 0 ? '，共发放 ' + totalReward.toFixed(2) + ' 石榴点奖励' : ''}`,
-      data: { success_count: successCount, total_reward: totalReward }
+      message: `成功设置 ${successCount} 篇笔记${skippedCount > 0 ? '，跳过 ' + skippedCount + ' 篇已标记笔记' : ''}${totalReward > 0 ? '，共发放 ' + totalReward.toFixed(2) + ' 石榴点奖励' : ''}`,
+      data: { success_count: successCount, skipped_count: skippedCount, total_reward: totalReward }
     })
   } catch (error) {
     console.error('批量设置笔记质量失败:', error)

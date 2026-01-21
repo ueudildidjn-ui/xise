@@ -150,19 +150,21 @@
               <span v-else class="no-reward">-</span>
             </td>
             <td class="actions-col">
-              <div class="action-buttons">
+              <div class="action-buttons" v-if="post.quality_level === 'none' || !post.quality_level">
                 <button 
                   v-for="level in ['low', 'medium', 'high']" 
                   :key="level"
                   @click="setQuality(post.id, level)"
                   class="quality-btn"
-                  :class="{ active: post.quality_level === level, [level]: true }"
+                  :class="[level]"
                   :disabled="settingQuality === post.id"
                 >
                   {{ getQualityShortLabel(level) }}
                 </button>
+              </div>
+              <div class="marked-info" v-else>
+                <span class="marked-label">已标记</span>
                 <button 
-                  v-if="post.quality_level !== 'none'"
                   @click="setQuality(post.id, 'none')"
                   class="quality-btn clear"
                   :disabled="settingQuality === post.id"
@@ -850,6 +852,18 @@ th {
 
 .quality-btn.clear { border-color: #f87171; color: #dc2626; }
 .quality-btn.clear:hover { background: #fee2e2; }
+
+.marked-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marked-label {
+  font-size: 12px;
+  color: #10b981;
+  font-weight: 500;
+}
 
 .loading, .empty {
   padding: 40px;
