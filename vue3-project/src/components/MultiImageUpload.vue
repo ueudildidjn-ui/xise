@@ -598,6 +598,15 @@ const uploadAllImages = async () => {
   try {
     // 上传新图片 - 使用逐个上传API（避免413错误），传递水印选项和进度回调
     const files = unuploadedImages.map(item => item.file)
+    
+    // 创建上传索引到图片列表索引的映射（在上传开始前固定下来，避免状态变化导致索引错乱）
+    const uploadIndexToImageIndex = []
+    for (let i = 0; i < imageList.value.length; i++) {
+      const item = imageList.value[i]
+      if (!item.uploaded && item.file) {
+        uploadIndexToImageIndex.push(i)
+      }
+    }
 
     const result = await imageUploadApi.uploadImages(files, { 
       watermark: enableWatermark.value,
@@ -614,19 +623,13 @@ const uploadAllImages = async () => {
       },
       // 单个图片完成回调：实时更新图片状态
       onSingleComplete: ({ index, result: uploadedResult, success }) => {
-        // 找到对应的未上传图片并更新状态
-        let uploadIndex = 0
-        for (let i = 0; i < imageList.value.length; i++) {
-          const item = imageList.value[i]
-          if (!item.uploaded && item.file) {
-            if (uploadIndex === index) {
-              if (success && uploadedResult) {
-                item.uploaded = true
-                item.url = uploadedResult.url
-              }
-              break
-            }
-            uploadIndex++
+        // 使用预先建立的索引映射来找到对应的图片（避免状态变化导致的索引错乱）
+        const imageIndex = uploadIndexToImageIndex[index]
+        if (imageIndex !== undefined && imageList.value[imageIndex]) {
+          const item = imageList.value[imageIndex]
+          if (success && uploadedResult) {
+            item.uploaded = true
+            item.url = uploadedResult.url
           }
         }
       }
