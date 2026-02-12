@@ -52,7 +52,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const targetIds = notifications
       .map(n => n.target_id)
       .filter(id => id !== null && id !== undefined)
-    const uniqueTargetIds = [...new Set(targetIds.map(id => id.toString()))].map(id => BigInt(id))
+    const uniqueTargetIds = [...new Set(targetIds)]
 
     let postCoverMap = {}
     if (uniqueTargetIds.length > 0) {
