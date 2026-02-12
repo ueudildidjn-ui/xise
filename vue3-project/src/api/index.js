@@ -377,54 +377,6 @@ export const uploadApi = {
 // 导出图片上传API（推荐使用）
 export { imageUploadApi, videoUploadApi }
 
-// 通知相关API
-export const notificationApi = {
-  // 获取评论通知
-  getCommentNotifications(params = {}) {
-    return request.get('/notifications/comments', { params })
-  },
-
-  // 获取点赞通知
-  getLikeNotifications(params = {}) {
-    return request.get('/notifications/likes', { params })
-  },
-
-  // 获取关注通知
-  getFollowNotifications(params = {}) {
-    return request.get('/notifications/follows', { params })
-  },
-
-  // 获取收藏通知
-  getCollectionNotifications(params = {}) {
-    return request.get('/notifications/collections', { params })
-  },
-
-  // 标记通知为已读
-  markAsRead(notificationId) {
-    return request.put(`/notifications/${notificationId}/read`)
-  },
-
-  // 标记所有通知为已读
-  markAllAsRead() {
-    return request.put('/notifications/read-all')
-  },
-
-  // 获取未读通知数量
-  getUnreadCount() {
-    return request.get('/notifications/unread-count')
-  },
-
-  // 获取按类型分组的未读通知数量
-  getUnreadCountByType() {
-    return request.get('/notifications/unread-count-by-type')
-  },
-
-  // 删除通知
-  deleteNotification(notificationId) {
-    return request.delete(`/notifications/${notificationId}`)
-  }
-}
-
 // 搜索相关API
 export const searchApi = {
   // 统一搜索接口
@@ -690,37 +642,6 @@ export const adminApi = {
     return request.get(`/admin/follows/${followId}`)
   },
 
-  // ========== 通知管理 ==========
-  // 获取通知列表
-  getNotifications(params = {}) {
-    return request.get('/admin/notifications', { params })
-  },
-
-  // 创建通知
-  createNotification(data) {
-    return request.post('/admin/notifications', data)
-  },
-
-  // 更新通知
-  updateNotification(notificationId, data) {
-    return request.put(`/admin/notifications/${notificationId}`, data)
-  },
-
-  // 删除通知
-  deleteNotification(notificationId) {
-    return request.delete(`/admin/notifications/${notificationId}`)
-  },
-
-  // 批量删除通知
-  batchDeleteNotifications(ids) {
-    return request.delete('/admin/notifications', { data: { ids } })
-  },
-
-  // 获取单个通知详情
-  getNotificationDetail(notificationId) {
-    return request.get(`/admin/notifications/${notificationId}`)
-  },
-
   // ========== 会话管理 ==========
   // 获取会话列表
   getSessions(params = {}) {
@@ -844,42 +765,6 @@ export const adminApi = {
     return request.delete(`/admin/queues/${queueName}`)
   },
 
-  // ========== 系统通知管理 ==========
-  // 获取系统通知列表
-  getSystemNotifications(params = {}) {
-    return request.get('/admin/system-notifications', { params })
-  },
-
-  // 创建系统通知
-  createSystemNotification(data) {
-    return request.post('/admin/system-notifications', data)
-  },
-
-  // 更新系统通知
-  updateSystemNotification(notificationId, data) {
-    return request.put(`/admin/system-notifications/${notificationId}`, data)
-  },
-
-  // 删除系统通知
-  deleteSystemNotification(notificationId) {
-    return request.delete(`/admin/system-notifications/${notificationId}`)
-  },
-
-  // 批量删除系统通知
-  batchDeleteSystemNotifications(ids) {
-    return request.delete('/admin/system-notifications', { data: { ids } })
-  },
-
-  // 获取单个系统通知详情
-  getSystemNotificationDetail(notificationId) {
-    return request.get(`/admin/system-notifications/${notificationId}`)
-  },
-
-  // 切换系统通知启用状态
-  toggleSystemNotificationActive(notificationId) {
-    return request.put(`/admin/system-notifications/${notificationId}/toggle-active`)
-  },
-
   // ========== 用户工具栏管理 ==========
   // 获取工具栏列表
   getUserToolbars(params = {}) {
@@ -992,28 +877,5 @@ export const creatorCenterApi = {
   // 获取质量奖励收益详情
   getQualityRewards(params = {}) {
     return request.get('/creator-center/quality-rewards', { params })
-  }
-}
-
-// 系统通知API（用户端）
-export const systemNotificationApi = {
-  // 获取未确认的系统通知
-  getPendingNotifications() {
-    return request.get('/system-notifications/pending')
-  },
-
-  // 获取未确认系统通知的数量
-  getPendingCount() {
-    return request.get('/system-notifications/pending-count')
-  },
-
-  // 确认系统通知
-  confirmNotification(notificationId) {
-    return request.post(`/system-notifications/${notificationId}/confirm`)
-  },
-
-  // 获取系统通知历史
-  getHistory(params = {}) {
-    return request.get('/system-notifications/history', { params })
   }
 }

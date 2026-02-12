@@ -2,59 +2,24 @@
 import SvgIcon from '@/components/SvgIcon.vue'
 import DropdownMenu from '@/components/menu/DropdownMenu.vue'
 import CommonMenu from '@/components/menu/CommonMenu.vue'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouteUtils } from '@/composables/useRouteUtils'
 import { useUserStore } from '@/stores/user.js'
-import { useNotificationStore } from '@/stores/notification'
 import { useAuthStore } from '@/stores/auth'
 
 const { route, handleExploreClick } = useRouteUtils()
 const userStore = useUserStore()
-const notificationStore = useNotificationStore()
 const authStore = useAuthStore()
 
 const defaultAvatar = new URL('@/assets/imgs/avatar.png', import.meta.url).href
-
-// 从store获取未读通知数量（包含系统消息）
-const unreadCount = computed(() => {
-  const regularCount = notificationStore.unreadCount || 0
-  const systemCount = notificationStore.unreadCountByType?.system || 0
-  return regularCount + systemCount
-})
 
 // 菜单项配置
 const menuItems = ref([
   { label: '发现', icon: 'home', path: '/explore' },
   { label: '发布', icon: 'publish', path: '/publish' },
-  { label: '通知', icon: 'notification', path: '/notification' },
   { label: '我', icon: 'avatar', path: '/user' },
   { label: '更多', icon: 'menu', path: '' },
 ]);
-
-
-
-
-
-// 监听登录状态变化
-watch(() => userStore.isLoggedIn, (newValue) => {
-  if (newValue) {
-    notificationStore.fetchUnreadCount()
-    console.log('登录状态已改变')
-  } else {
-    console.log('未登录')
-    notificationStore.clearUnreadCount()
-  }
-}, { immediate: true })
-
-// 监听路由变化，当从通知页面离开时刷新未读数量
-watch(() => route.path, (newPath, oldPath) => {
-  if (oldPath === '/notification' && newPath !== '/notification' && userStore.isLoggedIn) {
-    // 延迟一下再获取，确保通知已被标记为已读
-    setTimeout(() => {
-      notificationStore.fetchUnreadCount()
-    }, 500)
-  }
-})
 
 // 登录按钮点击处理
 const handleLoginClick = () => {
@@ -68,9 +33,6 @@ function handleAvatarError(event) {
 // 初始化用户信息
 onMounted(() => {
   userStore.initUserInfo()
-  if (userStore.isLoggedIn) {
-    notificationStore.fetchUnreadCount()
-  }
 })
 </script>
 
@@ -89,30 +51,25 @@ onMounted(() => {
         </div>
       </li>
 
-      <li v-for="item in menuItems.slice(1, 3)" :key="item.label"
-        :class="{ 'notification-item': item.icon === 'notification' }">
-        <RouterLink :to="item.path" class="sidebar-link"
-          :class="{ 'active-link': route.path === item.path }">
-          <span v-if="item.icon" class="sidebar-icon">
-            <SvgIcon :name="item.icon" width="24px" height="24px" :class="{ active: route.path === item.path }" />
+      <li>
+        <RouterLink :to="menuItems[1].path" class="sidebar-link"
+          :class="{ 'active-link': route.path === menuItems[1].path }">
+          <span class="sidebar-icon">
+            <SvgIcon :name="menuItems[1].icon" width="24px" height="24px" :class="{ active: route.path === menuItems[1].path }" />
           </span>
-          <span v-else-if="item.emoji" class="sidebar-icon">{{ item.emoji }}</span>
-          <span class="sidebar-label">{{ item.label }}</span>
-
-          <div v-if="item.icon === 'notification' && unreadCount > 0" class="count">{{ unreadCount > 99 ? '···' :
-            unreadCount }}</div>
+          <span class="sidebar-label">{{ menuItems[1].label }}</span>
         </RouterLink>
       </li>
 
 
       <li v-if="userStore.isLoggedIn">
-        <RouterLink :to="menuItems[3].path" class="sidebar-link"
-          :class="{ 'active-link': route.path === menuItems[3].path }">
+        <RouterLink :to="menuItems[2].path" class="sidebar-link"
+          :class="{ 'active-link': route.path === menuItems[2].path }">
           <span class="sidebar-icon">
             <img :src="userStore.userInfo?.avatar || defaultAvatar" :alt="userStore.userInfo?.nickname || '用户头像'"
               class="avatar-icon" @error="handleAvatarError" />
           </span>
-          <span class="sidebar-label">{{ menuItems[3].label }}</span>
+          <span class="sidebar-label">{{ menuItems[2].label }}</span>
         </RouterLink>
       </li>
 
@@ -130,9 +87,9 @@ onMounted(() => {
           <li class="sidebar-footer-item">
             <div class="sidebar-link">
               <span class="sidebar-icon">
-                <SvgIcon :name="menuItems[4].icon" width="24px" height="24px" />
+                <SvgIcon :name="menuItems[3].icon" width="24px" height="24px" />
               </span>
-              <span class="sidebar-label">{{ menuItems[4].label }}</span>
+              <span class="sidebar-label">{{ menuItems[3].label }}</span>
             </div>
           </li>
         </template>
@@ -267,27 +224,6 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 700;
   cursor: pointer;
-}
-
-/* 通知badge样式 */
-.notification-item {
-  position: relative;
-}
-
-.notification-item .count {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background-color: var(--danger-color);
-  color: white;
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  top: 15px;
-  left: 100px;
 }
 
 /* 移动端隐藏侧边栏 */
