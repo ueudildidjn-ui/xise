@@ -434,7 +434,7 @@ model SystemNotificationConfirmation {
   notification SystemNotification @relation(fields: [notification_id], references: [id], onDelete: Cascade)
   user         User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@unique([notification_id, user_id], name: "uk_notification_user")
+  @@unique([notification_id, user_id], map: "uk_notification_user")
   @@index([notification_id], name: "idx_confirmation_notification")
   @@index([user_id], name: "idx_confirmation_user")
   @@map("system_notification_confirmations")
