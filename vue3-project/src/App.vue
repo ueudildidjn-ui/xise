@@ -17,7 +17,6 @@ import KeyboardShortcutsModal from '@/components/modals/KeyboardShortcutsModal.v
 import AccountSecurityModal from '@/components/modals/AccountSecurityModal.vue'
 import VerifiedModal from '@/components/modals/VerifiedModal.vue'
 import BalanceModal from '@/components/modals/BalanceModal.vue'
-import SystemNotificationModal from '@/components/modals/SystemNotificationModal.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useConfirm } from '@/views/admin/composables/useConfirm'
 
@@ -192,7 +191,6 @@ onMounted(() => {
       @close="accountSecurityStore.closeAccountSecurityModal" />
     <VerifiedModal v-if="verifiedStore.showVerifiedModal" @close="verifiedStore.closeVerifiedModal" />
     <BalanceModal v-model:visible="balanceStore.showBalanceModal" @close="balanceStore.closeBalanceModal" />
-    <SystemNotificationModal />
     <ConfirmDialog v-model:visible="confirmState.visible" :title="confirmState.title" :message="confirmState.message"
       :type="confirmState.type" :confirm-text="confirmState.confirmText" :cancel-text="confirmState.cancelText"
       :show-cancel="confirmState.showCancel" @confirm="handleConfirm" @cancel="handleCancel" />

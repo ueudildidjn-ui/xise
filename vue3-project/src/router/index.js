@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import layout from '@/views/layout/index.vue'
 import explore from '@/views/explore/index.vue'
 import publish from '@/views/publish/index.vue'
-import notification from '@/views/notification/index.vue'
 import user from '@/views/user/index.vue'
 import userProfile from '@/views/user/UserProfile.vue'
 import FollowList from '@/views/user/FollowList.vue'
@@ -31,14 +30,12 @@ import TagManagement from '@/views/admin/TagManagement.vue'
 import LikeManagement from '@/views/admin/LikeManagement.vue'
 import CollectionManagement from '@/views/admin/CollectionManagement.vue'
 import FollowManagement from '@/views/admin/FollowManagement.vue'
-import NotificationManagement from '@/views/admin/NotificationManagement.vue'
 import SessionManagement from '@/views/admin/SessionManagement.vue'
 import AdminManagement from '@/views/admin/AdminManagement.vue'
 import AuditManagement from '@/views/admin/AuditManagement.vue'
 import ContentReviewManagement from '@/views/admin/ContentReviewManagement.vue'
 import QueueManagement from '@/views/admin/QueueManagement.vue'
 import BannedWordsManagement from '@/views/admin/BannedWordsManagement.vue'
-import SystemNotificationManagement from '@/views/admin/SystemNotificationManagement.vue'
 import NoteQualityManagement from '@/views/admin/NoteQualityManagement.vue'
 import SystemSettingsManagement from '@/views/admin/SystemSettingsManagement.vue'
 
@@ -97,11 +94,6 @@ const router = createRouter({
           path: 'publish',
           name: 'publish',
           component: publish,
-        },
-        {
-          path: 'notification',
-          name: 'notification',
-          component: notification,
         },
         {
           path: 'user',
@@ -266,11 +258,6 @@ const router = createRouter({
           component: FollowManagement
         },
         {
-          path: 'notifications',
-          name: 'admin_notifications',
-          component: NotificationManagement
-        },
-        {
           path: 'sessions',
           name: 'admin_sessions',
           component: SessionManagement
@@ -299,11 +286,6 @@ const router = createRouter({
           path: 'banned-words',
           name: 'admin_banned_words',
           component: BannedWordsManagement
-        },
-        {
-          path: 'system-notifications',
-          name: 'admin_system_notifications',
-          component: SystemNotificationManagement
         },
         {
           path: 'user-toolbar',

@@ -3,8 +3,7 @@
         <div class="footer-container">
             <div class="footer-list">
                 <ul>
-                    <li v-for="item in footerList" :key="item.icon"
-                        :class="{ 'notification-item': item.icon === 'notification' }">
+                    <li v-for="item in footerList" :key="item.icon">
 
                         <template v-if="item.label === 'explore'">
                             <a href="#" @click="handleExploreClick" class="footer-link">
@@ -18,9 +17,6 @@
                                     width="24px" height="24px" />
                             </RouterLink>
                         </template>
-                        <div v-if="item.icon === 'notification' && unreadCount > 0" class="count">{{ unreadCount > 99 ?
-                            '···' : unreadCount }}
-                        </div>
                     </li>
                 </ul>
             </div>
@@ -30,54 +26,17 @@
 
 <script setup>
 import SvgIcon from '@/components/SvgIcon.vue'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref } from 'vue'
 import { useRouteUtils } from '@/composables/useRouteUtils'
-import { useUserStore } from '@/stores/user'
-import { useNotificationStore } from '@/stores/notification'
 
 const { route, handleExploreClick } = useRouteUtils()
-const userStore = useUserStore()
-const notificationStore = useNotificationStore()
-
-// 从store获取未读通知数量（包含系统消息）
-const unreadCount = computed(() => {
-  const regularCount = notificationStore.unreadCount || 0
-  const systemCount = notificationStore.unreadCountByType?.system || 0
-  return regularCount + systemCount
-})
 
 // 底部导航配置
 const footerList = ref([
     { label: 'explore', icon: 'home', path: '/explore' },
     { label: 'publish', icon: 'publish', path: '/publish' },
-    { label: 'notification', icon: 'notification', path: '/notification' },
     { label: 'user', icon: 'user', path: '/user' },
 ])
-
-// 监听登录状态变化
-watch(() => userStore.isLoggedIn, (newValue) => {
-    if (newValue) {
-        notificationStore.fetchUnreadCount()
-    } else {
-        notificationStore.clearUnreadCount()
-    }
-}, { immediate: true })
-
-// 监听路由变化，当从通知页面离开时刷新未读数量
-watch(() => route.path, (newPath, oldPath) => {
-    if (oldPath === '/notification' && newPath !== '/notification' && userStore.isLoggedIn) {
-        // 延迟一下再获取，确保通知已被标记为已读
-        setTimeout(() => {
-            notificationStore.fetchUnreadCount()
-        }, 500)
-    }
-})
-
-onMounted(() => {
-    if (userStore.isLoggedIn) {
-        notificationStore.fetchUnreadCount()
-    }
-})
 </script>
 
 <style scoped>
@@ -172,21 +131,5 @@ onMounted(() => {
 
 .active {
     color: var(--text-color-primary);
-}
-
-.notification-item .count {
-    position: absolute;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background-color: var(--danger-color);
-    color: white;
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    top: 3px;
-    right: 25%;
 }
 </style>

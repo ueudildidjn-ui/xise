@@ -105,15 +105,6 @@ export const useUserStore = defineStore('user', () => {
       localStorage.removeItem('token')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('userInfo')
-
-      // 重置未读通知数量
-      try {
-        const { useNotificationStore } = await import('./notification')
-        const notificationStore = useNotificationStore()
-        notificationStore.resetUnreadCount()
-      } catch (error) {
-        console.error('重置未读通知数量失败:', error)
-      }
     }
   }
 
