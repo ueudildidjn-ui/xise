@@ -4181,7 +4181,10 @@ router.get('/system-notifications', adminAuth, async (req, res) => {
     const page = parseInt(req.query.page) || 1
     const limit = parseInt(req.query.limit) || 20
     const skip = (page - 1) * limit
-    const { type, is_active, title, sortField = 'created_at', sortOrder = 'desc' } = req.query
+    const { type, is_active, title } = req.query
+    const allowedSortFields = ['id', 'title', 'type', 'is_active', 'start_time', 'end_time', 'created_at', 'updated_at']
+    const sortField = allowedSortFields.includes(req.query.sortField) ? req.query.sortField : 'created_at'
+    const sortOrder = req.query.sortOrder === 'asc' ? 'asc' : 'desc'
 
     const where = {}
     if (type) where.type = type

@@ -16,6 +16,8 @@ const notificationStore = useNotificationStore()
 const userStore = useUserStore()
 const router = useRouter()
 
+const POLL_INTERVAL_MS = 60000
+
 let pollTimer = null
 
 const handleClick = () => {
@@ -29,7 +31,7 @@ const startPolling = () => {
     if (userStore.isLoggedIn) {
       notificationStore.fetchUnreadCount()
     }
-  }, 60000) // 每分钟轮询一次
+  }, POLL_INTERVAL_MS)
 }
 
 onMounted(() => {

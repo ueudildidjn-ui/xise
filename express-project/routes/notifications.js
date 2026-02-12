@@ -18,7 +18,10 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const where = { user_id: userId }
     if (type !== undefined && type !== '') {
-      where.type = parseInt(type)
+      const parsedType = parseInt(type)
+      if (!isNaN(parsedType)) {
+        where.type = parsedType
+      }
     }
     if (is_read !== undefined && is_read !== '') {
       where.is_read = is_read === 'true' || is_read === '1'
