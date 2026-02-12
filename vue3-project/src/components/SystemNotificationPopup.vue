@@ -1,10 +1,11 @@
 <template>
   <Teleport to="body">
-    <div v-if="currentNotification" class="sys-popup-overlay" @click.self="handleConfirm" @keydown.esc="handleConfirm">
+    <div v-if="currentNotification" class="sys-popup-overlay" tabindex="-1" ref="overlayRef"
+      @click.self="handleClose" @keydown.esc="handleClose">
       <div class="sys-popup-card">
         <div class="sys-popup-header">
           <span class="sys-popup-type">{{ currentNotification.type === 'activity' ? '活动通知' : '系统通知' }}</span>
-          <button class="sys-popup-close" aria-label="关闭" @click="handleConfirm">&times;</button>
+          <button class="sys-popup-close" aria-label="关闭" @click="handleClose">&times;</button>
         </div>
         <div class="sys-popup-title">{{ currentNotification.title }}</div>
         <div class="sys-popup-content">{{ currentNotification.content }}</div>
@@ -12,7 +13,7 @@
           <img :src="currentNotification.image_url" alt="" />
         </div>
         <div class="sys-popup-footer">
-          <button class="sys-popup-btn" @click="handleConfirm">我知道了</button>
+          <button class="sys-popup-btn" @click="handleClose">我知道了</button>
         </div>
       </div>
     </div>
@@ -20,35 +21,50 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { useNotificationStore } from '@/stores/notification'
 import { useUserStore } from '@/stores/user'
+import { notificationApi } from '@/api'
 
 const notificationStore = useNotificationStore()
 const userStore = useUserStore()
 const currentNotification = ref(null)
+const overlayRef = ref(null)
 
-const showNext = () => {
+const showNext = async () => {
   if (notificationStore.popupNotifications.length > 0) {
     currentNotification.value = notificationStore.popupNotifications[0]
+    await nextTick()
+    overlayRef.value?.focus()
   } else {
     currentNotification.value = null
   }
 }
 
-const handleConfirm = async () => {
-  if (currentNotification.value) {
-    await notificationStore.confirmSystemNotification(currentNotification.value.id)
-    currentNotification.value = null
-    // Show next popup if any
-    showNext()
+const handleClose = async () => {
+  if (!currentNotification.value) return
+  const id = currentNotification.value.id
+  // Immediately clear current to close popup
+  currentNotification.value = null
+
+  try {
+    // Call confirm API directly to ensure it works regardless of store state
+    await notificationApi.confirmSystemNotification(id)
+    // Remove from popup list
+    notificationStore.popupNotifications = notificationStore.popupNotifications.filter(n => n.id !== id)
+    if (notificationStore.systemUnreadCount > 0) notificationStore.systemUnreadCount--
+  } catch (error) {
+    console.error('确认系统通知失败:', error)
   }
+
+  // Show next popup if any
+  await showNext()
 }
 
 const init = async () => {
   if (userStore.isLoggedIn) {
     await notificationStore.fetchPopupNotifications()
-    showNext()
+    await showNext()
   }
 }
 

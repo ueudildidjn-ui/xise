@@ -15,7 +15,9 @@
                             <RouterLink :to="item.path" class="footer-link notification-link">
                                 <SvgIcon :name="item.icon" class="icon" :class="{ active: route.path === item.path }"
                                     width="24px" height="24px" />
-                                <span v-if="notificationStore.hasUnread" class="footer-unread-dot"></span>
+                                <span v-if="notificationStore.totalUnreadCount > 0" class="footer-unread-badge">
+                                    {{ notificationStore.totalUnreadCount > 99 ? '99+' : notificationStore.totalUnreadCount }}
+                                </span>
                             </RouterLink>
                         </template>
                         <template v-else>
@@ -147,13 +149,20 @@ const footerList = ref([
     position: relative;
 }
 
-.footer-unread-dot {
+.footer-unread-badge {
     position: absolute;
-    top: 8px;
-    right: -4px;
-    width: 6px;
-    height: 6px;
+    top: 4px;
+    right: -8px;
+    min-width: 16px;
+    height: 16px;
     background-color: #ff4757;
-    border-radius: 50%;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-sizing: border-box;
 }
 </style>
