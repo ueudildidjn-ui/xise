@@ -111,17 +111,20 @@ export const useNotificationStore = defineStore('notification', () => {
 
   // 确认系统通知
   const confirmSystemNotification = async (notificationId) => {
+    // 立即从弹窗列表中移除（防止重复弹窗）
+    popupNotifications.value = popupNotifications.value.filter(n => n.id !== notificationId)
+    // 立即更新系统通知列表的已读状态
+    const index = systemNotifications.value.findIndex(n => n.id === notificationId)
+    if (index !== -1) {
+      systemNotifications.value[index].is_read = true
+    }
+    if (systemUnreadCount.value > 0) systemUnreadCount.value--
+
     try {
       const response = await notificationApi.confirmSystemNotification(notificationId)
       if (response.success) {
-        // 从弹窗列表中移除
-        popupNotifications.value = popupNotifications.value.filter(n => n.id !== notificationId)
-        // 更新系统通知列表的已读状态
-        const index = systemNotifications.value.findIndex(n => n.id === notificationId)
-        if (index !== -1) {
-          systemNotifications.value[index].is_read = true
-        }
-        if (systemUnreadCount.value > 0) systemUnreadCount.value--
+        // 从服务器刷新准确的未读数量
+        await fetchUnreadCount()
       }
       return response
     } catch (error) {

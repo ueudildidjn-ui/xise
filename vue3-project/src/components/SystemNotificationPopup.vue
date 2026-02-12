@@ -31,6 +31,7 @@ const notificationStore = useNotificationStore()
 const userStore = useUserStore()
 const currentNotification = ref(null)
 const overlayRef = ref(null)
+const processing = ref(false)
 
 const showNext = async () => {
   // Don't show popups on admin pages
@@ -46,7 +47,8 @@ const showNext = async () => {
 }
 
 const handleClose = async () => {
-  if (!currentNotification.value) return
+  if (!currentNotification.value || processing.value) return
+  processing.value = true
   const id = currentNotification.value.id
   // Immediately clear current to close popup
   currentNotification.value = null
@@ -54,6 +56,7 @@ const handleClose = async () => {
   // Confirm via store which handles API call and state updates
   await notificationStore.confirmSystemNotification(id)
 
+  processing.value = false
   // Show next popup if any
   await showNext()
 }
