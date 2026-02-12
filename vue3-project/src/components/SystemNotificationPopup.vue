@@ -53,12 +53,14 @@ const handleClose = async () => {
   // Immediately clear current to close popup
   currentNotification.value = null
 
-  // Confirm via store which handles API call and state updates
-  await notificationStore.confirmSystemNotification(id)
-
-  processing.value = false
-  // Show next popup if any
-  await showNext()
+  try {
+    // Confirm via store which handles API call and state updates
+    await notificationStore.confirmSystemNotification(id)
+  } finally {
+    processing.value = false
+    // Show next popup if any
+    await showNext()
+  }
 }
 
 const init = async () => {
