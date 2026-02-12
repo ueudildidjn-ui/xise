@@ -37,6 +37,9 @@ router.get('/', authenticateToken, async (req, res) => {
         include: {
           sender: {
             select: { id: true, nickname: true, avatar: true, user_id: true }
+          },
+          comment: {
+            select: { id: true, content: true, post_id: true }
           }
         },
         orderBy: { created_at: 'desc' },
@@ -45,10 +48,44 @@ router.get('/', authenticateToken, async (req, res) => {
       })
     ])
 
+    // 获取关联笔记的封面图
+    const targetIds = notifications
+      .map(n => n.target_id)
+      .filter(id => id !== null && id !== undefined)
+    const uniqueTargetIds = [...new Set(targetIds.map(id => id.toString()))].map(id => BigInt(id))
+
+    let postCoverMap = {}
+    if (uniqueTargetIds.length > 0) {
+      const posts = await prisma.post.findMany({
+        where: { id: { in: uniqueTargetIds } },
+        select: {
+          id: true,
+          title: true,
+          images: { select: { image_url: true }, take: 1 }
+        }
+      })
+      posts.forEach(p => {
+        postCoverMap[p.id.toString()] = {
+          title: p.title,
+          cover: p.images[0]?.image_url || null
+        }
+      })
+    }
+
+    // 附加笔记封面到通知数据
+    const enrichedNotifications = notifications.map(n => {
+      const postInfo = n.target_id ? postCoverMap[n.target_id.toString()] : null
+      return {
+        ...n,
+        post_cover: postInfo?.cover || null,
+        post_title: postInfo?.title || null
+      }
+    })
+
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       data: {
-        data: notifications,
+        data: enrichedNotifications,
         pagination: { page, limit, total, pages: Math.ceil(total / limit) }
       },
       message: 'success'

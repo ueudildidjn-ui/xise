@@ -101,18 +101,22 @@
       </div>
 
       <div class="notification-list" v-if="currentInteractionList.length > 0">
-        <div v-for="item in currentInteractionList" :key="'int-' + item.id" class="notification-item"
-          :class="{ unread: !item.is_read }" @click="handleInteractionClick(item)">
+        <div v-for="item in currentInteractionList" :key="'int-' + item.id" class="notification-item interaction-item"
+          :class="{ unread: !item.is_read }">
           <div class="notification-dot" v-if="!item.is_read"></div>
           <div class="notification-avatar" v-if="item.sender" @click.stop="goToUserProfile(item.sender)">
             <img :src="item.sender.avatar || defaultAvatar" :alt="item.sender.nickname" @error="handleAvatarError" />
           </div>
-          <div class="notification-content" @click.stop="handleInteractionClick(item)">
+          <div class="notification-body" @click.stop="handleInteractionClick(item)">
             <div class="notification-title">
               <span class="sender-name" @click.stop="goToUserProfile(item.sender)">{{ item.sender?.nickname }}</span>
               {{ item.title }}
             </div>
+            <div class="notification-comment-text" v-if="item.comment && item.comment.content">{{ item.comment.content }}</div>
             <div class="notification-time">{{ formatTime(item.created_at) }}</div>
+          </div>
+          <div class="notification-cover" v-if="item.post_cover && item.target_id" @click.stop="goToPost(item)">
+            <img :src="item.post_cover" alt="" @error="handleCoverError" />
           </div>
         </div>
       </div>
@@ -122,7 +126,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
 import { notificationApi } from '@/api'
@@ -226,9 +230,20 @@ const handleAvatarError = (e) => {
   e.target.src = defaultAvatar
 }
 
+const handleCoverError = (e) => {
+  e.target.style.display = 'none'
+}
+
+// 跳转到笔记详情
+const goToPost = (item) => {
+  if (!item.target_id) return
+  const query = { id: item.target_id.toString() }
+  if (item.comment_id) query.targetCommentId = item.comment_id.toString()
+  router.push({ name: 'post_detail', query })
+}
+
 // 加载数据
 const loadMainData = async () => {
-  // 加载系统通知（type=system）和活动通知（type=activity）
   const [sysRes, actRes] = await Promise.all([
     notificationApi.getSystemNotifications({ type: 'system', limit: 50 }),
     notificationApi.getSystemNotifications({ type: 'activity', limit: 50 })
@@ -239,11 +254,9 @@ const loadMainData = async () => {
   }
   if (actRes.success && actRes.data) {
     activityNotifications.value = actRes.data.data || []
-    // 计算活动通知未读数
     activityUnreadCount.value = activityNotifications.value.filter(n => !n.is_read).length
   }
 
-  // 加载互动消息全部
   await loadInteractionNotifications('all')
 }
 
@@ -263,7 +276,7 @@ const loadInteractionNotifications = async (tab) => {
       typeParam = `${TYPES.MENTION},${TYPES.MENTION_COMMENT}`
       break
     default:
-      typeParam = '' // all
+      typeParam = ''
   }
 
   const params = { limit: 50 }
@@ -370,20 +383,28 @@ onMounted(() => {
 
 <style scoped>
 .messages-page {
-  max-width: 600px;
+  width: 100%;
+  max-width: 700px;
   margin: 0 auto;
-  padding: 20px 16px;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+@media (min-width: 960px) {
+  .messages-page {
+    padding: 20px 24px;
+  }
 }
 
 .messages-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .messages-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-color-primary);
   margin: 0;
@@ -424,7 +445,7 @@ onMounted(() => {
 .message-block {
   display: flex;
   align-items: center;
-  padding: 14px 12px;
+  padding: 12px;
   border-radius: 10px;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -435,8 +456,8 @@ onMounted(() => {
 }
 
 .block-icon {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -497,20 +518,26 @@ onMounted(() => {
 .interaction-tabs {
   display: flex;
   gap: 0;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   border-bottom: 1px solid var(--border-color);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.interaction-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .interaction-tab {
-  padding: 10px 16px;
+  padding: 8px 14px;
   font-size: 14px;
   color: var(--text-color-secondary);
   cursor: pointer;
   white-space: nowrap;
   border-bottom: 2px solid transparent;
   transition: color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
 }
 
 .interaction-tab.active {
@@ -533,12 +560,13 @@ onMounted(() => {
 .notification-item {
   display: flex;
   align-items: flex-start;
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
   position: relative;
   background: var(--bg-color-primary);
   transition: background 0.15s ease;
+  box-sizing: border-box;
 }
 
 .notification-item:hover {
@@ -580,10 +608,17 @@ onMounted(() => {
   min-width: 0;
 }
 
+.notification-body {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
 .notification-title {
   font-size: 14px;
   color: var(--text-color-primary);
   line-height: 1.4;
+  word-break: break-word;
 }
 
 .sender-name {
@@ -593,6 +628,15 @@ onMounted(() => {
 
 .sender-name:hover {
   text-decoration: underline;
+}
+
+.notification-comment-text {
+  font-size: 13px;
+  color: var(--text-color-secondary);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .notification-text {
@@ -610,10 +654,70 @@ onMounted(() => {
   margin-top: 4px;
 }
 
+/* 笔记封面缩略图 */
+.notification-cover {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  margin-left: 10px;
+  cursor: pointer;
+}
+
+.notification-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .empty-state {
   text-align: center;
   padding: 40px 0;
   color: var(--text-color-tertiary);
   font-size: 14px;
+}
+
+/* 移动端适配 */
+@media (max-width: 480px) {
+  .messages-page {
+    padding: 12px;
+  }
+
+  .messages-title {
+    font-size: 17px;
+  }
+
+  .message-block {
+    padding: 10px;
+  }
+
+  .block-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .block-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .block-title {
+    font-size: 14px;
+  }
+
+  .notification-item {
+    padding: 10px;
+  }
+
+  .notification-cover {
+    width: 44px;
+    height: 44px;
+  }
+
+  .interaction-tab {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
 }
 </style>
