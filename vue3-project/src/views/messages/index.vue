@@ -410,11 +410,15 @@ const handleInteractionClick = async (item) => {
 // 系统/活动通知点击
 const handleSystemNotificationClick = async (item) => {
   if (!item.is_read) {
-    const response = await notificationStore.confirmSystemNotification(item.id)
-    if (response.success) {
-      item.is_read = true
-      // 更新活动通知未读数
-      activityUnreadCount.value = activityNotifications.value.filter(n => !n.is_read).length
+    try {
+      const response = await notificationStore.confirmSystemNotification(item.id)
+      if (response.success) {
+        item.is_read = true
+        // 更新活动通知未读数
+        activityUnreadCount.value = activityNotifications.value.filter(n => !n.is_read).length
+      }
+    } catch (error) {
+      console.error('确认通知失败:', error)
     }
   }
 }
@@ -426,10 +430,12 @@ const handleMarkAllRead = async () => {
 
   const unreadSys = [...systemNotifications.value, ...activityNotifications.value].filter(n => !n.is_read)
   if (unreadSys.length > 0) {
-    await Promise.all(unreadSys.map(n => notificationStore.confirmSystemNotification(n.id)))
-    unreadSys.forEach(n => { n.is_read = true })
+    const results = await Promise.all(unreadSys.map(n => notificationStore.confirmSystemNotification(n.id)))
+    results.forEach((res, i) => {
+      if (res.success) unreadSys[i].is_read = true
+    })
   }
-  activityUnreadCount.value = 0
+  activityUnreadCount.value = activityNotifications.value.filter(n => !n.is_read).length
 }
 
 onMounted(() => {
