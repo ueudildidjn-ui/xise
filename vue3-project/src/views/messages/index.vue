@@ -67,10 +67,17 @@
           <div class="card-header">
             <div class="card-title-row">
               <div class="notification-dot" v-if="!item.is_read"></div>
-              <div class="card-title">{{ item.title }}</div>
+              <span class="card-type-label system-label">系统通知</span>
+              <div class="card-time">{{ formatTime(item.created_at) }}</div>
             </div>
-            <div class="card-time">{{ formatTime(item.created_at) }}</div>
+            <div class="card-more" @click.stop="toggleMenu(item.id)">
+              <SvgIcon name="more" width="18" height="18" />
+              <div class="card-menu" v-if="openMenuId === item.id">
+                <div class="card-menu-item" @click.stop="handleDeleteSystemNotification(item, 'system')">删除消息</div>
+              </div>
+            </div>
           </div>
+          <div class="card-title">{{ item.title }}</div>
           <div class="card-body">
             <template v-if="item.content && item.content.length > CONTENT_MAX_LENGTH && !expandedItems[item.id]">
               <span>{{ item.content.slice(0, CONTENT_MAX_LENGTH) }}...</span>
@@ -94,10 +101,17 @@
           <div class="card-header">
             <div class="card-title-row">
               <div class="notification-dot" v-if="!item.is_read"></div>
-              <div class="card-title">{{ item.title }}</div>
+              <span class="card-type-label activity-label">活动通知</span>
+              <div class="card-time">{{ formatTime(item.created_at) }}</div>
             </div>
-            <div class="card-time">{{ formatTime(item.created_at) }}</div>
+            <div class="card-more" @click.stop="toggleMenu(item.id)">
+              <SvgIcon name="more" width="18" height="18" />
+              <div class="card-menu" v-if="openMenuId === item.id">
+                <div class="card-menu-item" @click.stop="handleDeleteSystemNotification(item, 'activity')">删除消息</div>
+              </div>
+            </div>
           </div>
+          <div class="card-title">{{ item.title }}</div>
           <div class="card-body">
             <template v-if="item.content && item.content.length > CONTENT_MAX_LENGTH && !expandedItems[item.id]">
               <span>{{ item.content.slice(0, CONTENT_MAX_LENGTH) }}...</span>
@@ -148,7 +162,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
 import { notificationApi } from '@/api'
@@ -223,6 +237,9 @@ const activityUnreadCount = ref(0)
 // 展开状态跟踪
 const expandedItems = ref({})
 
+// 三点菜单状态
+const openMenuId = ref(null)
+
 // 内容截断阈值
 const CONTENT_MAX_LENGTH = 100
 
@@ -265,6 +282,34 @@ const handleCoverError = (e) => {
 // 切换展开/收起
 const toggleExpand = (item) => {
   expandedItems.value[item.id] = !expandedItems.value[item.id]
+}
+
+// 切换三点菜单
+const toggleMenu = (itemId) => {
+  openMenuId.value = openMenuId.value === itemId ? null : itemId
+}
+
+// 关闭菜单（点击外部）
+const closeMenu = () => {
+  openMenuId.value = null
+}
+
+// 删除系统/活动通知
+const handleDeleteSystemNotification = async (item, type) => {
+  openMenuId.value = null
+  try {
+    // 确认通知以标记为已读/已处理
+    await notificationStore.confirmSystemNotification(item.id)
+    // 从本地列表中移除
+    if (type === 'system') {
+      systemNotifications.value = systemNotifications.value.filter(n => n.id !== item.id)
+    } else {
+      activityNotifications.value = activityNotifications.value.filter(n => n.id !== item.id)
+      activityUnreadCount.value = activityNotifications.value.filter(n => !n.is_read).length
+    }
+  } catch (error) {
+    console.error('删除通知失败:', error)
+  }
 }
 
 // 获取通知关联的帖子ID（优先target_id，然后comment.post_id）
@@ -441,6 +486,11 @@ const handleMarkAllRead = async () => {
 onMounted(() => {
   loadMainData()
   notificationStore.fetchUnreadCount()
+  document.addEventListener('click', closeMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeMenu)
 })
 </script>
 
@@ -617,18 +667,81 @@ onMounted(() => {
   min-width: 0;
 }
 
+.card-type-label {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.system-label {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.activity-label {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
 .card-title {
   font-size: 15px;
   font-weight: 500;
   color: var(--text-color-primary);
   line-height: 1.4;
+  margin-bottom: 4px;
 }
 
 .card-time {
   font-size: 12px;
   color: var(--text-color-tertiary);
   flex-shrink: 0;
-  margin-left: 8px;
+}
+
+.card-more {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  color: var(--text-color-tertiary);
+  transition: background 0.15s;
+}
+
+.card-more:hover {
+  background: var(--bg-color-secondary);
+  color: var(--text-color-primary);
+}
+
+.card-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--bg-color-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 100px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.card-menu-item {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #ff4757;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.card-menu-item:hover {
+  background: var(--bg-color-secondary);
 }
 
 .card-body {

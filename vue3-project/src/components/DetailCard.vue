@@ -3042,6 +3042,15 @@ onMounted(async () => {
   adjustMobilePadding()
 })
 
+// 监听 targetCommentId 变化，支持同一帖子不同评论导航
+watch(() => props.targetCommentId, (newId) => {
+  if (newId) {
+    nextTick(() => {
+      locateTargetComment()
+    })
+  }
+})
+
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   document.removeEventListener('keydown', handleKeydown)
