@@ -19,7 +19,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPostDetail } from '@/api/posts'
 import { userApi } from '@/api/index.js'
@@ -112,6 +112,13 @@ onMounted(() => {
   // 初始化返回按钮显示状态
   updateShowBackButton()
   window.addEventListener('resize', updateShowBackButton)
+})
+
+// 监听路由参数变化（同一帖子不同评论导航）
+watch(() => route.query.targetCommentId, (newId) => {
+  if (route.name === 'post_detail') {
+    targetCommentId.value = newId || null
+  }
 })
 
 // 组件卸载时恢复原始标题
