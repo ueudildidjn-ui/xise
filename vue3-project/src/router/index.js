@@ -38,6 +38,7 @@ import QueueManagement from '@/views/admin/QueueManagement.vue'
 import BannedWordsManagement from '@/views/admin/BannedWordsManagement.vue'
 import NoteQualityManagement from '@/views/admin/NoteQualityManagement.vue'
 import SystemSettingsManagement from '@/views/admin/SystemSettingsManagement.vue'
+import NotificationManagement from '@/views/admin/NotificationManagement.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -301,6 +302,11 @@ const router = createRouter({
           path: 'system-settings',
           name: 'admin_system_settings',
           component: SystemSettingsManagement
+        },
+        {
+          path: 'notifications',
+          name: 'admin_notifications',
+          component: NotificationManagement
         }
       ]
     }

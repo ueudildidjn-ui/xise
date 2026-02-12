@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import SvgIcon from '@/components/SvgIcon.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 import DropdownMenu from '@/components/menu/DropdownMenu.vue'
 import CommonMenu from '@/components/menu/CommonMenu.vue'
 import SearchDropdown from './SearchDropdown.vue'
@@ -290,6 +291,7 @@ onUnmounted(() => {
                     <div v-if="!isLargeScreen" class="cancel-btn" @click="closeSearch">取消</div>
                 </div>
                 <div v-if="isLargeScreen && !showSidebar" class="header-right">
+                    <NotificationBell />
                     <DropdownMenu direction="down" menuClass="header-dropdown">
                         <template #trigger>
                             <div class="circle-btn">
@@ -327,6 +329,7 @@ onUnmounted(() => {
                     <div @click="openSearch" class="circle-btn">
                         <SvgIcon name="search" class="btn-icon" height="20" width="20" />
                     </div>
+                    <NotificationBell />
                     <DropdownMenu v-if="!showSidebar" direction="down" menuClass="header-dropdown">
                         <template #trigger>
                             <div class="circle-btn">

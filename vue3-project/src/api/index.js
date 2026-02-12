@@ -799,6 +799,37 @@ export const adminApi = {
   // 切换工具栏项启用状态
   toggleUserToolbarActive(toolbarId) {
     return request.put(`/admin/user-toolbar/${toolbarId}/toggle-active`)
+  },
+
+  // ========== 系统通知管理 ==========
+  // 获取系统通知列表
+  getSystemNotifications(params = {}) {
+    return request.get('/admin/system-notifications', { params })
+  },
+
+  // 创建系统通知
+  createSystemNotification(data) {
+    return request.post('/admin/system-notifications', data)
+  },
+
+  // 更新系统通知
+  updateSystemNotification(notificationId, data) {
+    return request.put(`/admin/system-notifications/${notificationId}`, data)
+  },
+
+  // 删除系统通知
+  deleteSystemNotification(notificationId) {
+    return request.delete(`/admin/system-notifications/${notificationId}`)
+  },
+
+  // 批量删除系统通知
+  batchDeleteSystemNotifications(ids) {
+    return request.delete('/admin/system-notifications', { data: { ids } })
+  },
+
+  // 获取单个系统通知详情
+  getSystemNotificationDetail(notificationId) {
+    return request.get(`/admin/system-notifications/${notificationId}`)
   }
 }
 
@@ -834,6 +865,49 @@ export const balanceApi = {
   checkPurchase(postId) {
     console.log('🔍 [API] 检查购买状态, postId:', postId)
     return request.get(`/balance/check-purchase/${postId}`)
+  }
+}
+
+// 通知相关API
+export const notificationApi = {
+  // 获取通知列表
+  getNotifications(params = {}) {
+    return request.get('/notifications', { params })
+  },
+
+  // 获取未读通知数量
+  getUnreadCount() {
+    return request.get('/notifications/unread-count')
+  },
+
+  // 标记通知为已读
+  markAsRead(notificationId) {
+    return request.put(`/notifications/${notificationId}/read`)
+  },
+
+  // 标记所有通知为已读
+  markAllAsRead() {
+    return request.put('/notifications/read-all')
+  },
+
+  // 删除通知
+  deleteNotification(notificationId) {
+    return request.delete(`/notifications/${notificationId}`)
+  },
+
+  // 获取系统通知列表
+  getSystemNotifications(params = {}) {
+    return request.get('/notifications/system', { params })
+  },
+
+  // 获取需要弹窗显示的系统通知
+  getPopupNotifications() {
+    return request.get('/notifications/system/popup')
+  },
+
+  // 确认系统通知（标记已读）
+  confirmSystemNotification(notificationId) {
+    return request.post(`/notifications/system/${notificationId}/confirm`)
   }
 }
 
