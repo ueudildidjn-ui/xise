@@ -18,9 +18,12 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const where = { user_id: userId }
     if (type !== undefined && type !== '') {
-      const parsedType = parseInt(type)
-      if (!isNaN(parsedType)) {
-        where.type = parsedType
+      // 支持逗号分隔的多类型筛选，如 type=1,2,6
+      const types = type.split(',').map(t => parseInt(t.trim())).filter(t => !isNaN(t))
+      if (types.length === 1) {
+        where.type = types[0]
+      } else if (types.length > 1) {
+        where.type = { in: types }
       }
     }
     if (is_read !== undefined && is_read !== '') {
