@@ -72,13 +72,13 @@
             <div class="card-time">{{ formatTime(item.created_at) }}</div>
           </div>
           <div class="card-body">
-            <template v-if="item.content && item.content.length > 100 && !expandedItems[item.id]">
-              <span>{{ item.content.slice(0, 100) }}...</span>
+            <template v-if="item.content && item.content.length > CONTENT_MAX_LENGTH && !expandedItems[item.id]">
+              <span>{{ item.content.slice(0, CONTENT_MAX_LENGTH) }}...</span>
               <span class="view-detail" @click.stop="toggleExpand(item)">查看详情</span>
             </template>
             <template v-else>
               {{ item.content }}
-              <span v-if="item.content && item.content.length > 100" class="view-detail" @click.stop="toggleExpand(item)">收起</span>
+              <span v-if="item.content && item.content.length > CONTENT_MAX_LENGTH" class="view-detail" @click.stop="toggleExpand(item)">收起</span>
             </template>
           </div>
         </div>
@@ -99,13 +99,13 @@
             <div class="card-time">{{ formatTime(item.created_at) }}</div>
           </div>
           <div class="card-body">
-            <template v-if="item.content && item.content.length > 100 && !expandedItems[item.id]">
-              <span>{{ item.content.slice(0, 100) }}...</span>
+            <template v-if="item.content && item.content.length > CONTENT_MAX_LENGTH && !expandedItems[item.id]">
+              <span>{{ item.content.slice(0, CONTENT_MAX_LENGTH) }}...</span>
               <span class="view-detail" @click.stop="toggleExpand(item)">查看详情</span>
             </template>
             <template v-else>
               {{ item.content }}
-              <span v-if="item.content && item.content.length > 100" class="view-detail" @click.stop="toggleExpand(item)">收起</span>
+              <span v-if="item.content && item.content.length > CONTENT_MAX_LENGTH" class="view-detail" @click.stop="toggleExpand(item)">收起</span>
             </template>
           </div>
         </div>
@@ -222,6 +222,9 @@ const activityUnreadCount = ref(0)
 
 // 展开状态跟踪
 const expandedItems = ref({})
+
+// 内容截断阈值
+const CONTENT_MAX_LENGTH = 100
 
 // 当前互动列表
 const currentInteractionList = computed(() => {

@@ -1,10 +1,10 @@
 <template>
   <Teleport to="body">
-    <div v-if="currentNotification" class="sys-popup-overlay" @click.self="handleConfirm">
+    <div v-if="currentNotification" class="sys-popup-overlay" @click.self="handleConfirm" @keydown.esc="handleConfirm">
       <div class="sys-popup-card">
         <div class="sys-popup-header">
           <span class="sys-popup-type">{{ currentNotification.type === 'activity' ? '活动通知' : '系统通知' }}</span>
-          <button class="sys-popup-close" @click="handleConfirm">&times;</button>
+          <button class="sys-popup-close" aria-label="关闭" @click="handleConfirm">&times;</button>
         </div>
         <div class="sys-popup-title">{{ currentNotification.title }}</div>
         <div class="sys-popup-content">{{ currentNotification.content }}</div>
