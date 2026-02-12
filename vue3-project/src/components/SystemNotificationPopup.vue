@@ -22,16 +22,20 @@
 
 <script setup>
 import { ref, onMounted, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
 import { useUserStore } from '@/stores/user'
-import { notificationApi } from '@/api'
 
+const route = useRoute()
 const notificationStore = useNotificationStore()
 const userStore = useUserStore()
 const currentNotification = ref(null)
 const overlayRef = ref(null)
 
 const showNext = async () => {
+  // Don't show popups on admin pages
+  if (route.path.startsWith('/admin')) return
+
   if (notificationStore.popupNotifications.length > 0) {
     currentNotification.value = notificationStore.popupNotifications[0]
     await nextTick()
@@ -47,21 +51,17 @@ const handleClose = async () => {
   // Immediately clear current to close popup
   currentNotification.value = null
 
-  try {
-    // Call confirm API directly to ensure it works regardless of store state
-    await notificationApi.confirmSystemNotification(id)
-    // Remove from popup list
-    notificationStore.popupNotifications = notificationStore.popupNotifications.filter(n => n.id !== id)
-    if (notificationStore.systemUnreadCount > 0) notificationStore.systemUnreadCount--
-  } catch (error) {
-    console.error('确认系统通知失败:', error)
-  }
+  // Confirm via store which handles API call and state updates
+  await notificationStore.confirmSystemNotification(id)
 
   // Show next popup if any
   await showNext()
 }
 
 const init = async () => {
+  // Don't init popups on admin pages
+  if (route.path.startsWith('/admin')) return
+
   if (userStore.isLoggedIn) {
     await notificationStore.fetchPopupNotifications()
     await showNext()
@@ -77,6 +77,13 @@ watch(() => userStore.isLoggedIn, (loggedIn) => {
   if (loggedIn) {
     init()
   } else {
+    currentNotification.value = null
+  }
+})
+
+// Watch for route changes — hide popup on admin pages
+watch(() => route.path, (newPath) => {
+  if (newPath.startsWith('/admin')) {
     currentNotification.value = null
   }
 })
