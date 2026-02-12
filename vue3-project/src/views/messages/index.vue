@@ -65,6 +65,7 @@ const formatTime = (timeStr) => {
   const date = new Date(timeStr)
   const now = new Date()
   const diff = now - date
+  if (diff < 0) return date.toLocaleDateString()
   const minutes = Math.floor(diff / 60000)
   if (minutes < 1) return '刚刚'
   if (minutes < 60) return `${minutes}分钟前`
@@ -105,12 +106,11 @@ const handleSystemNotificationClick = async (item) => {
 const handleMarkAllRead = async () => {
   await notificationStore.markAllAsRead()
   notifications.value.forEach(n => { n.is_read = true })
-  // Also confirm all system notifications
-  for (const sn of systemNotifications.value) {
-    if (!sn.is_read) {
-      await notificationStore.confirmSystemNotification(sn.id)
-      sn.is_read = true
-    }
+  // Also confirm all system notifications in parallel
+  const unreadSysNotifs = systemNotifications.value.filter(sn => !sn.is_read)
+  if (unreadSysNotifs.length > 0) {
+    await Promise.all(unreadSysNotifs.map(sn => notificationStore.confirmSystemNotification(sn.id)))
+    unreadSysNotifs.forEach(sn => { sn.is_read = true })
   }
 }
 

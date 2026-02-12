@@ -4211,7 +4211,7 @@ router.get('/system-notifications', adminAuth, async (req, res) => {
     const data = notifications.map(n => ({
       ...n,
       confirmed_count: n._count.confirmations,
-      unread_count: totalUsers - n._count.confirmations,
+      unread_count: Math.max(0, totalUsers - n._count.confirmations),
       _count: undefined
     }))
 
