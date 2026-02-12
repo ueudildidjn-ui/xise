@@ -11,6 +11,7 @@ import { useVerifiedStore } from '@/stores/verified'
 import { useBalanceStore } from '@/stores/balance'
 import AuthModal from '@/components/modals/AuthModal.vue'
 import ResetPasswordModal from '@/components/modals/ResetPasswordModal.vue'
+import SystemNotificationPopup from '@/components/SystemNotificationPopup.vue'
 
 import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue'
 import KeyboardShortcutsModal from '@/components/modals/KeyboardShortcutsModal.vue'
@@ -194,6 +195,7 @@ onMounted(() => {
     <ConfirmDialog v-model:visible="confirmState.visible" :title="confirmState.title" :message="confirmState.message"
       :type="confirmState.type" :confirm-text="confirmState.confirmText" :cancel-text="confirmState.cancelText"
       :show-cancel="confirmState.showCancel" @confirm="handleConfirm" @cancel="handleCancel" />
+    <SystemNotificationPopup />
   </div>
 </template>
 

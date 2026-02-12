@@ -61,14 +61,25 @@
 
     <!-- 系统通知列表 -->
     <template v-if="activeView === 'system'">
-      <div class="notification-list" v-if="systemNotifications.length > 0">
-        <div v-for="item in systemNotifications" :key="'sys-' + item.id" class="notification-item"
+      <div class="card-list" v-if="systemNotifications.length > 0">
+        <div v-for="item in systemNotifications" :key="'sys-' + item.id" class="notification-card"
           :class="{ unread: !item.is_read }" @click="handleSystemNotificationClick(item)">
-          <div class="notification-dot" v-if="!item.is_read"></div>
-          <div class="notification-content">
-            <div class="notification-title">{{ item.title }}</div>
-            <div class="notification-text">{{ item.content }}</div>
-            <div class="notification-time">{{ formatTime(item.created_at) }}</div>
+          <div class="card-header">
+            <div class="card-title-row">
+              <div class="notification-dot" v-if="!item.is_read"></div>
+              <div class="card-title">{{ item.title }}</div>
+            </div>
+            <div class="card-time">{{ formatTime(item.created_at) }}</div>
+          </div>
+          <div class="card-body">
+            <template v-if="item.content && item.content.length > 100 && !expandedItems[item.id]">
+              <span>{{ item.content.slice(0, 100) }}...</span>
+              <span class="view-detail" @click.stop="toggleExpand(item)">查看详情</span>
+            </template>
+            <template v-else>
+              {{ item.content }}
+              <span v-if="item.content && item.content.length > 100" class="view-detail" @click.stop="toggleExpand(item)">收起</span>
+            </template>
           </div>
         </div>
       </div>
@@ -77,14 +88,25 @@
 
     <!-- 活动通知列表 -->
     <template v-if="activeView === 'activity'">
-      <div class="notification-list" v-if="activityNotifications.length > 0">
-        <div v-for="item in activityNotifications" :key="'act-' + item.id" class="notification-item"
+      <div class="card-list" v-if="activityNotifications.length > 0">
+        <div v-for="item in activityNotifications" :key="'act-' + item.id" class="notification-card"
           :class="{ unread: !item.is_read }" @click="handleSystemNotificationClick(item)">
-          <div class="notification-dot" v-if="!item.is_read"></div>
-          <div class="notification-content">
-            <div class="notification-title">{{ item.title }}</div>
-            <div class="notification-text">{{ item.content }}</div>
-            <div class="notification-time">{{ formatTime(item.created_at) }}</div>
+          <div class="card-header">
+            <div class="card-title-row">
+              <div class="notification-dot" v-if="!item.is_read"></div>
+              <div class="card-title">{{ item.title }}</div>
+            </div>
+            <div class="card-time">{{ formatTime(item.created_at) }}</div>
+          </div>
+          <div class="card-body">
+            <template v-if="item.content && item.content.length > 100 && !expandedItems[item.id]">
+              <span>{{ item.content.slice(0, 100) }}...</span>
+              <span class="view-detail" @click.stop="toggleExpand(item)">查看详情</span>
+            </template>
+            <template v-else>
+              {{ item.content }}
+              <span v-if="item.content && item.content.length > 100" class="view-detail" @click.stop="toggleExpand(item)">收起</span>
+            </template>
           </div>
         </div>
       </div>
@@ -198,6 +220,9 @@ const interactionUnreadCount = computed(() => {
 
 const activityUnreadCount = ref(0)
 
+// 展开状态跟踪
+const expandedItems = ref({})
+
 // 当前互动列表
 const currentInteractionList = computed(() => {
   return interactionNotifications.value[activeInteractionTab.value] || []
@@ -234,10 +259,23 @@ const handleCoverError = (e) => {
   e.target.style.display = 'none'
 }
 
+// 切换展开/收起
+const toggleExpand = (item) => {
+  expandedItems.value[item.id] = !expandedItems.value[item.id]
+}
+
+// 获取通知关联的帖子ID（优先target_id，然后comment.post_id）
+const getPostId = (item) => {
+  if (item.target_id) return item.target_id.toString()
+  if (item.comment?.post_id) return item.comment.post_id.toString()
+  return null
+}
+
 // 跳转到笔记详情
 const goToPost = (item) => {
-  if (!item.target_id) return
-  const query = { id: item.target_id.toString() }
+  const postId = getPostId(item)
+  if (!postId) return
+  const query = { id: postId }
   if (item.comment_id) query.targetCommentId = item.comment_id.toString()
   router.push({ name: 'post_detail', query })
 }
@@ -323,10 +361,22 @@ const handleInteractionClick = async (item) => {
     item.is_read = true
   }
 
+  const postId = getPostId(item)
+
   // 评论/回复类 → 跳转到帖子详情并定位评论
   if ([TYPES.COMMENT, TYPES.REPLY].includes(item.type)) {
-    if (item.target_id) {
-      const query = { id: item.target_id.toString() }
+    if (postId) {
+      const query = { id: postId }
+      if (item.comment_id) query.targetCommentId = item.comment_id.toString()
+      router.push({ name: 'post_detail', query })
+    }
+    return
+  }
+
+  // 点赞评论 → 跳转到帖子详情并定位评论
+  if (item.type === TYPES.LIKE_COMMENT) {
+    if (postId) {
+      const query = { id: postId }
       if (item.comment_id) query.targetCommentId = item.comment_id.toString()
       router.push({ name: 'post_detail', query })
     }
@@ -334,8 +384,8 @@ const handleInteractionClick = async (item) => {
   }
 
   // 点赞/收藏笔记 → 跳转到帖子详情
-  if ([TYPES.LIKE_POST, TYPES.COLLECT].includes(item.type) && item.target_id) {
-    router.push({ name: 'post_detail', query: { id: item.target_id.toString() } })
+  if ([TYPES.LIKE_POST, TYPES.COLLECT].includes(item.type) && postId) {
+    router.push({ name: 'post_detail', query: { id: postId } })
     return
   }
 
@@ -346,8 +396,8 @@ const handleInteractionClick = async (item) => {
   }
 
   // @提及 → 跳转到帖子详情
-  if ([TYPES.MENTION, TYPES.MENTION_COMMENT].includes(item.type) && item.target_id) {
-    const query = { id: item.target_id.toString() }
+  if ([TYPES.MENTION, TYPES.MENTION_COMMENT].includes(item.type) && postId) {
+    const query = { id: postId }
     if (item.comment_id) query.targetCommentId = item.comment_id.toString()
     router.push({ name: 'post_detail', query })
     return
@@ -386,13 +436,13 @@ onMounted(() => {
   width: 100%;
   max-width: 700px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 60px 16px 16px;
   box-sizing: border-box;
 }
 
 @media (min-width: 960px) {
   .messages-page {
-    padding: 20px 24px;
+    padding: 60px 24px 24px;
   }
 }
 
@@ -514,6 +564,78 @@ onMounted(() => {
   margin-left: 8px;
 }
 
+/* 卡片式通知列表（系统/活动） */
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.notification-card {
+  background: var(--bg-color-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.notification-card:hover {
+  background: var(--bg-color-secondary);
+}
+
+.notification-card.unread {
+  border-left: 3px solid var(--primary-color);
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-color-primary);
+  line-height: 1.4;
+}
+
+.card-time {
+  font-size: 12px;
+  color: var(--text-color-tertiary);
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.card-body {
+  font-size: 14px;
+  color: var(--text-color-secondary);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.view-detail {
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 13px;
+  margin-left: 4px;
+}
+
+.view-detail:hover {
+  text-decoration: underline;
+}
+
 /* 互动消息子标签 */
 .interaction-tabs {
   display: flex;
@@ -550,7 +672,7 @@ onMounted(() => {
   color: var(--text-color-primary);
 }
 
-/* 通知列表 */
+/* 通知列表（互动消息） */
 .notification-list {
   display: flex;
   flex-direction: column;
@@ -603,11 +725,6 @@ onMounted(() => {
   object-fit: cover;
 }
 
-.notification-content {
-  flex: 1;
-  min-width: 0;
-}
-
 .notification-body {
   flex: 1;
   min-width: 0;
@@ -639,15 +756,6 @@ onMounted(() => {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-}
-
-.notification-text {
-  font-size: 13px;
-  color: var(--text-color-secondary);
-  margin-top: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .notification-time {
@@ -683,7 +791,7 @@ onMounted(() => {
 /* 移动端适配 */
 @media (max-width: 480px) {
   .messages-page {
-    padding: 12px;
+    padding: 48px 12px 12px;
   }
 
   .messages-title {
@@ -706,6 +814,10 @@ onMounted(() => {
 
   .block-title {
     font-size: 14px;
+  }
+
+  .notification-card {
+    padding: 12px;
   }
 
   .notification-item {
