@@ -11,6 +11,15 @@
                                     :class="{ active: route.path.startsWith('/explore') }" width="24px" height="24px" />
                             </a>
                         </template>
+                        <template v-else-if="item.label === 'messages'">
+                            <RouterLink :to="item.path" class="footer-link notification-link">
+                                <SvgIcon :name="item.icon" class="icon" :class="{ active: route.path === item.path }"
+                                    width="24px" height="24px" />
+                                <span v-if="notificationStore.totalUnreadCount > 0" class="footer-unread-badge">
+                                    {{ notificationStore.totalUnreadCount > 99 ? '99+' : notificationStore.totalUnreadCount }}
+                                </span>
+                            </RouterLink>
+                        </template>
                         <template v-else>
                             <RouterLink :to="item.path" class="footer-link">
                                 <SvgIcon :name="item.icon" class="icon" :class="{ active: route.path === item.path }"
@@ -28,13 +37,16 @@
 import SvgIcon from '@/components/SvgIcon.vue'
 import { ref } from 'vue'
 import { useRouteUtils } from '@/composables/useRouteUtils'
+import { useNotificationStore } from '@/stores/notification'
 
 const { route, handleExploreClick } = useRouteUtils()
+const notificationStore = useNotificationStore()
 
 // 底部导航配置
 const footerList = ref([
     { label: 'explore', icon: 'home', path: '/explore' },
     { label: 'publish', icon: 'publish', path: '/publish' },
+    { label: 'messages', icon: 'notification', path: '/messages' },
     { label: 'user', icon: 'user', path: '/user' },
 ])
 </script>
@@ -131,5 +143,26 @@ const footerList = ref([
 
 .active {
     color: var(--text-color-primary);
+}
+
+.notification-link {
+    position: relative;
+}
+
+.footer-unread-badge {
+    position: absolute;
+    top: 4px;
+    right: -8px;
+    min-width: 16px;
+    height: 16px;
+    background-color: #ff4757;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-sizing: border-box;
 }
 </style>

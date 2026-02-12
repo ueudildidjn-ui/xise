@@ -401,19 +401,29 @@ enum SystemNotificationType {
   activity // 活动消息
 }
 
+// 系统通知内容格式枚举
+enum ContentFormat {
+  text // 纯文本
+  html // HTML格式
+  image // 图片格式
+  url // URL链接格式
+}
+
 // 系统通知表
 model SystemNotification {
-  id         BigInt                 @id @default(autoincrement())
-  title      String                 @db.VarChar(200)
-  content    String                 @db.Text
-  type       SystemNotificationType @default(system)
-  image_url  String?                @db.VarChar(500)
-  link_url   String?                @db.VarChar(500)
-  is_active  Boolean                @default(true)
-  start_time DateTime?
-  end_time   DateTime?
-  created_at DateTime               @default(now())
-  updated_at DateTime               @updatedAt
+  id             BigInt                 @id @default(autoincrement())
+  title          String                 @db.VarChar(200)
+  content        String                 @db.Text
+  type           SystemNotificationType @default(system)
+  content_format ContentFormat          @default(text)
+  image_url      String?                @db.VarChar(500)
+  link_url       String?                @db.VarChar(500)
+  show_popup     Boolean                @default(false)
+  is_active      Boolean                @default(true)
+  start_time     DateTime?
+  end_time       DateTime?
+  created_at     DateTime               @default(now())
+  updated_at     DateTime               @updatedAt
 
   // 用户确认记录关联
   confirmations SystemNotificationConfirmation[]

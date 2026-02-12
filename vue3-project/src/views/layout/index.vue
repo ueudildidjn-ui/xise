@@ -2,8 +2,8 @@
   <div class="layout-container">
     <Sidebar v-if="showSidebar" />
     <div class="main-content" :class="{ 'with-sidebar': showSidebar }">
-      <LayoutHeader v-if="!isPostDetailPage && !isSearchPage && !isCreatorCenterPage" />
-      <div class="content-wrapper" :class="{ 'no-footer-padding': isPostDetailPage || isSearchPage || isCreatorCenterPage }">
+      <LayoutHeader v-if="!isPostDetailPage && !isSearchPage && !isCreatorCenterPage && !isMessagesPage" />
+      <div class="content-wrapper" :class="{ 'no-footer-padding': isPostDetailPage || isSearchPage || isCreatorCenterPage || isMessagesPage }">
         <router-view />
       </div>
       <LayoutFooter v-if="!showSidebar && !isPostDetailPage && !isSearchPage && !isCreatorCenterPage" />
@@ -28,6 +28,9 @@ const isSearchPage = computed(() => route.name === 'search')
 
 // Check if current route is creator center page
 const isCreatorCenterPage = computed(() => route.name === 'creator_center')
+
+// Check if current route is messages page
+const isMessagesPage = computed(() => route.name === 'messages')
 
 const showSidebar = ref(window.innerWidth > 960)
 const handleResize = () => {

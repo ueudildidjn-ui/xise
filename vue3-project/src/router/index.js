@@ -14,6 +14,7 @@ import SearchPage from '@/views/search/SearchPage.vue'
 import PostManagementPage from '@/views/post-management/index.vue'
 import DraftBoxPage from '@/views/draft-box/index.vue'
 import CreatorCenterPage from '@/views/creator-center/index.vue'
+import MessagesPage from '@/views/messages/index.vue'
 import NotFound from '@/views/NotFound.vue'
 import { getValidChannelPaths } from '@/config/channels'
 
@@ -38,6 +39,7 @@ import QueueManagement from '@/views/admin/QueueManagement.vue'
 import BannedWordsManagement from '@/views/admin/BannedWordsManagement.vue'
 import NoteQualityManagement from '@/views/admin/NoteQualityManagement.vue'
 import SystemSettingsManagement from '@/views/admin/SystemSettingsManagement.vue'
+import NotificationManagement from '@/views/admin/NotificationManagement.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -180,6 +182,11 @@ const router = createRouter({
           name: 'creator_center',
           component: CreatorCenterPage
         },
+        {
+          path: 'messages',
+          name: 'messages',
+          component: MessagesPage
+        },
         // 404页面 - 捕获所有未匹配的路由
         {
           path: '/:pathMatch(.*)*',
@@ -301,6 +308,11 @@ const router = createRouter({
           path: 'system-settings',
           name: 'admin_system_settings',
           component: SystemSettingsManagement
+        },
+        {
+          path: 'notifications',
+          name: 'admin_notifications',
+          component: NotificationManagement
         }
       ]
     }
