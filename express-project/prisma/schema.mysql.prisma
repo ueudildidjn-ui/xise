@@ -430,6 +430,7 @@ model SystemNotificationConfirmation {
   notification_id BigInt
   user_id         BigInt
   confirmed_at    DateTime @default(now())
+  is_dismissed    Boolean  @default(false)
 
   notification SystemNotification @relation(fields: [notification_id], references: [id], onDelete: Cascade)
   user         User               @relation(fields: [user_id], references: [id], onDelete: Cascade)

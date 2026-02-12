@@ -298,8 +298,8 @@ const closeMenu = () => {
 const handleDeleteSystemNotification = async (item, type) => {
   openMenuId.value = null
   try {
-    // 确认通知以标记为已读/已处理
-    await notificationStore.confirmSystemNotification(item.id)
+    // 调用dismiss API，将通知标记为已删除（对当前用户隐藏）
+    await notificationStore.dismissSystemNotification(item.id)
     // 从本地列表中移除
     if (type === 'system') {
       systemNotifications.value = systemNotifications.value.filter(n => n.id !== item.id)

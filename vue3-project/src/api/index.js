@@ -908,6 +908,11 @@ export const notificationApi = {
   // 确认系统通知（标记已读）
   confirmSystemNotification(notificationId) {
     return request.post(`/notifications/system/${notificationId}/confirm`)
+  },
+
+  // 删除（dismiss）系统通知
+  dismissSystemNotification(notificationId) {
+    return request.delete(`/notifications/system/${notificationId}/dismiss`)
   }
 }
 

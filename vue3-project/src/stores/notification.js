@@ -153,6 +153,27 @@ export const useNotificationStore = defineStore('notification', () => {
     }
   }
 
+  // 删除（dismiss）系统/活动通知
+  const dismissSystemNotification = async (notificationId) => {
+    try {
+      const response = await notificationApi.dismissSystemNotification(notificationId)
+      if (response.success) {
+        // 从本地列表中移除
+        const index = systemNotifications.value.findIndex(n => n.id === notificationId)
+        if (index !== -1) {
+          if (!systemNotifications.value[index].is_read && systemUnreadCount.value > 0) {
+            systemUnreadCount.value--
+          }
+          systemNotifications.value.splice(index, 1)
+        }
+      }
+      return response
+    } catch (error) {
+      console.error('删除系统通知失败:', error)
+      return { success: false }
+    }
+  }
+
   return {
     // 状态
     notifications,
@@ -174,6 +195,7 @@ export const useNotificationStore = defineStore('notification', () => {
     markAsRead,
     markAllAsRead,
     confirmSystemNotification,
-    deleteNotification
+    deleteNotification,
+    dismissSystemNotification
   }
 })

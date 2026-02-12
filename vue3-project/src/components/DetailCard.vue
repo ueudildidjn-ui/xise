@@ -1428,19 +1428,19 @@ const locateTargetComment = async () => {
       const currentComments = comments.value || []
 
       // 递归搜索函数，同时检查是否需要展开回复
-      const searchComments = (commentList, parentCommentId = null) => {
+      const searchComments = (commentList, parentComment = null) => {
         for (const comment of commentList) {
           // 检查当前评论是否为目标
           if (comment.id == props.targetCommentId) {
             // 如果目标评论是回复，且父评论有折叠的回复，需要展开
-            if (parentCommentId && comment.replies && comment.replies.length > 2) {
-              expandedReplies.value.add(parentCommentId)
+            if (parentComment && parentComment.replies && parentComment.replies.length > 2) {
+              expandedReplies.value.add(parentComment.id)
             }
             return comment
           }
           // 检查子评论（如果有）
           if (comment.replies && comment.replies.length > 0) {
-            const foundInReplies = searchComments(comment.replies, comment.id)
+            const foundInReplies = searchComments(comment.replies, comment)
             if (foundInReplies) {
               // 如果在子评论中找到目标，且该评论有超过2个回复，需要展开
               if (comment.replies.length > 2) {
@@ -1464,7 +1464,16 @@ const locateTargetComment = async () => {
       let attempts = 0
 
       while (!targetComment && hasMoreCommentsToShow.value && attempts < maxAttempts) {
-        await loadMoreComments()
+        // 直接通过store加载更多评论，避免loadMoreComments的isLoadingMore竞态
+        const commentData = commentStore.getComments(props.item.id)
+        const nextPage = (commentData.currentPage || 0) + 1
+        await commentStore.fetchComments(props.item.id, {
+          page: nextPage,
+          limit: 5,
+          loadMore: true,
+          silentLoad: true,
+          sort: commentSortOrder.value
+        })
         await nextTick()
         targetComment = findCommentInCurrent()
         attempts++
@@ -1475,10 +1484,18 @@ const locateTargetComment = async () => {
     if (targetComment) {
       await nextTick()
 
-      // 查找目标评论元素
+      // 查找目标评论元素，带重试机制确保DOM已更新
       const targetId = String(props.targetCommentId)
-      let commentElement = document.querySelector(`[data-comment-id="${targetId}"]`)
-
+      let commentElement = null
+      let retries = 0
+      while (!commentElement && retries < 5) {
+        commentElement = document.querySelector(`[data-comment-id="${targetId}"]`)
+        if (!commentElement) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+          await nextTick()
+          retries++
+        }
+      }
 
       if (commentElement) {
         // 添加高亮样式
@@ -1491,12 +1508,7 @@ const locateTargetComment = async () => {
         setTimeout(() => {
           commentElement.classList.remove('comment-highlight')
         }, 3000)
-
-      } else {
-
       }
-    } else {
-
     }
   } finally {
     // 定位完成后，在移动端解锁页面滚动
