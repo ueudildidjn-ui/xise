@@ -162,7 +162,7 @@ const interactionNotifications = ref({
 
 // 互动消息子标签
 const interactionTabs = [
-  { key: 'all', label: '互动消息' },
+  { key: 'all', label: '全部' },
   { key: 'follow', label: '新关注我的' },
   { key: 'likeCollect', label: '赞与收藏' },
   { key: 'comment', label: '评论' },
@@ -278,7 +278,7 @@ const loadInteractionNotifications = async (tab) => {
 // 切换互动消息子标签
 const switchInteractionTab = async (tab) => {
   activeInteractionTab.value = tab
-  if (interactionNotifications.value[tab].length === 0 || tab !== 'all') {
+  if (interactionNotifications.value[tab].length === 0) {
     await loadInteractionNotifications(tab)
   }
 }
