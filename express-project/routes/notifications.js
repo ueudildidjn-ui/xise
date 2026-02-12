@@ -66,17 +66,10 @@ router.get('/unread-count', authenticateToken, async (req, res) => {
       where: { user_id: userId, is_read: false }
     })
 
-    // 系统通知未读数（未确认的活跃系统通知）
-    const now = new Date()
+    // 系统通知未读数（未确认的系统通知）
     const activeSystemNotifications = await prisma.systemNotification.count({
       where: {
         is_active: true,
-        OR: [
-          { start_time: null, end_time: null },
-          { start_time: { lte: now }, end_time: null },
-          { start_time: null, end_time: { gte: now } },
-          { start_time: { lte: now }, end_time: { gte: now } }
-        ],
         confirmations: {
           none: { user_id: userId }
         }
@@ -175,15 +168,8 @@ router.get('/system', authenticateToken, async (req, res) => {
     const skip = (page - 1) * limit
     const type = req.query.type // 可选：system / activity
 
-    const now = new Date()
     const where = {
-      is_active: true,
-      OR: [
-        { start_time: null, end_time: null },
-        { start_time: { lte: now }, end_time: null },
-        { start_time: null, end_time: { gte: now } },
-        { start_time: { lte: now }, end_time: { gte: now } }
-      ]
+      is_active: true
     }
     if (type) {
       where.type = type
@@ -231,18 +217,11 @@ router.get('/system', authenticateToken, async (req, res) => {
 router.get('/system/popup', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id)
-    const now = new Date()
 
     const notifications = await prisma.systemNotification.findMany({
       where: {
         is_active: true,
         show_popup: true,
-        OR: [
-          { start_time: null, end_time: null },
-          { start_time: { lte: now }, end_time: null },
-          { start_time: null, end_time: { gte: now } },
-          { start_time: { lte: now }, end_time: { gte: now } }
-        ],
         confirmations: {
           none: { user_id: userId }
         }

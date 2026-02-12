@@ -21,7 +21,7 @@ const POLL_INTERVAL_MS = 60000
 let pollTimer = null
 
 const handleClick = () => {
-  router.push({ name: 'user' })
+  router.push({ name: 'messages' })
 }
 
 const startPolling = () => {

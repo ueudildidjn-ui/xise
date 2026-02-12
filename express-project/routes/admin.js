@@ -4191,19 +4191,33 @@ router.get('/system-notifications', adminAuth, async (req, res) => {
     if (is_active !== undefined && is_active !== '') where.is_active = is_active === 'true' || is_active === '1'
     if (title) where.title = { contains: title }
 
-    const [total, notifications] = await Promise.all([
+    const [total, notifications, totalUsers] = await Promise.all([
       prisma.systemNotification.count({ where }),
       prisma.systemNotification.findMany({
         where,
+        include: {
+          _count: {
+            select: { confirmations: true }
+          }
+        },
         orderBy: { [sortField]: sortOrder.toLowerCase() },
         take: limit,
         skip
-      })
+      }),
+      prisma.user.count()
     ])
+
+    // 附加已读/未读统计
+    const data = notifications.map(n => ({
+      ...n,
+      confirmed_count: n._count.confirmations,
+      unread_count: totalUsers - n._count.confirmations,
+      _count: undefined
+    }))
 
     res.json({
       code: RESPONSE_CODES.SUCCESS,
-      data: { data: notifications, pagination: { page, limit, total, pages: Math.ceil(total / limit) } },
+      data: { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } },
       message: 'success'
     })
   } catch (error) {
@@ -4258,12 +4272,10 @@ router.post('/system-notifications', adminAuth, async (req, res) => {
       type: type || 'system',
       content_format: content_format || 'text',
       show_popup: show_popup === undefined ? false : Boolean(show_popup),
-      is_active: is_active === undefined ? true : Boolean(is_active)
+      is_active: true
     }
     if (image_url) data.image_url = image_url.trim()
     if (link_url) data.link_url = link_url.trim()
-    if (start_time) data.start_time = new Date(start_time)
-    if (end_time) data.end_time = new Date(end_time)
 
     const notification = await prisma.systemNotification.create({ data })
 
@@ -4287,7 +4299,7 @@ router.put('/system-notifications/:id', adminAuth, async (req, res) => {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '系统通知不存在' })
     }
 
-    const { title, content, type, content_format, image_url, link_url, show_popup, is_active, start_time, end_time } = req.body
+    const { title, content, type, content_format, image_url, link_url, show_popup } = req.body
     const data = {}
     if (title !== undefined) data.title = title.trim()
     if (content !== undefined) data.content = content.trim()
@@ -4296,9 +4308,6 @@ router.put('/system-notifications/:id', adminAuth, async (req, res) => {
     if (image_url !== undefined) data.image_url = image_url ? image_url.trim() : null
     if (link_url !== undefined) data.link_url = link_url ? link_url.trim() : null
     if (show_popup !== undefined) data.show_popup = Boolean(show_popup)
-    if (is_active !== undefined) data.is_active = Boolean(is_active)
-    if (start_time !== undefined) data.start_time = start_time ? new Date(start_time) : null
-    if (end_time !== undefined) data.end_time = end_time ? new Date(end_time) : null
 
     await prisma.systemNotification.update({ where: { id }, data })
 
@@ -4350,6 +4359,31 @@ router.delete('/system-notifications', adminAuth, async (req, res) => {
   } catch (error) {
     console.error('批量删除系统通知失败:', error)
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '批量删除失败' })
+  }
+})
+
+// 重新发送通知给未读用户（清除所有确认记录）
+router.post('/system-notifications/:id/resend', adminAuth, async (req, res) => {
+  try {
+    if (!isSystemNotificationAvailable()) {
+      return res.status(503).json({ code: RESPONSE_CODES.ERROR, message: '系统通知功能暂不可用' })
+    }
+
+    const id = BigInt(req.params.id)
+    const existing = await prisma.systemNotification.findUnique({ where: { id } })
+    if (!existing) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '系统通知不存在' })
+    }
+
+    // 删除所有确认记录，使通知对所有用户重新变为未读
+    const deleted = await prisma.systemNotificationConfirmation.deleteMany({
+      where: { notification_id: id }
+    })
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: `已重新发送，清除了 ${deleted.count} 条已读记录` })
+  } catch (error) {
+    console.error('重新发送系统通知失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '重新发送失败' })
   }
 })
 

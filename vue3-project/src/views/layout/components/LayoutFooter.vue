@@ -11,6 +11,13 @@
                                     :class="{ active: route.path.startsWith('/explore') }" width="24px" height="24px" />
                             </a>
                         </template>
+                        <template v-else-if="item.label === 'messages'">
+                            <RouterLink :to="item.path" class="footer-link notification-link">
+                                <SvgIcon :name="item.icon" class="icon" :class="{ active: route.path === item.path }"
+                                    width="24px" height="24px" />
+                                <span v-if="notificationStore.hasUnread" class="footer-unread-dot"></span>
+                            </RouterLink>
+                        </template>
                         <template v-else>
                             <RouterLink :to="item.path" class="footer-link">
                                 <SvgIcon :name="item.icon" class="icon" :class="{ active: route.path === item.path }"
@@ -28,13 +35,16 @@
 import SvgIcon from '@/components/SvgIcon.vue'
 import { ref } from 'vue'
 import { useRouteUtils } from '@/composables/useRouteUtils'
+import { useNotificationStore } from '@/stores/notification'
 
 const { route, handleExploreClick } = useRouteUtils()
+const notificationStore = useNotificationStore()
 
 // 底部导航配置
 const footerList = ref([
     { label: 'explore', icon: 'home', path: '/explore' },
     { label: 'publish', icon: 'publish', path: '/publish' },
+    { label: 'messages', icon: 'notification', path: '/messages' },
     { label: 'user', icon: 'user', path: '/user' },
 ])
 </script>
@@ -131,5 +141,19 @@ const footerList = ref([
 
 .active {
     color: var(--text-color-primary);
+}
+
+.notification-link {
+    position: relative;
+}
+
+.footer-unread-dot {
+    position: absolute;
+    top: 8px;
+    right: -4px;
+    width: 6px;
+    height: 6px;
+    background-color: #ff4757;
+    border-radius: 50%;
 }
 </style>
