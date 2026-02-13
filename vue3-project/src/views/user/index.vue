@@ -15,6 +15,7 @@ import { userApi } from '@/api/index.js'
 import BackToTopButton from '@/components/BackToTopButton.vue'
 import ImageViewer from '@/components/ImageViewer.vue'
 import VerifiedBadge from '@/components/VerifiedBadge.vue'
+import { useVerifiedStore } from '@/stores/verified'
 
 // Tab宽度常量（用于滑块位置计算）
 const TAB_WIDTH = 64
@@ -22,6 +23,7 @@ const TAB_WIDTH = 64
 const router = useRouter()
 const navigationStore = useNavigationStore()
 const userStore = useUserStore()
+const verifiedStore = useVerifiedStore()
 
 const defaultAvatar = new URL('@/assets/imgs/avatar.png', import.meta.url).href
 
@@ -500,6 +502,9 @@ function handleCollect(data) {
         <div class="edit-profile-button-wrapper">
           <button class="edit-profile-btn" @click.stop="openEditProfileModal">
             编辑资料
+          </button>
+          <button class="edit-profile-btn verify-btn" @click.stop="verifiedStore.openVerifiedModal">
+            申请认证
           </button>
         </div>
       </div>
@@ -1173,6 +1178,8 @@ function handleCollect(data) {
   top: 50%;
   transform: translateY(-50%);
   z-index: 1;
+  display: flex;
+  gap: 8px;
 }
 
 .edit-profile-btn {

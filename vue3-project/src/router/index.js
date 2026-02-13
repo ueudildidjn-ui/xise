@@ -40,6 +40,7 @@ import BannedWordsManagement from '@/views/admin/BannedWordsManagement.vue'
 import NoteQualityManagement from '@/views/admin/NoteQualityManagement.vue'
 import SystemSettingsManagement from '@/views/admin/SystemSettingsManagement.vue'
 import NotificationManagement from '@/views/admin/NotificationManagement.vue'
+import AuditManagement from '@/views/admin/AuditManagement.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -308,6 +309,11 @@ const router = createRouter({
           path: 'notifications',
           name: 'admin_notifications',
           component: NotificationManagement
+        },
+        {
+          path: 'audit',
+          name: 'admin_audit',
+          component: AuditManagement
         }
       ]
     }

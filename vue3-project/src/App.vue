@@ -8,8 +8,10 @@ import { useChangePasswordStore } from '@/stores/changePassword'
 import { useKeyboardShortcutsStore } from '@/stores/keyboardShortcuts'
 import { useAccountSecurityStore } from '@/stores/accountSecurity'
 import { useBalanceStore } from '@/stores/balance'
+import { useVerifiedStore } from '@/stores/verified'
 import AuthModal from '@/components/modals/AuthModal.vue'
 import ResetPasswordModal from '@/components/modals/ResetPasswordModal.vue'
+import VerifiedModal from '@/components/modals/VerifiedModal.vue'
 import SystemNotificationPopup from '@/components/SystemNotificationPopup.vue'
 
 import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue'
@@ -25,6 +27,7 @@ const changePasswordStore = useChangePasswordStore()
 const keyboardShortcutsStore = useKeyboardShortcutsStore()
 const accountSecurityStore = useAccountSecurityStore()
 const balanceStore = useBalanceStore()
+const verifiedStore = useVerifiedStore()
 const { confirmState, handleConfirm, handleCancel } = useConfirm()
 
 // 找回密码模态框状态
@@ -188,6 +191,7 @@ onMounted(() => {
     <AccountSecurityModal v-model:visible="accountSecurityStore.showAccountSecurityModal"
       @close="accountSecurityStore.closeAccountSecurityModal" />
     <BalanceModal v-model:visible="balanceStore.showBalanceModal" @close="balanceStore.closeBalanceModal" />
+    <VerifiedModal v-if="verifiedStore.showVerifiedModal" @close="verifiedStore.closeVerifiedModal" />
     <ConfirmDialog v-model:visible="confirmState.visible" :title="confirmState.title" :message="confirmState.message"
       :type="confirmState.type" :confirm-text="confirmState.confirmText" :cancel-text="confirmState.cancelText"
       :show-cancel="confirmState.showCancel" @confirm="handleConfirm" @cancel="handleCancel" />
