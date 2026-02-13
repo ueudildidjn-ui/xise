@@ -1476,13 +1476,17 @@ const locateTargetComment = async () => {
 
     // 如果找到了目标评论，进行定位和高亮
     if (targetComment) {
+      // 确保showContent为true，否则评论DOM元素不会渲染
+      if (!showContent.value) {
+        showContent.value = true
+      }
       await nextTick()
 
       // 查找目标评论元素，带重试机制确保DOM已更新
       const targetId = String(props.targetCommentId)
       let commentElement = null
       let retries = 0
-      while (!commentElement && retries < 5) {
+      while (!commentElement && retries < 10) {
         commentElement = document.querySelector(`[data-comment-id="${targetId}"]`)
         if (!commentElement) {
           await new Promise(resolve => setTimeout(resolve, 100))
