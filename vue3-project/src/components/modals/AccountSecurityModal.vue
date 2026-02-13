@@ -10,16 +10,6 @@
 
       <div class="modal-content">
         <div class="security-options">
-          <div class="security-item" @click="handleVerification">
-            <div class="item-icon">
-              <SvgIcon name="verified" width="24" height="24" />
-            </div>
-            <div class="item-content">
-              <div class="item-title">我要认证</div>
-              <div class="item-desc">申请个人认证或官方认证</div>
-            </div>
-          </div>
-
           <div class="security-item" @click="handleChangePassword">
             <div class="item-icon">
               <SvgIcon name="edit" width="24" height="24" />
@@ -53,7 +43,6 @@
 <script setup>
 import { useScrollLock } from '@/composables/useScrollLock'
 import { useChangePasswordStore } from '@/stores/changePassword'
-import { useVerifiedStore } from '@/stores/verified'
 import { useUserStore } from '@/stores/user'
 import SvgIcon from '@/components/SvgIcon.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -70,7 +59,6 @@ const emit = defineEmits(['update:visible', 'close'])
 
 const { lock, unlock } = useScrollLock()
 const changePasswordStore = useChangePasswordStore()
-const verifiedStore = useVerifiedStore()
 const userStore = useUserStore()
 const showDeleteModal = ref(false)
 
@@ -78,12 +66,6 @@ const showDeleteModal = ref(false)
 const handleClose = () => {
   emit('update:visible', false)
   emit('close')
-}
-
-// 处理认证申请
-const handleVerification = () => {
-  handleClose()
-  verifiedStore.openVerifiedModal()
 }
 
 // 处理修改密码

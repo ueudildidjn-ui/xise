@@ -34,7 +34,6 @@ import CollectionManagement from '@/views/admin/CollectionManagement.vue'
 import FollowManagement from '@/views/admin/FollowManagement.vue'
 import SessionManagement from '@/views/admin/SessionManagement.vue'
 import AdminManagement from '@/views/admin/AdminManagement.vue'
-import AuditManagement from '@/views/admin/AuditManagement.vue'
 import ContentReviewManagement from '@/views/admin/ContentReviewManagement.vue'
 import QueueManagement from '@/views/admin/QueueManagement.vue'
 import BannedWordsManagement from '@/views/admin/BannedWordsManagement.vue'
@@ -274,11 +273,6 @@ const router = createRouter({
           path: 'admins',
           name: 'admin_admins',
           component: AdminManagement
-        },
-        {
-          path: 'audit',
-          name: 'admin_audit',
-          component: AuditManagement
         },
         {
           path: 'content-review',
