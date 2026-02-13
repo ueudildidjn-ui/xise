@@ -66,12 +66,13 @@ function createLikePostNotification(targetUserId, senderId, postId) {
 /**
  * 创建点赞评论通知
  */
-function createLikeCommentNotification(targetUserId, senderId, commentId) {
+function createLikeCommentNotification(targetUserId, senderId, postId, commentId) {
   return createNotificationData({
     userId: targetUserId,
     senderId,
     type: TYPES.LIKE_COMMENT,
     title: '赞了你的评论',
+    targetId: postId,
     commentId
   })
 }

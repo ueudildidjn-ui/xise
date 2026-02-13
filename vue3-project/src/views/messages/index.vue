@@ -138,12 +138,12 @@
 
       <div class="notification-list" v-if="currentInteractionList.length > 0">
         <div v-for="item in currentInteractionList" :key="'int-' + item.id" class="notification-item interaction-item"
-          :class="{ unread: !item.is_read }">
+          :class="{ unread: !item.is_read }" @click="handleInteractionClick(item)">
           <div class="notification-dot" v-if="!item.is_read"></div>
           <div class="notification-avatar" v-if="item.sender" @click.stop="goToUserProfile(item.sender)">
             <img :src="item.sender.avatar || defaultAvatar" :alt="item.sender.nickname" @error="handleAvatarError" />
           </div>
-          <div class="notification-body" @click.stop="handleInteractionClick(item)">
+          <div class="notification-body">
             <div class="notification-title">
               <span class="sender-name">{{ item.sender?.nickname }}</span>
               {{ item.title }}
