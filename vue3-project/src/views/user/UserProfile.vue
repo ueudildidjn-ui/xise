@@ -337,10 +337,11 @@ onMounted(async () => {
         <div class="user-basic">
           <div class="user-nickname">
             <span>{{ userInfo?.nickname || '用户' }}</span>
-            <VerifiedBadge :verified="userInfo?.verified" size="large" />
+            <VerifiedBadge :verified="userInfo?.verified" :user-id="userInfo?.user_id" size="large" />
           </div>
           <div class="user-content">
-            <div class="user-id text-ellipsis">汐社号：{{ userInfo?.verified_name && userInfo?.verified ? userInfo.verified_name : (userInfo?.user_id || '') }}</div>
+            <div class="user-id text-ellipsis">汐社号：{{ userInfo?.user_id || '' }}</div>
+            <div v-if="userInfo?.verified && userInfo?.verified_name" class="user-id text-ellipsis">认证名称：{{ userInfo.verified_name }}</div>
           </div>
         </div>
 

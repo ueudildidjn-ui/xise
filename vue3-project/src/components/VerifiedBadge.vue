@@ -1,9 +1,9 @@
 <template>
-  <div v-if="verified === 1" class="verified-badge verified-badge--official" :class="sizeClass">
+  <div v-if="verified === 1" class="verified-badge verified-badge--official" :class="sizeClass" @click.stop="handleClick">
     <SvgIcon name="overified" />
     <div class="tooltip">{{ badgeTitle }}</div>
   </div>
-  <div v-else-if="verified === 2" class="verified-badge" :class="sizeClass">
+  <div v-else-if="verified === 2" class="verified-badge" :class="sizeClass" @click.stop="handleClick">
     <SvgIcon name="pverified" />
     <div class="tooltip">{{ badgeTitle }}</div>
   </div>
@@ -11,7 +11,10 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/SvgIcon.vue'
+
+const router = useRouter()
 
 const props = defineProps({
   verified: {
@@ -26,6 +29,10 @@ const props = defineProps({
     type: String,
     default: 'medium',
     validator: (value) => ['mini', 'small', 'medium', 'large'].includes(value)
+  },
+  userId: {
+    type: String,
+    default: ''
   }
 })
 
@@ -41,6 +48,12 @@ const badgeTitle = computed(() => {
   }
   return props.title
 })
+
+const handleClick = () => {
+  if (props.userId) {
+    router.push(`/user/${props.userId}`)
+  }
+}
 </script>
 
 <style scoped>

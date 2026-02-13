@@ -26,9 +26,6 @@
             <SvgIcon v-else name="close" width="48" height="48" />
           </div>
           <p class="status-text">{{ hasVerification.statusText }}</p>
-          <button type="button" class="revoke-btn" @click="handleRevokeVerification" :disabled="revokeLoading">
-            {{ revokeLoading ? '撤回中...' : '撤回认证' }}
-          </button>
         </div>
 
         <!-- 认证申请表单 -->
@@ -230,7 +227,6 @@ const form = reactive({
 
 // 加载状态
 const loading = ref(false)
-const revokeLoading = ref(false)
 
 // 认证状态
 const verificationStatus = ref(null)
@@ -252,7 +248,7 @@ const hasVerification = computed(() => {
       hasPending: false,
       hasApproved: true,
       hasRejected: false,
-      statusText: `您已通过${typeText}，如需重新申请可先撤回当前认证`
+      statusText: `您已通过${typeText}`
     }
   }
 
@@ -262,7 +258,7 @@ const hasVerification = computed(() => {
       hasPending: false,
       hasApproved: false,
       hasRejected: true,
-      statusText: `您的${typeText}申请已被拒绝，如需重新申请请先撤回当前申请并修改后再次提交`
+      statusText: `您的${typeText}申请已被拒绝，如有疑问请联系管理员`
     }
   }
 
@@ -573,38 +569,6 @@ const handleSubmitVerification = async () => {
     $message.error('网络错误，请重试')
   } finally {
     loading.value = false
-  }
-}
-
-// 撤回认证申请
-const handleRevokeVerification = async () => {
-  if (revokeLoading.value) return
-
-  revokeLoading.value = true
-
-  try {
-    const response = await fetch('/api/users/verification/revoke', {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userStore.token}`
-      }
-    })
-
-    const result = await response.json()
-
-    if (result.code === 200 || result.success) {
-      $message.success('认证申请已撤回')
-      // 重新获取认证状态
-      await fetchVerificationStatus()
-    } else {
-      $message.error(result.message || '撤回失败，请重试')
-    }
-  } catch (error) {
-    console.error('撤回认证申请失败:', error)
-    $message.error('网络错误，请重试')
-  } finally {
-    revokeLoading.value = false
   }
 }
 </script>
@@ -935,32 +899,6 @@ const handleRevokeVerification = async () => {
   color: var(--text-color-secondary);
   text-align: center;
   margin: 0 0 16px 0;
-}
-
-.revoke-btn {
-  padding: 8px 16px;
-  background: transparent;
-  color: var(--primary-color);
-  border: 1px solid var(--primary-color);
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.revoke-btn:hover {
-  scale: 1.05;
-}
-
-.revoke-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
 }
 
 .form-textarea:disabled {

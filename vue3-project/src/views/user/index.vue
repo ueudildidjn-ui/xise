@@ -491,10 +491,11 @@ function handleCollect(data) {
         <div class="user-basic">
           <div class="user-nickname">
             <span>{{ userStore.userInfo?.nickname || '用户' }}</span>
-            <VerifiedBadge v-if="userStore.userInfo?.verified" :verified="userStore.userInfo.verified" size="large"/>
+            <VerifiedBadge v-if="userStore.userInfo?.verified" :verified="userStore.userInfo.verified" :user-id="userStore.userInfo?.user_id" size="large"/>
           </div>
           <div class="user-content">
-            <div class="user-id text-ellipsis">汐社号：{{ userStore.userInfo?.verified_name && userStore.userInfo?.verified ? userStore.userInfo.verified_name : (userStore.userInfo?.user_id || '') }}</div>
+            <div class="user-id text-ellipsis">汐社号：{{ userStore.userInfo?.user_id || '' }}</div>
+            <div v-if="userStore.userInfo?.verified && userStore.userInfo?.verified_name" class="user-id text-ellipsis">认证名称：{{ userStore.userInfo.verified_name }}</div>
           </div>
         </div>
         <div class="edit-profile-button-wrapper">
