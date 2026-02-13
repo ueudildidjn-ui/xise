@@ -348,6 +348,392 @@ router.get('/hot', optionalAuthWithGuestRestriction, async (req, res) => {
   }
 });
 
+// 获取朋友（互相关注）的笔记列表
+router.get('/friends', authenticateToken, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const sort = req.query.sort || 'time'; // 'time' 或 'hot'
+    const type = req.query.type ? parseInt(req.query.type) : null;
+    const currentUserId = BigInt(req.user.id);
+
+    // 获取当前用户关注的用户
+    const following = await prisma.follow.findMany({
+      where: { follower_id: currentUserId },
+      select: { following_id: true }
+    });
+    const followingIds = following.map(f => f.following_id);
+
+    // 获取互相关注的用户（朋友）
+    let mutualFollowIds = [];
+    if (followingIds.length > 0) {
+      const mutualFollows = await prisma.follow.findMany({
+        where: {
+          follower_id: { in: followingIds },
+          following_id: currentUserId
+        },
+        select: { follower_id: true }
+      });
+      mutualFollowIds = mutualFollows.map(f => f.follower_id);
+    }
+
+    const hasFriends = mutualFollowIds.length > 0;
+
+    // 如果没有互相关注的朋友，返回推荐用户
+    if (!hasFriends) {
+      // 推荐一些活跃用户供关注
+      const recommendedUsers = await prisma.user.findMany({
+        where: {
+          id: { not: currentUserId },
+          status: 1
+        },
+        select: {
+          id: true,
+          user_id: true,
+          nickname: true,
+          avatar: true,
+          bio: true,
+          fans_count: true,
+          verified: true,
+          _count: { select: { posts: true } }
+        },
+        orderBy: { fans_count: 'desc' },
+        take: 10
+      });
+
+      return res.json({
+        code: RESPONSE_CODES.SUCCESS,
+        message: 'success',
+        data: {
+          posts: [],
+          hasFriends: false,
+          recommendedUsers: recommendedUsers.map(u => ({
+            id: Number(u.id),
+            user_id: u.user_id,
+            nickname: u.nickname,
+            avatar: u.avatar,
+            bio: u.bio,
+            fans_count: u.fans_count,
+            verified: u.verified,
+            post_count: u._count.posts
+          })),
+          pagination: { page, limit, total: 0, pages: 0 }
+        }
+      });
+    }
+
+    // 获取黑名单用户
+    const blockedUserIds = await getBlockedUserIds(currentUserId);
+
+    // 构建查询条件：只获取互相关注用户的公开和朋友可见的笔记
+    const where = {
+      user_id: { in: mutualFollowIds },
+      is_draft: false,
+      visibility: { in: [VISIBILITY_PUBLIC, VISIBILITY_FRIENDS_ONLY] }
+    };
+
+    if (type) where.type = type;
+
+    // 排除黑名单用户
+    if (blockedUserIds.length > 0) {
+      where.NOT = { user_id: { in: blockedUserIds } };
+    }
+
+    // 排序方式
+    let orderBy;
+    if (sort === 'hot') {
+      orderBy = [{ like_count: 'desc' }, { view_count: 'desc' }, { created_at: 'desc' }];
+    } else {
+      orderBy = { created_at: 'desc' };
+    }
+
+    const posts = await prisma.post.findMany({
+      where,
+      include: {
+        user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true, verified: true } },
+        category: { select: { name: true } },
+        images: { select: { image_url: true, is_free_preview: true } },
+        videos: { select: { video_url: true, cover_url: true, preview_video_url: true }, take: 1 },
+        tags: { include: { tag: { select: { id: true, name: true } } } },
+        paymentSettings: true
+      },
+      orderBy,
+      take: limit,
+      skip: skip
+    });
+
+    // 批量获取用户互动状态
+    let purchasedPostIds = new Set();
+    let likedPostIds = new Set();
+    let collectedPostIds = new Set();
+    if (posts.length > 0) {
+      const postIds = posts.map(p => p.id);
+      const [purchases, likes, collections] = await Promise.all([
+        prisma.userPurchasedContent.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } }),
+        prisma.like.findMany({ where: { user_id: currentUserId, target_type: 1, target_id: { in: postIds } }, select: { target_id: true } }),
+        prisma.collection.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } })
+      ]);
+      purchasedPostIds = new Set(purchases.map(p => p.post_id));
+      likedPostIds = new Set(likes.map(l => l.target_id));
+      collectedPostIds = new Set(collections.map(c => c.post_id));
+    }
+
+    const formattedPosts = posts.map(post => {
+      const formatted = {
+        id: Number(post.id),
+        user_id: Number(post.user_id),
+        title: post.title,
+        content: post.content,
+        category_id: post.category_id,
+        category: post.category?.name,
+        type: post.type,
+        view_count: Number(post.view_count),
+        like_count: post.like_count,
+        collect_count: post.collect_count,
+        comment_count: post.comment_count,
+        created_at: post.created_at,
+        is_draft: post.is_draft,
+        visibility: post.visibility || VISIBILITY_PUBLIC,
+        nickname: post.user?.nickname,
+        user_avatar: post.user?.avatar,
+        author_account: post.user?.user_id,
+        author_auto_id: post.user ? Number(post.user.id) : null,
+        location: post.user?.location,
+        verified: post.user?.verified,
+        avatar: post.user?.avatar,
+        author: post.user?.nickname
+      };
+
+      const isAuthor = post.user_id === currentUserId;
+      const hasPurchased = purchasedPostIds.has(post.id);
+      const paymentSetting = post.paymentSettings;
+      const imageUrls = post.images.map(img => ({ url: img.image_url, isFreePreview: img.is_free_preview }));
+      const videoData = post.videos[0] || null;
+
+      protectPostListItem(formatted, {
+        paymentSetting: paymentSetting ? { enabled: paymentSetting.enabled ? 1 : 0, free_preview_count: paymentSetting.free_preview_count, preview_duration: paymentSetting.preview_duration, price: Number(paymentSetting.price), hide_all: paymentSetting.hide_all } : null,
+        isAuthor,
+        hasPurchased,
+        videoData: videoData ? { video_url: videoData.video_url, cover_url: videoData.cover_url, preview_video_url: videoData.preview_video_url } : null,
+        imageUrls
+      });
+
+      formatted.tags = post.tags.map(pt => ({ id: pt.tag.id, name: pt.tag.name }));
+      formatted.liked = likedPostIds.has(post.id);
+      formatted.collected = collectedPostIds.has(post.id);
+      return formatted;
+    });
+
+    const total = await prisma.post.count({ where });
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success',
+      data: {
+        posts: formattedPosts,
+        hasFriends: true,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+      }
+    });
+  } catch (error) {
+    console.error('获取朋友笔记列表失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 获取关注用户的笔记列表
+router.get('/following', authenticateToken, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const sort = req.query.sort || 'time';
+    const type = req.query.type ? parseInt(req.query.type) : null;
+    const currentUserId = BigInt(req.user.id);
+
+    // 获取当前用户关注的用户
+    const following = await prisma.follow.findMany({
+      where: { follower_id: currentUserId },
+      select: { following_id: true }
+    });
+    const followingIds = following.map(f => f.following_id);
+
+    const hasFollowing = followingIds.length > 0;
+
+    if (!hasFollowing) {
+      // 推荐一些活跃用户供关注
+      const recommendedUsers = await prisma.user.findMany({
+        where: {
+          id: { not: currentUserId },
+          status: 1
+        },
+        select: {
+          id: true,
+          user_id: true,
+          nickname: true,
+          avatar: true,
+          bio: true,
+          fans_count: true,
+          verified: true,
+          _count: { select: { posts: true } }
+        },
+        orderBy: { fans_count: 'desc' },
+        take: 10
+      });
+
+      return res.json({
+        code: RESPONSE_CODES.SUCCESS,
+        message: 'success',
+        data: {
+          posts: [],
+          hasFollowing: false,
+          recommendedUsers: recommendedUsers.map(u => ({
+            id: Number(u.id),
+            user_id: u.user_id,
+            nickname: u.nickname,
+            avatar: u.avatar,
+            bio: u.bio,
+            fans_count: u.fans_count,
+            verified: u.verified,
+            post_count: u._count.posts
+          })),
+          pagination: { page, limit, total: 0, pages: 0 }
+        }
+      });
+    }
+
+    // 获取互相关注的用户ID用于friends_only可见性过滤
+    const mutualFollows = await prisma.follow.findMany({
+      where: {
+        follower_id: { in: followingIds },
+        following_id: currentUserId
+      },
+      select: { follower_id: true }
+    });
+    const mutualFollowIds = new Set(mutualFollows.map(f => f.follower_id));
+
+    // 获取黑名单用户
+    const blockedUserIds = await getBlockedUserIds(currentUserId);
+
+    // 构建查询条件
+    const where = {
+      user_id: { in: followingIds },
+      is_draft: false,
+      OR: [
+        { visibility: VISIBILITY_PUBLIC },
+        { visibility: VISIBILITY_FRIENDS_ONLY, user_id: { in: Array.from(mutualFollowIds) } }
+      ]
+    };
+
+    if (type) where.type = type;
+
+    if (blockedUserIds.length > 0) {
+      where.NOT = { user_id: { in: blockedUserIds } };
+    }
+
+    // 排序方式
+    let orderBy;
+    if (sort === 'hot') {
+      orderBy = [{ like_count: 'desc' }, { view_count: 'desc' }, { created_at: 'desc' }];
+    } else {
+      orderBy = { created_at: 'desc' };
+    }
+
+    const posts = await prisma.post.findMany({
+      where,
+      include: {
+        user: { select: { id: true, user_id: true, nickname: true, avatar: true, location: true, verified: true } },
+        category: { select: { name: true } },
+        images: { select: { image_url: true, is_free_preview: true } },
+        videos: { select: { video_url: true, cover_url: true, preview_video_url: true }, take: 1 },
+        tags: { include: { tag: { select: { id: true, name: true } } } },
+        paymentSettings: true
+      },
+      orderBy,
+      take: limit,
+      skip: skip
+    });
+
+    // 批量获取用户互动状态
+    let purchasedPostIds = new Set();
+    let likedPostIds = new Set();
+    let collectedPostIds = new Set();
+    if (posts.length > 0) {
+      const postIds = posts.map(p => p.id);
+      const [purchases, likes, collections] = await Promise.all([
+        prisma.userPurchasedContent.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } }),
+        prisma.like.findMany({ where: { user_id: currentUserId, target_type: 1, target_id: { in: postIds } }, select: { target_id: true } }),
+        prisma.collection.findMany({ where: { user_id: currentUserId, post_id: { in: postIds } }, select: { post_id: true } })
+      ]);
+      purchasedPostIds = new Set(purchases.map(p => p.post_id));
+      likedPostIds = new Set(likes.map(l => l.target_id));
+      collectedPostIds = new Set(collections.map(c => c.post_id));
+    }
+
+    const formattedPosts = posts.map(post => {
+      const formatted = {
+        id: Number(post.id),
+        user_id: Number(post.user_id),
+        title: post.title,
+        content: post.content,
+        category_id: post.category_id,
+        category: post.category?.name,
+        type: post.type,
+        view_count: Number(post.view_count),
+        like_count: post.like_count,
+        collect_count: post.collect_count,
+        comment_count: post.comment_count,
+        created_at: post.created_at,
+        is_draft: post.is_draft,
+        visibility: post.visibility || VISIBILITY_PUBLIC,
+        nickname: post.user?.nickname,
+        user_avatar: post.user?.avatar,
+        author_account: post.user?.user_id,
+        author_auto_id: post.user ? Number(post.user.id) : null,
+        location: post.user?.location,
+        verified: post.user?.verified,
+        avatar: post.user?.avatar,
+        author: post.user?.nickname
+      };
+
+      const isAuthor = post.user_id === currentUserId;
+      const hasPurchased = purchasedPostIds.has(post.id);
+      const paymentSetting = post.paymentSettings;
+      const imageUrls = post.images.map(img => ({ url: img.image_url, isFreePreview: img.is_free_preview }));
+      const videoData = post.videos[0] || null;
+
+      protectPostListItem(formatted, {
+        paymentSetting: paymentSetting ? { enabled: paymentSetting.enabled ? 1 : 0, free_preview_count: paymentSetting.free_preview_count, preview_duration: paymentSetting.preview_duration, price: Number(paymentSetting.price), hide_all: paymentSetting.hide_all } : null,
+        isAuthor,
+        hasPurchased,
+        videoData: videoData ? { video_url: videoData.video_url, cover_url: videoData.cover_url, preview_video_url: videoData.preview_video_url } : null,
+        imageUrls
+      });
+
+      formatted.tags = post.tags.map(pt => ({ id: pt.tag.id, name: pt.tag.name }));
+      formatted.liked = likedPostIds.has(post.id);
+      formatted.collected = collectedPostIds.has(post.id);
+      return formatted;
+    });
+
+    const total = await prisma.post.count({ where });
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success',
+      data: {
+        posts: formattedPosts,
+        hasFollowing: true,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+      }
+    });
+  } catch (error) {
+    console.error('获取关注用户笔记列表失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
 // 获取笔记列表
 router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
   try {

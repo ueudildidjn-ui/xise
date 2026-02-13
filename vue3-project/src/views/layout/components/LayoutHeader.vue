@@ -28,6 +28,7 @@ const isExplorePage = computed(() => {
            route.path.startsWith('/explore/') || 
            route.name === 'explore' || 
            route.name === 'recommend' || 
+           route.name === 'friends' ||
            route.name === 'following' ||
            route.name === 'channel'
 })

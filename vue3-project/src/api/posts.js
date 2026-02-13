@@ -552,6 +552,73 @@ export async function getDraftPosts(params = {}) {
   }
 }
 
+// 获取朋友（互相关注）用户的笔记列表
+export async function getFriendsPosts(params = {}) {
+  const {
+    page = 1,
+    limit = 20,
+    sort = 'time',
+    type
+  } = params
+
+  try {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      console.warn('获取朋友笔记需要登录')
+      return {
+        posts: [],
+        recommendedUsers: [],
+        hasFriends: false,
+        pagination: { page, limit, total: 0, pages: 0 },
+        hasMore: false
+      }
+    }
+
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      sort
+    })
+
+    if (type) {
+      queryParams.append('type', type.toString())
+    }
+
+    const response = await fetch(`${apiConfig.baseURL}/posts/friends?${queryParams.toString()}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }).then(res => res.json())
+
+    if (response && response.code === 200 && response.data) {
+      return {
+        posts: (response.data.posts || []).map(transformPostData),
+        recommendedUsers: response.data.recommendedUsers || [],
+        hasFriends: response.data.hasFriends,
+        pagination: response.data.pagination,
+        hasMore: response.data.pagination.page < response.data.pagination.pages
+      }
+    } else {
+      console.error('获取朋友笔记返回错误:', response)
+    }
+  } catch (error) {
+    console.error('获取朋友笔记列表失败:', error)
+  }
+
+  return {
+    posts: [],
+    recommendedUsers: [],
+    hasFriends: false,
+    pagination: {
+      page,
+      limit,
+      total: 0,
+      pages: 0
+    },
+    hasMore: false
+  }
+}
+
 // 获取关注用户的笔记列表
 export async function getFollowingPosts(params = {}) {
   const {
