@@ -63,7 +63,6 @@ export const useCommentStore = defineStore('comment', () => {
                     verified: comment.verified || 0, // 认证状态
                     content: comment.content,
                     time: formatTime(comment.created_at),
-                    location: comment.user_location || comment.location,
                     likeCount: comment.like_count || 0,
                     isLiked: comment.liked || false,
                     parent_id: comment.parent_id,
@@ -108,7 +107,6 @@ export const useCommentStore = defineStore('comment', () => {
                                     verified: reply.verified || 0, // 认证状态
                                     content: reply.content,
                                     time: formatTime(reply.created_at),
-                                    location: reply.user_location || reply.location,
                                     likeCount: reply.like_count || 0,
                                     isLiked: reply.liked || false,
                                     parent_id: reply.parent_id,

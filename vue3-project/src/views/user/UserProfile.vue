@@ -341,7 +341,6 @@ onMounted(async () => {
           </div>
           <div class="user-content">
             <div class="user-id text-ellipsis">汐社号：{{ userInfo?.user_id || '' }}</div>
-            <div class="user-IP text-ellipsis">IP属地：{{ userInfo?.location || '未知' }}</div>
           </div>
         </div>
 
@@ -614,32 +613,10 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.user-IP {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.user-IP::before {
-  content: '';
-  display: none;
-}
-
 /* 大屏幕下恢复分隔线和宽度限制 */
 @media (min-width: 901px) {
   .user-id {
     max-width: 60%;
-  }
-
-  .user-IP::before {
-    content: '';
-    display: inline-block;
-    width: 0.92px;
-    height: 12px;
-    background-color: var(--bg-color-tertiary);
-    margin-right: 8px;
-    vertical-align: middle;
   }
 }
 

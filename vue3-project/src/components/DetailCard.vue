@@ -327,7 +327,6 @@
               </div>
               <div class="post-meta">
                 <span class="time">{{ postData.time }}</span>
-                <span class="location">{{ postData.location }}</span>
               </div>
             </div>
 
@@ -390,7 +389,7 @@
                     <div class="comment-text">
                       <ContentRenderer :content="comment.content" @image-click="handleCommentImageClick" />
                     </div>
-                    <span class="comment-time">{{ comment.time }} {{ comment.location }}</span>
+                    <span class="comment-time">{{ comment.time }}</span>
                     <div class="comment-actions">
                       <div class="comment-like-container">
                         <LikeButton :is-liked="comment.isLiked" size="small"
@@ -434,7 +433,7 @@
                             回复 <span class="reply-to">{{ reply.replyTo }}</span>：
                             <ContentRenderer :content="reply.content" @image-click="handleCommentImageClick" />
                           </div>
-                          <span class="reply-time">{{ reply.time }} {{ reply.location }}</span>
+                          <span class="reply-time">{{ reply.time }}</span>
                           <div class="reply-actions">
                             <div class="reply-like-container">
                               <LikeButton :is-liked="reply.isLiked" size="small"
@@ -1155,7 +1154,6 @@ const postData = computed(() => {
           []) :
         []),
     time: formatTime(props.item.originalData?.createdAt || props.item.created_at || props.item.time),
-    location: props.item.location || '',
     attachment: props.item.attachment || null
   }
   return data
@@ -2744,7 +2742,6 @@ const handleSendComment = async () => {
           verified: response.data.verified || 0, // 认证状态
           content: response.data.content,
           time: formatTime(response.data.created_at) || '刚刚',
-          location: response.data.user_location || response.data.location || '',
           likeCount: response.data.like_count || 0,
           isLiked: response.data.liked || false,
           parent_id: response.data.parent_id,
