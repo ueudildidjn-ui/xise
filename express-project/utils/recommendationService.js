@@ -355,7 +355,8 @@ async function getRecommendedPosts(options = {}) {
     page = 1,
     limit = 20,
     excludePostIds = [],
-    type = null
+    type = null,
+    blockedUserIds = []
   } = options;
 
   // 使用配置常量计算候选池大小
@@ -416,6 +417,11 @@ async function getRecommendedPosts(options = {}) {
 
     if (excludePostIds.length > 0) {
       whereCondition.id = { notIn: excludePostIds.map(id => BigInt(id)) };
+    }
+
+    // 排除黑名单用户的笔记
+    if (blockedUserIds.length > 0) {
+      whereCondition.user_id = { notIn: blockedUserIds };
     }
 
     addDebugPhase(debugLog, 'QUERY_CONDITION', whereCondition);
@@ -561,7 +567,8 @@ async function getHotPosts(options = {}) {
     limit = 20,
     timeRange = 7, // 天数
     category = null,
-    type = null
+    type = null,
+    blockedUserIds = []
   } = options;
 
   // 候选池大小限制（避免全表扫描）
@@ -585,6 +592,11 @@ async function getHotPosts(options = {}) {
 
   if (type) {
     whereCondition.type = parseInt(type);
+  }
+
+  // 排除黑名单用户的笔记
+  if (blockedUserIds.length > 0) {
+    whereCondition.user_id = { notIn: blockedUserIds };
   }
 
   // 获取总数（用于分页信息）
