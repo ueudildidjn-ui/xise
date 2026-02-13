@@ -1,10 +1,11 @@
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useScroll, useWindowSize } from '@vueuse/core'
 import { useNavigationStore } from '@/stores/navigation'
 import { useUserStore } from '@/stores/user'
 import { useFollowStore } from '@/stores/follow'
+import { useBlacklistStore } from '@/stores/blacklist'
 import { userApi } from '@/api'
 import WaterfallFlow from '@/components/WaterfallFlow.vue'
 import FollowButton from '@/components/FollowButton.vue'
@@ -20,6 +21,7 @@ const router = useRouter()
 const navigationStore = useNavigationStore()
 const userStore = useUserStore()
 const followStore = useFollowStore()
+const blacklistStore = useBlacklistStore()
 
 const defaultAvatar = new URL('@/assets/imgs/avatar.png', import.meta.url).href
 const userId = ref(route.params.userId)
@@ -64,6 +66,13 @@ const userStats = ref({
 
 // 关注状态
 const followStatus = ref(false)
+
+// 黑名单状态
+const isBlocked = ref(false)     // 我是否拉黑了对方
+const isBlockedBy = ref(false)   // 对方是否拉黑了我
+
+// 更多操作菜单
+const showMoreMenu = ref(false)
 
 // 图片预览
 const showImageViewer = ref(false)
@@ -148,6 +157,12 @@ const getUserInfo = async () => {
 
     if (response.success) {
       userInfo.value = response.data
+      // 更新黑名单状态
+      isBlocked.value = response.data.isBlocked || false
+      isBlockedBy.value = response.data.isBlockedBy || false
+      if (response.data.user_id) {
+        blacklistStore.initUserBlockState(response.data.user_id, isBlocked.value, isBlockedBy.value)
+      }
       // 获取用户信息成功后，再获取关注状态
       await getFollowStatus()
     } else {
@@ -218,6 +233,53 @@ const previewAvatar = () => {
   console.log('currentImageUrl设置为:', currentImageUrl.value)
 }
 
+// 切换更多菜单
+const toggleMoreMenu = () => {
+  showMoreMenu.value = !showMoreMenu.value
+}
+
+// 关闭更多菜单（点击外部时）
+const closeMoreMenu = (e) => {
+  if (showMoreMenu.value) {
+    const moreBtn = document.querySelector('.more-menu-wrapper')
+    if (moreBtn && !moreBtn.contains(e.target)) {
+      showMoreMenu.value = false
+    }
+  }
+}
+
+// 拉黑/取消拉黑
+const toggleBlock = async () => {
+  showMoreMenu.value = false
+  if (!userStore.isLoggedIn) return
+
+  if (isBlocked.value) {
+    const result = await blacklistStore.unblockUser(userInfo.value.user_id)
+    if (result.success) {
+      isBlocked.value = false
+      // 重新加载用户信息
+      await getUserInfo()
+      await getUserStats()
+    }
+  } else {
+    const result = await blacklistStore.blockUser(userInfo.value.user_id)
+    if (result.success) {
+      isBlocked.value = true
+      // 拉黑后关注状态也会被清除
+      followStatus.value = false
+      followStore.updateUserFollowState(userInfo.value.user_id, false, false, 'follow')
+    }
+  }
+}
+
+// 监听点击外部关闭菜单
+onMounted(() => {
+  document.addEventListener('click', closeMoreMenu)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', closeMoreMenu)
+})
+
 // 监听路由参数变化
 watch(() => route.params.userId, (newUserId) => {
   if (newUserId) {
@@ -229,6 +291,9 @@ watch(() => route.params.userId, (newUserId) => {
 
     userId.value = newUserId
     activeTab.value = 'posts'
+    isBlocked.value = false
+    isBlockedBy.value = false
+    showMoreMenu.value = false
 
     // 重新加载数据
     getUserInfo()
@@ -281,7 +346,17 @@ onMounted(async () => {
         </div>
 
         <div class="follow-button-wrapper" v-if="!isCurrentUser">
-          <FollowButton :user-id="userInfo.user_id" :is-following="followStatus" />
+          <FollowButton v-if="!isBlocked && !isBlockedBy" :user-id="userInfo.user_id" :is-following="followStatus" />
+          <div class="more-menu-wrapper" @click.stop>
+            <div class="more-btn" @click="toggleMoreMenu">
+              <SvgIcon name="more" width="20" height="20" color="#ffffff" />
+            </div>
+            <div class="more-dropdown" v-if="showMoreMenu">
+              <div class="dropdown-item" @click="toggleBlock">
+                {{ isBlocked ? '取消拉黑' : '加入黑名单' }}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="user-desc">
@@ -324,7 +399,7 @@ onMounted(async () => {
     </div>
 
 
-    <div class="tab" ref="tabBarRef" v-if="userInfo.nickname">
+    <div class="tab" ref="tabBarRef" v-if="userInfo.nickname && !isBlocked && !isBlockedBy">
       <div v-for="item in tabs" class="tab-item" :class="{ active: activeTab === item.name }"
         @click="onTabClick(item.name)">
         {{ item.label }}
@@ -332,7 +407,7 @@ onMounted(async () => {
       <div class="tab-slider" :style="sliderStyle"></div>
     </div>
 
-    <div class="fixedTab" :class="{ hidden: scrollY < 300 }" ref="fixedTabBarRef" v-if="userInfo.nickname">
+    <div class="fixedTab" :class="{ hidden: scrollY < 300 }" ref="fixedTabBarRef" v-if="userInfo.nickname && !isBlocked && !isBlockedBy">
       <div v-for="item in tabs" class="tab-item" :class="{ active: activeTab === item.name }"
         @click="onTabClick(item.name)">
         {{ item.label }}
@@ -340,8 +415,26 @@ onMounted(async () => {
       <div class="tab-slider" :style="fixedSliderStyle"></div>
     </div>
 
+    <!-- 拉黑状态提示 -->
+    <div class="blocked-state" v-if="userInfo.nickname && isBlocked">
+      <div class="blocked-content">
+        <SvgIcon name="info" width="48" height="48" class="blocked-icon" />
+        <h3>你已拉黑对方</h3>
+        <p>你已拉黑对方无法查看其笔记</p>
+      </div>
+    </div>
 
-    <div class="content-switch-container" v-if="userInfo.nickname">
+    <!-- 被对方拉黑状态提示 -->
+    <div class="blocked-state" v-else-if="userInfo.nickname && isBlockedBy">
+      <div class="blocked-content">
+        <SvgIcon name="info" width="48" height="48" class="blocked-icon" />
+        <h3>暂无内容</h3>
+        <p>由于对方的隐私设置，你无法看到Ta笔记</p>
+      </div>
+    </div>
+
+
+    <div class="content-switch-container" v-if="userInfo.nickname && !isBlocked && !isBlockedBy">
 
       <div class="content-item" :class="{ active: activeTab === 'posts' }"
         :style="{ transform: activeTab === 'posts' ? 'translateX(0%)' : 'translateX(-100%)' }">
@@ -635,6 +728,91 @@ onMounted(async () => {
   top: 50%;
   transform: translateY(-50%);
   z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- 3.5.1. 更多操作菜单 ---------- */
+.more-menu-wrapper {
+  position: relative;
+}
+
+.more-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+  transition: background-color 0.2s ease;
+}
+
+.more-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.more-dropdown {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  background: var(--bg-color-primary);
+  border: 1px solid var(--border-color-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 120px;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.dropdown-item {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--text-color-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background: var(--bg-color-secondary);
+}
+
+/* ---------- 3.5.2. 黑名单状态样式 ---------- */
+.blocked-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  padding: 40px 16px;
+  background: var(--bg-color-primary);
+}
+
+.blocked-content {
+  text-align: center;
+  max-width: 300px;
+}
+
+.blocked-icon {
+  color: var(--text-color-quaternary);
+  margin-bottom: 16px;
+}
+
+.blocked-content h3 {
+  color: var(--text-color-primary);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.blocked-content p {
+  color: var(--text-color-secondary);
+  font-size: 14px;
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* ---------- 3.6. 加载和错误状态样式 ---------- */

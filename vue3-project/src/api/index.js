@@ -90,6 +90,21 @@ export const userApi = {
   // 获取用户工具栏配置
   getToolbarItems() {
     return request.get('/users/toolbar/items')
+  },
+
+  // 拉黑用户
+  blockUser(userId) {
+    return request.post(`/users/${userId}/block`)
+  },
+
+  // 取消拉黑
+  unblockUser(userId) {
+    return request.delete(`/users/${userId}/block`)
+  },
+
+  // 获取黑名单状态
+  getBlockStatus(userId) {
+    return request.get(`/users/${userId}/block-status`)
   }
 }
 
