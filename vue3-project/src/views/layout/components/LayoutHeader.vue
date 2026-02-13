@@ -1,8 +1,7 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import SvgIcon from '@/components/SvgIcon.vue'
-import DropdownMenu from '@/components/menu/DropdownMenu.vue'
 import CommonMenu from '@/components/menu/CommonMenu.vue'
 import SearchDropdown from './SearchDropdown.vue'
 import TabContainer from '@/components/TabContainer.vue'
@@ -232,6 +231,20 @@ function handleClickOutside(event) {
     }
 }
 
+// 半屏菜单面板状态
+const showMenuPanel = ref(false)
+
+function openMenuPanel() {
+    showMenuPanel.value = true
+}
+
+function closeMenuPanel() {
+    showMenuPanel.value = false
+}
+
+// 提供关闭方法给 CommonMenu 的子组件
+provide('closeDropdown', closeMenuPanel)
+
 // 生命周期钩子
 onMounted(() => {
     window.addEventListener('resize', handleResize)
@@ -289,16 +302,9 @@ onUnmounted(() => {
                     <div v-if="!isLargeScreen" class="cancel-btn" @click="closeSearch">取消</div>
                 </div>
                 <div v-if="isLargeScreen && !showSidebar" class="header-right">
-                    <DropdownMenu direction="down" menuClass="header-dropdown">
-                        <template #trigger>
-                            <div class="circle-btn">
-                                <SvgIcon name="menu" class="btn-icon" height="20" width="20" />
-                            </div>
-                        </template>
-                        <template #menu>
-                            <CommonMenu />
-                        </template>
-                    </DropdownMenu>
+                    <div class="circle-btn" @click="openMenuPanel">
+                        <SvgIcon name="menu" class="btn-icon" height="20" width="20" />
+                    </div>
                 </div>
 
             </template>
@@ -326,19 +332,28 @@ onUnmounted(() => {
                     <div @click="openSearch" class="circle-btn">
                         <SvgIcon name="search" class="btn-icon" height="20" width="20" />
                     </div>
-                    <DropdownMenu v-if="!showSidebar" direction="down" menuClass="header-dropdown">
-                        <template #trigger>
-                            <div class="circle-btn">
-                                <SvgIcon name="menu" class="btn-icon" height="20" width="20" />
-                            </div>
-                        </template>
-                        <template #menu>
-                            <CommonMenu />
-                        </template>
-                    </DropdownMenu>
+                    <div v-if="!showSidebar" class="circle-btn" @click="openMenuPanel">
+                        <SvgIcon name="menu" class="btn-icon" height="20" width="20" />
+                    </div>
                 </div>
             </template>
         </div>
+
+        <!-- 半屏菜单面板 -->
+        <Transition name="menu-panel">
+            <div v-if="showMenuPanel" class="menu-panel-overlay" @click="closeMenuPanel">
+                <div class="menu-panel" @click.stop>
+                    <div class="menu-panel-header">
+                        <button class="menu-panel-close" @click="closeMenuPanel">
+                            <SvgIcon name="close" width="20" height="20" />
+                        </button>
+                    </div>
+                    <div class="menu-panel-content">
+                        <CommonMenu />
+                    </div>
+                </div>
+            </div>
+        </Transition>
     </header>
 </template>
 
@@ -596,5 +611,89 @@ header {
     position: static !important;
     transform: none !important;
     margin: 0 !important;
+}
+
+/* 半屏菜单面板样式 */
+.menu-panel-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 2000;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.menu-panel {
+    width: 50%;
+    max-width: 320px;
+    min-width: 240px;
+    height: 100%;
+    background: var(--bg-color-primary);
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.menu-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color-primary);
+}
+
+.menu-panel-close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: var(--bg-color-secondary);
+    color: var(--text-color-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.menu-panel-close:hover {
+    opacity: 0.8;
+    transform: scale(1.1);
+}
+
+.menu-panel-content {
+    flex: 1;
+    padding: 8px 0;
+}
+
+/* 菜单面板过渡动画 */
+.menu-panel-enter-active,
+.menu-panel-leave-active {
+    transition: all 0.3s ease;
+}
+
+.menu-panel-enter-active .menu-panel,
+.menu-panel-leave-active .menu-panel {
+    transition: transform 0.3s ease;
+}
+
+.menu-panel-enter-from {
+    background: rgba(0, 0, 0, 0);
+}
+
+.menu-panel-enter-from .menu-panel {
+    transform: translateX(100%);
+}
+
+.menu-panel-leave-to {
+    background: rgba(0, 0, 0, 0);
+}
+
+.menu-panel-leave-to .menu-panel {
+    transform: translateX(100%);
 }
 </style>
