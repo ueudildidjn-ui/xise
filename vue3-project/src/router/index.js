@@ -60,11 +60,6 @@ const router = createRouter({
               component: ChannelPage
             },
             {
-              path: '/explore/video',
-              name: 'video',
-              component: ChannelPage
-            },
-            {
               path: '/explore/following',
               name: 'following',
               component: FollowingPage
