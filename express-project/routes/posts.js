@@ -437,8 +437,11 @@ router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
     // 排除黑名单用户的笔记（仅在未指定特定用户时应用，指定用户时由各自路由处理）
     if (blockedUserIds.length > 0 && !userId) {
       if (where.OR) {
-        // 已有 OR 条件时，添加 NOT 条件排除黑名单用户
-        where.NOT = { user_id: { in: blockedUserIds } };
+        // 已有 OR 条件时，添加 NOT 条件排除黑名单用户（合并已有 NOT）
+        where.NOT = [
+          ...(Array.isArray(where.NOT) ? where.NOT : where.NOT ? [where.NOT] : []),
+          { user_id: { in: blockedUserIds } }
+        ];
       } else {
         where.user_id = { ...(typeof where.user_id === 'object' ? where.user_id : {}), notIn: blockedUserIds };
       }

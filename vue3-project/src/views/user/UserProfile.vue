@@ -273,9 +273,6 @@ const toggleBlock = async () => {
 }
 
 // 监听点击外部关闭菜单
-onMounted(() => {
-  document.addEventListener('click', closeMoreMenu)
-})
 onUnmounted(() => {
   document.removeEventListener('click', closeMoreMenu)
 })
@@ -305,6 +302,9 @@ watch(() => route.params.userId, (newUserId) => {
 })
 
 onMounted(async () => {
+  // 监听点击外部关闭菜单
+  document.addEventListener('click', closeMoreMenu)
+
   // 检查是否是当前用户访问自己的主页，如果是则重定向到 /user
   if (userStore.isLoggedIn && userStore.userInfo?.user_id === userId.value) {
     router.replace('/user')
@@ -420,7 +420,7 @@ onMounted(async () => {
       <div class="blocked-content">
         <SvgIcon name="info" width="48" height="48" class="blocked-icon" />
         <h3>你已拉黑对方</h3>
-        <p>你已拉黑对方无法查看其笔记</p>
+        <p>你已拉黑对方，无法查看其笔记</p>
       </div>
     </div>
 
@@ -429,7 +429,7 @@ onMounted(async () => {
       <div class="blocked-content">
         <SvgIcon name="info" width="48" height="48" class="blocked-icon" />
         <h3>暂无内容</h3>
-        <p>由于对方的隐私设置，你无法看到Ta笔记</p>
+        <p>由于对方的隐私设置，你无法看到Ta的笔记</p>
       </div>
     </div>
 
