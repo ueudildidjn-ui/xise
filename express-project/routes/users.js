@@ -531,6 +531,22 @@ router.get('/:id', optionalAuth, async (req, res) => {
     // 判断是否是本人
     const isOwner = currentUserId && currentUserId === user.id;
 
+    // 检查黑名单状态
+    let isBlocked = false;    // 我是否拉黑了对方
+    let isBlockedBy = false;  // 对方是否拉黑了我
+    if (currentUserId && !isOwner) {
+      const [blockedResult, blockedByResult] = await Promise.all([
+        prisma.blacklist.findUnique({
+          where: { uk_blacklist: { blocker_id: currentUserId, blocked_id: user.id } }
+        }),
+        prisma.blacklist.findUnique({
+          where: { uk_blacklist: { blocker_id: user.id, blocked_id: currentUserId } }
+        })
+      ]);
+      isBlocked = !!blockedResult;
+      isBlockedBy = !!blockedByResult;
+    }
+
     // 处理个人简介的可见性
     let displayBio = user.bio;
     let bioAuditStatus = user.bio_audit_status;
@@ -567,7 +583,9 @@ router.get('/:id', optionalAuth, async (req, res) => {
       mbti: user.mbti,
       education: user.education,
       major: user.major,
-      interests: user.interests
+      interests: user.interests,
+      isBlocked,
+      isBlockedBy
     };
 
     res.json({ code: RESPONSE_CODES.SUCCESS, message: 'success', data: userData });
@@ -904,6 +922,18 @@ router.post('/:id/follow', authenticateToken, async (req, res) => {
     // 不能关注自己
     if (followerId === userId) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '不能关注自己' });
+    }
+
+    // 检查黑名单：任一方拉黑对方都不允许关注
+    const [blockedByMe, blockedByThem] = await Promise.all([
+      prisma.blacklist.findUnique({ where: { uk_blacklist: { blocker_id: followerId, blocked_id: userId } } }),
+      prisma.blacklist.findUnique({ where: { uk_blacklist: { blocker_id: userId, blocked_id: followerId } } })
+    ]);
+    if (blockedByMe) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '你已拉黑对方，无法关注' });
+    }
+    if (blockedByThem) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '操作失败' });
     }
 
     // 检查是否已经关注
@@ -1390,6 +1420,28 @@ router.get('/:id/posts', optionalAuth, async (req, res) => {
     }
     const userId = userRecord.id;
 
+    // 检查黑名单状态：任一方拉黑则不显示笔记
+    if (currentUserId && currentUserId !== userId) {
+      const [blockedByMe, blockedByThem] = await Promise.all([
+        prisma.blacklist.findUnique({ where: { uk_blacklist: { blocker_id: currentUserId, blocked_id: userId } } }),
+        prisma.blacklist.findUnique({ where: { uk_blacklist: { blocker_id: userId, blocked_id: currentUserId } } })
+      ]);
+      if (blockedByMe) {
+        return res.json({
+          code: RESPONSE_CODES.SUCCESS,
+          message: 'blocked',
+          data: { posts: [], pagination: { page, limit, total: 0, pages: 0 }, isBlocked: true }
+        });
+      }
+      if (blockedByThem) {
+        return res.json({
+          code: RESPONSE_CODES.SUCCESS,
+          message: 'blocked_by',
+          data: { posts: [], pagination: { page, limit, total: 0, pages: 0 }, isBlockedBy: true }
+        });
+      }
+    }
+
     // Check if current user is mutual follower with the target user
     let isMutualFollower = false;
     if (currentUserId && currentUserId !== userId) {
@@ -1536,6 +1588,28 @@ router.get('/:id/collections', optionalAuth, async (req, res) => {
       return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
     }
     const userId = userRecord.id;
+
+    // 检查黑名单状态：任一方拉黑则不显示收藏
+    if (currentUserId && currentUserId !== userId) {
+      const [blockedByMe, blockedByThem] = await Promise.all([
+        prisma.blacklist.findUnique({ where: { uk_blacklist: { blocker_id: currentUserId, blocked_id: userId } } }),
+        prisma.blacklist.findUnique({ where: { uk_blacklist: { blocker_id: userId, blocked_id: currentUserId } } })
+      ]);
+      if (blockedByMe) {
+        return res.json({
+          code: RESPONSE_CODES.SUCCESS,
+          message: 'blocked',
+          data: { collections: [], pagination: { page, limit, total: 0, pages: 0 }, isBlocked: true }
+        });
+      }
+      if (blockedByThem) {
+        return res.json({
+          code: RESPONSE_CODES.SUCCESS,
+          message: 'blocked_by',
+          data: { collections: [], pagination: { page, limit, total: 0, pages: 0 }, isBlockedBy: true }
+        });
+      }
+    }
 
     const collections = await prisma.collection.findMany({
       where: { user_id: userId },
@@ -1833,6 +1907,153 @@ router.get('/toolbar/items', async (req, res) => {
       message: 'success',
       data: []
     });
+  }
+});
+
+// ===================== 黑名单功能 =====================
+
+// 加入黑名单
+router.post('/:id/block', authenticateToken, async (req, res) => {
+  try {
+    const userIdParam = req.params.id;
+    const blockerId = BigInt(req.user.id);
+
+    // 通过汐社号查找对应的数字ID
+    const userRecord = await prisma.user.findUnique({
+      where: { user_id: userIdParam },
+      select: { id: true }
+    });
+
+    if (!userRecord) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
+    }
+    const blockedId = userRecord.id;
+
+    // 不能拉黑自己
+    if (blockerId === blockedId) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '不能拉黑自己' });
+    }
+
+    // 检查是否已经拉黑
+    const existingBlock = await prisma.blacklist.findUnique({
+      where: { uk_blacklist: { blocker_id: blockerId, blocked_id: blockedId } }
+    });
+
+    if (existingBlock) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '已经拉黑了该用户' });
+    }
+
+    // 添加黑名单记录，同时移除双方关注关系
+    await prisma.$transaction(async (tx) => {
+      // 添加黑名单
+      await tx.blacklist.create({
+        data: { blocker_id: blockerId, blocked_id: blockedId }
+      });
+
+      // 移除我关注对方的记录
+      const myFollow = await tx.follow.findUnique({
+        where: { uk_follow: { follower_id: blockerId, following_id: blockedId } }
+      });
+      if (myFollow) {
+        await tx.follow.delete({ where: { id: myFollow.id } });
+        await tx.user.update({ where: { id: blockerId }, data: { follow_count: { decrement: 1 } } });
+        await tx.user.update({ where: { id: blockedId }, data: { fans_count: { decrement: 1 } } });
+      }
+
+      // 移除对方关注我的记录
+      const theirFollow = await tx.follow.findUnique({
+        where: { uk_follow: { follower_id: blockedId, following_id: blockerId } }
+      });
+      if (theirFollow) {
+        await tx.follow.delete({ where: { id: theirFollow.id } });
+        await tx.user.update({ where: { id: blockedId }, data: { follow_count: { decrement: 1 } } });
+        await tx.user.update({ where: { id: blockerId }, data: { fans_count: { decrement: 1 } } });
+      }
+    });
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '拉黑成功' });
+  } catch (error) {
+    console.error('拉黑失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 取消拉黑
+router.delete('/:id/block', authenticateToken, async (req, res) => {
+  try {
+    const userIdParam = req.params.id;
+    const blockerId = BigInt(req.user.id);
+
+    // 通过汐社号查找对应的数字ID
+    const userRecord = await prisma.user.findUnique({
+      where: { user_id: userIdParam },
+      select: { id: true }
+    });
+
+    if (!userRecord) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
+    }
+    const blockedId = userRecord.id;
+
+    // 检查黑名单记录是否存在
+    const blockRecord = await prisma.blacklist.findUnique({
+      where: { uk_blacklist: { blocker_id: blockerId, blocked_id: blockedId } }
+    });
+
+    if (!blockRecord) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '黑名单记录不存在' });
+    }
+
+    await prisma.blacklist.delete({ where: { id: blockRecord.id } });
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '取消拉黑成功' });
+  } catch (error) {
+    console.error('取消拉黑失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 获取黑名单状态
+router.get('/:id/block-status', optionalAuth, async (req, res) => {
+  try {
+    const userIdParam = req.params.id;
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
+
+    // 通过汐社号查找对应的数字ID
+    const userRecord = await prisma.user.findUnique({
+      where: { user_id: userIdParam },
+      select: { id: true }
+    });
+
+    if (!userRecord) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
+    }
+    const targetId = userRecord.id;
+
+    let isBlocked = false;    // 我是否拉黑了对方
+    let isBlockedBy = false;  // 对方是否拉黑了我
+
+    if (currentUserId) {
+      const [blockedResult, blockedByResult] = await Promise.all([
+        prisma.blacklist.findUnique({
+          where: { uk_blacklist: { blocker_id: currentUserId, blocked_id: targetId } }
+        }),
+        prisma.blacklist.findUnique({
+          where: { uk_blacklist: { blocker_id: targetId, blocked_id: currentUserId } }
+        })
+      ]);
+      isBlocked = !!blockedResult;
+      isBlockedBy = !!blockedByResult;
+    }
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success',
+      data: { isBlocked, isBlockedBy }
+    });
+  } catch (error) {
+    console.error('获取黑名单状态失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
   }
 });
 

@@ -43,6 +43,19 @@ async function areMutualFollowers(userId1, userId2) {
   return !!(follows1to2 && follows2to1);
 }
 
+// Helper to get blocked user IDs (both directions) for a user
+async function getBlockedUserIds(currentUserId) {
+  if (!currentUserId) return [];
+  const [blockedUsers, blockedByUsers] = await Promise.all([
+    prisma.blacklist.findMany({ where: { blocker_id: currentUserId }, select: { blocked_id: true } }),
+    prisma.blacklist.findMany({ where: { blocked_id: currentUserId }, select: { blocker_id: true } })
+  ]);
+  return [
+    ...blockedUsers.map(b => b.blocked_id),
+    ...blockedByUsers.map(b => b.blocker_id)
+  ];
+}
+
 // Helper to check if user can view a post based on visibility
 async function canViewPost(post, currentUserId) {
   // Author can always view their own posts
@@ -135,12 +148,16 @@ router.get('/recommended', optionalAuthWithGuestRestriction, async (req, res) =>
 
     console.log(`📊 [推荐算法] 开始计算推荐 - 用户ID: ${currentUserId || '未登录'}, 页码: ${page}`);
 
+    // 获取当前用户的黑名单列表
+    const blockedUserIds = await getBlockedUserIds(currentUserId);
+
     // 调用推荐算法服务
     const result = await getRecommendedPosts({
       userId: currentUserId,
       page,
       limit,
-      type
+      type,
+      blockedUserIds
     });
 
     // 批量获取用户互动状态
@@ -244,13 +261,17 @@ router.get('/hot', optionalAuthWithGuestRestriction, async (req, res) => {
 
     console.log(`🔥 [热门算法] 获取热门笔记 - 页码: ${page}, 时间范围: ${timeRange}天`);
 
+    // 获取当前用户的黑名单列表
+    const blockedUserIds = await getBlockedUserIds(currentUserId);
+
     // 调用热门算法服务
     const result = await getHotPosts({
       page,
       limit,
       timeRange,
       category,
-      type
+      type,
+      blockedUserIds
     });
 
     // 批量获取用户互动状态
@@ -378,6 +399,9 @@ router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
         mutualFollowerIds = new Set(mutualFollows.map(f => f.follower_id));
       }
     }
+
+    // 获取当前用户的黑名单列表，过滤掉被拉黑用户的笔记
+    const blockedUserIds = await getBlockedUserIds(currentUserId);
     
     if (isDraft) {
       if (!currentUserId) {
@@ -416,6 +440,19 @@ router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
     }
     if (category) where.category_id = category;
     if (type) where.type = type;
+
+    // 排除黑名单用户的笔记（仅在未指定特定用户时应用，指定用户时由各自路由处理）
+    if (blockedUserIds.length > 0 && !userId) {
+      if (where.OR) {
+        // 已有 OR 条件时，添加 NOT 条件排除黑名单用户（合并已有 NOT）
+        where.NOT = [
+          ...(Array.isArray(where.NOT) ? where.NOT : where.NOT ? [where.NOT] : []),
+          { user_id: { in: blockedUserIds } }
+        ];
+      } else {
+        where.user_id = { ...(typeof where.user_id === 'object' ? where.user_id : {}), notIn: blockedUserIds };
+      }
+    }
 
     const posts = await prisma.post.findMany({
       where,

@@ -17,6 +17,17 @@ router.get('/', authenticateToken, async (req, res) => {
     const is_read = req.query.is_read // 可选：按已读状态筛选
 
     const where = { user_id: userId }
+
+    // 过滤黑名单用户的通知
+    const blockedUsers = await prisma.blacklist.findMany({
+      where: { blocker_id: userId },
+      select: { blocked_id: true }
+    })
+    if (blockedUsers.length > 0) {
+      const blockedIds = blockedUsers.map(b => b.blocked_id)
+      where.sender_id = { notIn: blockedIds }
+    }
+
     if (type !== undefined && type !== '') {
       // 支持逗号分隔的多类型筛选，如 type=1,2,6
       const types = type.split(',').map(t => parseInt(t.trim())).filter(t => !isNaN(t))
