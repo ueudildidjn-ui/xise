@@ -25,10 +25,9 @@ const showSidebar = ref(window.innerWidth > 960)
 // 检查是否在探索页面（需要显示频道标签）
 const isExplorePage = computed(() => {
     return route.path === '/explore' || 
-           route.path.startsWith('/explore/') || 
+           (route.path.startsWith('/explore/') && route.name !== 'friends') || 
            route.name === 'explore' || 
            route.name === 'recommend' || 
-           route.name === 'friends' ||
            route.name === 'following' ||
            route.name === 'channel'
 })

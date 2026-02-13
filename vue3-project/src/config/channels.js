@@ -1,7 +1,6 @@
-// 默认频道配置（推荐、朋友、关注频道始终存在）
+// 默认频道配置（推荐、关注频道始终存在）
 const DEFAULT_CHANNELS = [
   { id: 'recommend', label: '推荐', path: '/recommend' },
-  { id: 'friends', label: '朋友', path: '/friends' },
   { id: 'following', label: '关注', path: '/following' }
 ]
 

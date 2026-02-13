@@ -8,11 +8,11 @@
                         <template v-if="item.label === 'explore'">
                             <a href="#" @click="handleExploreClick" class="footer-link">
                                 <template v-if="item.useText">
-                                    <span class="footer-text" :class="{ active: route.path.startsWith('/explore') }">{{ item.text }}</span>
+                                    <span class="footer-text" :class="{ active: route.path.startsWith('/explore') && route.path !== '/explore/friends' }">{{ item.text }}</span>
                                 </template>
                                 <template v-else>
                                     <SvgIcon :name="item.icon" class="icon"
-                                        :class="{ active: route.path.startsWith('/explore') }" width="24px" height="24px" />
+                                        :class="{ active: route.path.startsWith('/explore') && route.path !== '/explore/friends' }" width="24px" height="24px" />
                                 </template>
                             </a>
                         </template>
@@ -60,6 +60,7 @@ const notificationStore = useNotificationStore()
 // 底部导航配置
 const footerList = ref([
     { label: 'explore', icon: 'home', path: '/explore', useText: true, text: '首页' },
+    { label: 'friends', icon: 'user', path: '/explore/friends', useText: true, text: '朋友' },
     { label: 'publish', icon: 'publish', path: '/publish' },
     { label: 'messages', icon: 'notification', path: '/messages', useText: true, text: '消息' },
     { label: 'user', icon: 'user', path: '/user', useText: true, text: '我的' },

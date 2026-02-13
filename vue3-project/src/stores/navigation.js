@@ -24,12 +24,12 @@ export const useNavigationStore = defineStore('navigation', () => {
       event.preventDefault()
     }
 
-    // 如果当前已经在发现页面，触发刷新并滚动到顶部
-    if (currentPath && currentPath.startsWith('/explore')) {
+    // 如果当前已经在发现页面（但不是朋友页面），触发刷新并滚动到顶部
+    if (currentPath && currentPath.startsWith('/explore') && currentPath !== '/explore/friends') {
       scrollToTop()
       triggerExploreRefresh()
     } else {
-      // 如果不在发现页面，正常跳转并滚动到顶部
+      // 如果不在发现页面或在朋友页面，正常跳转并滚动到顶部
       router.push('/explore').then(() => {
         scrollToTop()
       })
