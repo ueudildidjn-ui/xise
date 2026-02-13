@@ -8,11 +8,11 @@
                         <template v-if="item.label === 'explore'">
                             <a href="#" @click="handleExploreClick" class="footer-link">
                                 <template v-if="item.useText">
-                                    <span class="footer-text" :class="{ active: route.path.startsWith('/explore') && route.path !== '/explore/friends' }">{{ item.text }}</span>
+                                    <span class="footer-text" :class="{ active: isExploreActive }">{{ item.text }}</span>
                                 </template>
                                 <template v-else>
                                     <SvgIcon :name="item.icon" class="icon"
-                                        :class="{ active: route.path.startsWith('/explore') && route.path !== '/explore/friends' }" width="24px" height="24px" />
+                                        :class="{ active: isExploreActive }" width="24px" height="24px" />
                                 </template>
                             </a>
                         </template>
@@ -50,12 +50,15 @@
 
 <script setup>
 import SvgIcon from '@/components/SvgIcon.vue'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouteUtils } from '@/composables/useRouteUtils'
 import { useNotificationStore } from '@/stores/notification'
 
 const { route, handleExploreClick } = useRouteUtils()
 const notificationStore = useNotificationStore()
+
+// 首页是否高亮（排除朋友页面）
+const isExploreActive = computed(() => route.path.startsWith('/explore') && route.path !== '/explore/friends')
 
 // 底部导航配置
 const footerList = ref([
