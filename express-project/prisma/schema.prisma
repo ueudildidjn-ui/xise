@@ -142,6 +142,22 @@ model Comment {
   @@map("comments")
 }
 
+// 黑名单表
+model Blacklist {
+  id         BigInt   @id @default(autoincrement())
+  blocker_id BigInt
+  blocked_id BigInt
+  created_at DateTime @default(now())
+
+  blocker User @relation("BlockedByUser", fields: [blocker_id], references: [id], onDelete: Cascade)
+  blocked User @relation("BlockedUser", fields: [blocked_id], references: [id], onDelete: Cascade)
+
+  @@unique([blocker_id, blocked_id], name: "uk_blacklist")
+  @@index([blocker_id], name: "idx_blacklist_blocker_id")
+  @@index([blocked_id], name: "idx_blacklist_blocked_id")
+  @@map("blacklist")
+}
+
 // 关注关系表
 model Follow {
   id           BigInt   @id @default(autoincrement())
@@ -648,6 +664,8 @@ model User {
   purchasedContentAsAuthor        UserPurchasedContent[]           @relation("PurchasedContentAuthor")
   browsingHistory                 BrowsingHistory[]
   systemNotificationConfirmations SystemNotificationConfirmation[]
+  blockedByMe                     Blacklist[]                      @relation("BlockedByUser")
+  blockedMe                       Blacklist[]                      @relation("BlockedUser")
 
   @@index([user_id], name: "idx_user_user_id")
   @@index([email], name: "idx_user_email")

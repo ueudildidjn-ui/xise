@@ -378,6 +378,23 @@ router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
         mutualFollowerIds = new Set(mutualFollows.map(f => f.follower_id));
       }
     }
+
+    // 获取当前用户的黑名单列表，过滤掉被拉黑用户的笔记
+    let blockedUserIds = [];
+    if (currentUserId) {
+      const blockedUsers = await prisma.blacklist.findMany({
+        where: { blocker_id: currentUserId },
+        select: { blocked_id: true }
+      });
+      const blockedByUsers = await prisma.blacklist.findMany({
+        where: { blocked_id: currentUserId },
+        select: { blocker_id: true }
+      });
+      blockedUserIds = [
+        ...blockedUsers.map(b => b.blocked_id),
+        ...blockedByUsers.map(b => b.blocker_id)
+      ];
+    }
     
     if (isDraft) {
       if (!currentUserId) {
@@ -416,6 +433,16 @@ router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
     }
     if (category) where.category_id = category;
     if (type) where.type = type;
+
+    // 排除黑名单用户的笔记（仅在未指定特定用户时应用，指定用户时由各自路由处理）
+    if (blockedUserIds.length > 0 && !userId) {
+      if (where.OR) {
+        // 已有 OR 条件时，添加 NOT 条件排除黑名单用户
+        where.NOT = { user_id: { in: blockedUserIds } };
+      } else {
+        where.user_id = { ...(typeof where.user_id === 'object' ? where.user_id : {}), notIn: blockedUserIds };
+      }
+    }
 
     const posts = await prisma.post.findMany({
       where,
