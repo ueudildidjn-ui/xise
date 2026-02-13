@@ -1561,7 +1561,7 @@ router.post('/users', adminAuth, async (req, res) => {
         education: education || null,
         major: major || null,
         interests: interests || null,
-        verified: verified || false
+        verified: verified !== undefined ? parseInt(verified) || 0 : 0
       }
     })
 
@@ -1595,7 +1595,7 @@ router.put('/users/:id', adminAuth, async (req, res) => {
     if (education !== undefined) updateData.education = education
     if (major !== undefined) updateData.major = major
     if (interests !== undefined) updateData.interests = interests
-    if (verified !== undefined) updateData.verified = Boolean(verified)
+    if (verified !== undefined) updateData.verified = parseInt(verified) || 0
 
     await prisma.user.update({ where: { id: userId }, data: updateData })
     res.json({ code: RESPONSE_CODES.SUCCESS, message: '更新成功' })
@@ -4184,6 +4184,285 @@ router.post('/system-notifications/:id/resend', adminAuth, async (req, res) => {
   } catch (error) {
     console.error('重新发送系统通知失败:', error)
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '重新发送失败' })
+  }
+})
+
+// ===================== 认证管理 (审核 type 1,2) =====================
+
+// 获取认证申请列表
+router.get('/audit', adminAuth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 20
+    const skip = (page - 1) * limit
+    const sortField = req.query.sortField || 'created_at'
+    const sortOrder = req.query.sortOrder || 'desc'
+
+    const where = { type: { in: [1, 2] } }
+
+    // 搜索条件
+    if (req.query.user_display_id) {
+      const user = await prisma.user.findFirst({
+        where: { xise_id: req.query.user_display_id },
+        select: { id: true }
+      })
+      if (user) {
+        where.user_id = user.id
+      } else {
+        return res.json({ code: RESPONSE_CODES.SUCCESS, data: { data: [], total: 0, page, limit } })
+      }
+    }
+    if (req.query.type) where.type = parseInt(req.query.type)
+    if (req.query.status !== undefined && req.query.status !== '') where.status = parseInt(req.query.status)
+
+    const [audits, total] = await Promise.all([
+      prisma.audit.findMany({
+        where,
+        include: {
+          user: {
+            select: { id: true, user_id: true, nickname: true, avatar: true, xise_id: true }
+          }
+        },
+        orderBy: { [sortField]: sortOrder.toLowerCase() },
+        take: limit,
+        skip
+      }),
+      prisma.audit.count({ where })
+    ])
+
+    const formattedAudits = audits.map(a => ({
+      id: Number(a.id),
+      user_id: Number(a.user_id),
+      user_display_id: a.user?.xise_id || a.user?.user_id,
+      nickname: a.user?.nickname,
+      avatar: a.user?.avatar,
+      type: a.type,
+      content: a.content,
+      status: a.status,
+      reason: a.reason,
+      created_at: a.created_at,
+      audit_time: a.audit_time
+    }))
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: '获取认证申请列表成功',
+      data: { data: formattedAudits, total, page, limit }
+    })
+  } catch (error) {
+    console.error('获取认证申请列表失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '获取认证申请列表失败' })
+  }
+})
+
+// 获取认证申请详情
+router.get('/audit/:id', adminAuth, async (req, res) => {
+  try {
+    const auditId = BigInt(req.params.id)
+    const audit = await prisma.audit.findFirst({
+      where: { id: auditId, type: { in: [1, 2] } },
+      include: {
+        user: {
+          select: { id: true, user_id: true, nickname: true, avatar: true, xise_id: true }
+        }
+      }
+    })
+
+    if (!audit) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '认证记录不存在' })
+    }
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: {
+        id: Number(audit.id),
+        user_id: Number(audit.user_id),
+        user_display_id: audit.user?.xise_id || audit.user?.user_id,
+        nickname: audit.user?.nickname,
+        type: audit.type,
+        content: audit.content,
+        status: audit.status,
+        reason: audit.reason,
+        created_at: audit.created_at,
+        audit_time: audit.audit_time
+      }
+    })
+  } catch (error) {
+    console.error('获取认证详情失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '获取认证详情失败' })
+  }
+})
+
+// 创建认证申请（管理员手动创建）
+router.post('/audit', adminAuth, async (req, res) => {
+  try {
+    const { user_id, type, content, status } = req.body
+
+    if (!user_id || !type || !content) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少必填字段' })
+    }
+
+    const audit = await prisma.audit.create({
+      data: {
+        user_id: BigInt(user_id),
+        type: parseInt(type),
+        content,
+        status: status !== undefined ? parseInt(status) : 0
+      }
+    })
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, data: { id: Number(audit.id) }, message: '创建成功' })
+  } catch (error) {
+    console.error('创建认证申请失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '创建失败' })
+  }
+})
+
+// 更新认证申请
+router.put('/audit/:id', adminAuth, async (req, res) => {
+  try {
+    const auditId = BigInt(req.params.id)
+    const { type, content, status } = req.body
+
+    const audit = await prisma.audit.findFirst({ where: { id: auditId, type: { in: [1, 2] } } })
+    if (!audit) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '认证记录不存在' })
+    }
+
+    const updateData = {}
+    if (type !== undefined && type !== '') updateData.type = parseInt(type)
+    if (content !== undefined) updateData.content = content
+    if (status !== undefined && status !== '') {
+      updateData.status = parseInt(status)
+      updateData.audit_time = new Date()
+    }
+
+    await prisma.audit.update({ where: { id: auditId }, data: updateData })
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '更新成功' })
+  } catch (error) {
+    console.error('更新认证申请失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '更新失败' })
+  }
+})
+
+// 认证审核通过
+router.put('/audit/:id/approve', adminAuth, async (req, res) => {
+  try {
+    const auditId = BigInt(req.params.id)
+    const audit = await prisma.audit.findFirst({ where: { id: auditId, type: { in: [1, 2] } } })
+    if (!audit) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.ERROR, message: '认证记录不存在' })
+    }
+
+    await prisma.audit.update({
+      where: { id: auditId },
+      data: { status: 1, audit_time: new Date() }
+    })
+
+    // 解析认证内容中的认证名称
+    let verifiedName = null
+    try {
+      // 尝试从HTML内容中提取认证名称
+      const nameMatch = audit.content.match(/认证名称<\/td>\s*<td[^>]*>([^<]+)<\/td>/)
+      if (nameMatch) {
+        verifiedName = nameMatch[1].trim()
+      }
+    } catch (e) {
+      // 忽略解析错误
+    }
+
+    // 更新用户认证状态：type 1=官方认证, type 2=个人认证
+    await prisma.user.update({
+      where: { id: audit.user_id },
+      data: {
+        verified: audit.type,
+        verified_name: verifiedName
+      }
+    })
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '认证审核通过' })
+  } catch (error) {
+    console.error('认证审核通过失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '认证审核通过失败' })
+  }
+})
+
+// 认证审核拒绝
+router.put('/audit/:id/reject', adminAuth, async (req, res) => {
+  try {
+    const auditId = BigInt(req.params.id)
+    const audit = await prisma.audit.findFirst({ where: { id: auditId, type: { in: [1, 2] } } })
+    if (!audit) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.ERROR, message: '认证记录不存在' })
+    }
+
+    const { reason } = req.body
+
+    await prisma.audit.update({
+      where: { id: auditId },
+      data: { status: 2, audit_time: new Date(), reason: reason || null }
+    })
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '认证申请已拒绝' })
+  } catch (error) {
+    console.error('认证审核拒绝失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '认证审核拒绝失败' })
+  }
+})
+
+// 删除认证申请
+router.delete('/audit/:id', adminAuth, async (req, res) => {
+  try {
+    const auditId = BigInt(req.params.id)
+    const audit = await prisma.audit.findFirst({ where: { id: auditId, type: { in: [1, 2] } } })
+    if (!audit) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.ERROR, message: '认证记录不存在' })
+    }
+
+    // 如果已通过的认证被删除，重置用户认证状态
+    if (audit.status === 1) {
+      await prisma.user.update({
+        where: { id: audit.user_id },
+        data: { verified: 0, verified_name: null }
+      })
+    }
+
+    await prisma.audit.delete({ where: { id: auditId } })
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '删除成功' })
+  } catch (error) {
+    console.error('删除认证申请失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '删除失败' })
+  }
+})
+
+// 批量删除认证申请
+router.delete('/audit', adminAuth, async (req, res) => {
+  try {
+    const { ids } = req.body
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.ERROR, message: '请选择要删除的项' })
+    }
+
+    const bigIntIds = ids.map(id => BigInt(id))
+
+    // 查找已通过的认证，需要重置用户状态
+    const approvedAudits = await prisma.audit.findMany({
+      where: { id: { in: bigIntIds }, type: { in: [1, 2] }, status: 1 }
+    })
+
+    if (approvedAudits.length > 0) {
+      const userIds = approvedAudits.map(a => a.user_id)
+      await prisma.user.updateMany({
+        where: { id: { in: userIds } },
+        data: { verified: 0, verified_name: null }
+      })
+    }
+
+    await prisma.audit.deleteMany({ where: { id: { in: bigIntIds }, type: { in: [1, 2] } } })
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '批量删除成功' })
+  } catch (error) {
+    console.error('批量删除认证申请失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '删除失败' })
   }
 })
 

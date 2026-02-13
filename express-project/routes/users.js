@@ -37,7 +37,7 @@ router.get('/search', optionalAuth, async (req, res) => {
       select: {
         id: true, user_id: true, nickname: true, avatar: true, bio: true,
         location: true, follow_count: true, fans_count: true, like_count: true,
-        created_at: true, verified: true,
+        created_at: true, verified: true, verified_name: true,
         _count: { select: { posts: { where: { is_draft: false } } } }
       },
       orderBy: { created_at: 'desc' },
@@ -443,6 +443,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       like_count: user.like_count,
       created_at: user.created_at,
       verified: user.verified,
+      verified_name: user.verified_name,
       gender: user.gender,
       zodiac_sign: user.zodiac_sign,
       mbti: user.mbti,
@@ -971,7 +972,7 @@ router.get('/:id/following', optionalAuth, async (req, res) => {
         following: {
           select: {
             id: true, user_id: true, nickname: true, avatar: true, bio: true, location: true,
-            follow_count: true, fans_count: true, like_count: true, created_at: true, verified: true,
+            follow_count: true, fans_count: true, like_count: true, created_at: true, verified: true, verified_name: true,
             _count: { select: { posts: { where: { is_draft: false } } } }
           }
         }
@@ -1072,7 +1073,7 @@ router.get('/:id/followers', optionalAuth, async (req, res) => {
         follower: {
           select: {
             id: true, user_id: true, nickname: true, avatar: true, bio: true, location: true,
-            follow_count: true, fans_count: true, like_count: true, created_at: true, verified: true,
+            follow_count: true, fans_count: true, like_count: true, created_at: true, verified: true, verified_name: true,
             _count: { select: { posts: { where: { is_draft: false } } } }
           }
         }
@@ -1189,7 +1190,7 @@ router.get('/:id/mutual-follows', optionalAuth, async (req, res) => {
       where: { id: { in: mutualFollowIds } },
       select: {
         id: true, user_id: true, nickname: true, avatar: true, bio: true, location: true,
-        follow_count: true, fans_count: true, like_count: true, created_at: true, verified: true,
+        follow_count: true, fans_count: true, like_count: true, created_at: true, verified: true, verified_name: true,
         _count: { select: { posts: { where: { is_draft: false } } } }
       },
       orderBy: { created_at: 'desc' },
@@ -1918,6 +1919,119 @@ router.get('/:id/block-status', optionalAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('获取黑名单状态失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// ===================== 认证相关路由 =====================
+
+// 获取认证状态
+router.get('/verification/status', authenticateToken, async (req, res) => {
+  try {
+    const userId = BigInt(req.user.id);
+
+    const audits = await prisma.audit.findMany({
+      where: {
+        user_id: userId,
+        type: { in: [AUDIT_TYPES.PERSONAL, AUDIT_TYPES.BUSINESS] }
+      },
+      orderBy: { created_at: 'desc' }
+    });
+
+    const formattedAudits = audits.map(a => ({
+      id: Number(a.id),
+      user_id: Number(a.user_id),
+      type: a.type,
+      content: a.content,
+      status: a.status,
+      reason: a.reason,
+      created_at: a.created_at,
+      audit_time: a.audit_time
+    }));
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: 'success', data: formattedAudits });
+  } catch (error) {
+    console.error('获取认证状态失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 提交认证申请
+router.post('/verification', authenticateToken, async (req, res) => {
+  try {
+    const userId = BigInt(req.user.id);
+    const { type, content } = req.body;
+
+    if (!type || !content) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少必填字段' });
+    }
+
+    if (![AUDIT_TYPES.PERSONAL, AUDIT_TYPES.BUSINESS].includes(type)) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '无效的认证类型' });
+    }
+
+    // 检查是否已有待审核或已通过的认证申请
+    const existingAudit = await prisma.audit.findFirst({
+      where: {
+        user_id: userId,
+        type: { in: [AUDIT_TYPES.PERSONAL, AUDIT_TYPES.BUSINESS] },
+        status: { in: [AUDIT_STATUS.PENDING, AUDIT_STATUS.APPROVED] }
+      }
+    });
+
+    if (existingAudit) {
+      const statusText = existingAudit.status === AUDIT_STATUS.PENDING ? '待审核' : '已通过';
+      return res.status(HTTP_STATUS.CONFLICT).json({ code: RESPONSE_CODES.CONFLICT, message: `您已有${statusText}的认证申请` });
+    }
+
+    const audit = await prisma.audit.create({
+      data: {
+        user_id: userId,
+        type: type,
+        content: content,
+        status: AUDIT_STATUS.PENDING
+      }
+    });
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '认证申请提交成功', data: { id: Number(audit.id) } });
+  } catch (error) {
+    console.error('提交认证申请失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 撤回认证申请
+router.delete('/verification/revoke', authenticateToken, async (req, res) => {
+  try {
+    const userId = BigInt(req.user.id);
+
+    // 查找用户的认证申请
+    const audit = await prisma.audit.findFirst({
+      where: {
+        user_id: userId,
+        type: { in: [AUDIT_TYPES.PERSONAL, AUDIT_TYPES.BUSINESS] }
+      },
+      orderBy: { created_at: 'desc' }
+    });
+
+    if (!audit) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '没有找到认证申请' });
+    }
+
+    // 如果之前已通过，撤回时需要重置用户的认证状态
+    if (audit.status === AUDIT_STATUS.APPROVED) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { verified: 0, verified_name: null }
+      });
+    }
+
+    // 删除认证申请记录
+    await prisma.audit.delete({ where: { id: audit.id } });
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '认证申请已撤回' });
+  } catch (error) {
+    console.error('撤回认证申请失败:', error);
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
   }
 });
