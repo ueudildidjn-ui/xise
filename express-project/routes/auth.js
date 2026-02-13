@@ -998,7 +998,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { id: BigInt(userId) },
-      select: { id: true, user_id: true, nickname: true, avatar: true, background: true, bio: true, location: true, email: true, follow_count: true, fans_count: true, like_count: true, is_active: true, created_at: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, verified: true }
+      select: { id: true, user_id: true, nickname: true, avatar: true, background: true, bio: true, location: true, email: true, follow_count: true, fans_count: true, like_count: true, is_active: true, created_at: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, verified: true, verified_name: true }
     });
 
     if (!user) {

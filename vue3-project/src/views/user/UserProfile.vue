@@ -340,7 +340,7 @@ onMounted(async () => {
             <VerifiedBadge :verified="userInfo?.verified" size="large" />
           </div>
           <div class="user-content">
-            <div class="user-id text-ellipsis">汐社号：{{ userInfo?.user_id || '' }}</div>
+            <div class="user-id text-ellipsis">汐社号：{{ userInfo?.verified_name && userInfo?.verified ? userInfo.verified_name : (userInfo?.user_id || '') }}</div>
           </div>
         </div>
 

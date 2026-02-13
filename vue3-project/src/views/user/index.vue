@@ -494,7 +494,7 @@ function handleCollect(data) {
             <VerifiedBadge v-if="userStore.userInfo?.verified" :verified="userStore.userInfo.verified" size="large"/>
           </div>
           <div class="user-content">
-            <div class="user-id text-ellipsis">汐社号：{{ userStore.userInfo?.user_id || '' }}</div>
+            <div class="user-id text-ellipsis">汐社号：{{ userStore.userInfo?.verified_name && userStore.userInfo?.verified ? userStore.userInfo.verified_name : (userStore.userInfo?.user_id || '') }}</div>
           </div>
         </div>
         <div class="edit-profile-button-wrapper">

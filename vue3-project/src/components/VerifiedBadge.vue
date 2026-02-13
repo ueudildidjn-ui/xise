@@ -89,6 +89,7 @@ const badgeTitle = computed(() => {
 }
 
 .verified-badge--official {
+  background-color: #1d9bf0;
   background-image: linear-gradient(90deg,
       transparent 0%,
       transparent 40%,
