@@ -3,18 +3,28 @@
         <div class="footer-container">
             <div class="footer-list">
                 <ul>
-                    <li v-for="item in footerList" :key="item.icon">
+                    <li v-for="item in footerList" :key="item.label">
 
                         <template v-if="item.label === 'explore'">
                             <a href="#" @click="handleExploreClick" class="footer-link">
-                                <SvgIcon :name="item.icon" class="icon"
-                                    :class="{ active: route.path.startsWith('/explore') }" width="24px" height="24px" />
+                                <template v-if="item.useText">
+                                    <span class="footer-text" :class="{ active: isExploreActive }">{{ item.text }}</span>
+                                </template>
+                                <template v-else>
+                                    <SvgIcon :name="item.icon" class="icon"
+                                        :class="{ active: isExploreActive }" width="24px" height="24px" />
+                                </template>
                             </a>
                         </template>
                         <template v-else-if="item.label === 'messages'">
                             <RouterLink :to="item.path" class="footer-link notification-link">
-                                <SvgIcon :name="item.icon" class="icon" :class="{ active: route.path === item.path }"
-                                    width="24px" height="24px" />
+                                <template v-if="item.useText">
+                                    <span class="footer-text" :class="{ active: route.path === item.path }">{{ item.text }}</span>
+                                </template>
+                                <template v-else>
+                                    <SvgIcon :name="item.icon" class="icon" :class="{ active: route.path === item.path }"
+                                        width="24px" height="24px" />
+                                </template>
                                 <span v-if="notificationStore.totalUnreadCount > 0" class="footer-unread-badge">
                                     {{ notificationStore.totalUnreadCount > 99 ? '99+' : notificationStore.totalUnreadCount }}
                                 </span>
@@ -22,8 +32,13 @@
                         </template>
                         <template v-else>
                             <RouterLink :to="item.path" class="footer-link">
-                                <SvgIcon :name="item.icon" class="icon" :class="{ active: route.path === item.path }"
-                                    width="24px" height="24px" />
+                                <template v-if="item.useText">
+                                    <span class="footer-text" :class="{ active: route.path === item.path }">{{ item.text }}</span>
+                                </template>
+                                <template v-else>
+                                    <SvgIcon :name="item.icon" class="icon" :class="{ active: route.path === item.path }"
+                                        width="24px" height="24px" />
+                                </template>
                             </RouterLink>
                         </template>
                     </li>
@@ -35,19 +50,23 @@
 
 <script setup>
 import SvgIcon from '@/components/SvgIcon.vue'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouteUtils } from '@/composables/useRouteUtils'
 import { useNotificationStore } from '@/stores/notification'
 
 const { route, handleExploreClick } = useRouteUtils()
 const notificationStore = useNotificationStore()
 
+// 首页是否高亮（排除朋友页面）
+const isExploreActive = computed(() => route.path.startsWith('/explore') && route.path !== '/explore/friends')
+
 // 底部导航配置
 const footerList = ref([
-    { label: 'explore', icon: 'home', path: '/explore' },
+    { label: 'explore', icon: 'home', path: '/explore', useText: true, text: '首页' },
+    { label: 'friends', icon: 'user', path: '/explore/friends', useText: true, text: '朋友' },
     { label: 'publish', icon: 'publish', path: '/publish' },
-    { label: 'messages', icon: 'notification', path: '/messages' },
-    { label: 'user', icon: 'user', path: '/user' },
+    { label: 'messages', icon: 'notification', path: '/messages', useText: true, text: '消息' },
+    { label: 'user', icon: 'user', path: '/user', useText: true, text: '我的' },
 ])
 </script>
 
@@ -139,6 +158,17 @@ const footerList = ref([
 
 .icon {
     color: var(--text-color-tertiary);
+}
+
+.footer-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-color-tertiary);
+}
+
+.footer-text.active {
+    color: var(--text-color-primary);
+    font-weight: 700;
 }
 
 .active {

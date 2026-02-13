@@ -2,7 +2,6 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import SvgIcon from '@/components/SvgIcon.vue'
-import NotificationBell from '@/components/NotificationBell.vue'
 import DropdownMenu from '@/components/menu/DropdownMenu.vue'
 import CommonMenu from '@/components/menu/CommonMenu.vue'
 import SearchDropdown from './SearchDropdown.vue'
@@ -26,10 +25,9 @@ const showSidebar = ref(window.innerWidth > 960)
 // 检查是否在探索页面（需要显示频道标签）
 const isExplorePage = computed(() => {
     return route.path === '/explore' || 
-           route.path.startsWith('/explore/') || 
+           (route.path.startsWith('/explore/') && route.name !== 'friends') || 
            route.name === 'explore' || 
            route.name === 'recommend' || 
-           route.name === 'video' ||
            route.name === 'following' ||
            route.name === 'channel'
 })
@@ -291,7 +289,6 @@ onUnmounted(() => {
                     <div v-if="!isLargeScreen" class="cancel-btn" @click="closeSearch">取消</div>
                 </div>
                 <div v-if="isLargeScreen && !showSidebar" class="header-right">
-                    <NotificationBell />
                     <DropdownMenu direction="down" menuClass="header-dropdown">
                         <template #trigger>
                             <div class="circle-btn">
@@ -329,7 +326,6 @@ onUnmounted(() => {
                     <div @click="openSearch" class="circle-btn">
                         <SvgIcon name="search" class="btn-icon" height="20" width="20" />
                     </div>
-                    <NotificationBell />
                     <DropdownMenu v-if="!showSidebar" direction="down" menuClass="header-dropdown">
                         <template #trigger>
                             <div class="circle-btn">

@@ -8,6 +8,7 @@ import FollowList from '@/views/user/FollowList.vue'
 import BrowsingHistory from '@/views/user/BrowsingHistory.vue'
 import ChannelPage from '@/views/explore/ChannelPage.vue'
 import FollowingPage from '@/views/explore/FollowingPage.vue'
+import FriendsPage from '@/views/explore/FriendsPage.vue'
 import PostDetail from '@/views/PostDetail.vue'
 import SearchResult from '@/views/search/SearchResult.vue'
 import SearchPage from '@/views/search/SearchPage.vue'
@@ -60,9 +61,9 @@ const router = createRouter({
               component: ChannelPage
             },
             {
-              path: '/explore/video',
-              name: 'video',
-              component: ChannelPage
+              path: '/explore/friends',
+              name: 'friends',
+              component: FriendsPage
             },
             {
               path: '/explore/following',

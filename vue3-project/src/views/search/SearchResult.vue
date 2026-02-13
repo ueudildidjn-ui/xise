@@ -303,8 +303,7 @@ function handleUserResults(usersData) {
                 posts: user.post_count || 0,
                 isFollowing: user.isFollowing || false,
                 buttonType: user.buttonType || 'follow',
-                bio: user.bio,
-                location: user.location
+                bio: user.bio
             }
 
             return transformedUser
