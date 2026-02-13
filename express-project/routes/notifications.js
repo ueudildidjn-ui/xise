@@ -209,7 +209,14 @@ router.get('/system', authenticateToken, async (req, res) => {
     const type = req.query.type // 可选：system / activity
 
     const where = {
-      is_active: true
+      is_active: true,
+      // 排除用户已删除（dismissed）的通知
+      confirmations: {
+        none: {
+          user_id: userId,
+          is_dismissed: true
+        }
+      }
     }
     if (type) {
       where.type = type
@@ -222,7 +229,7 @@ router.get('/system', authenticateToken, async (req, res) => {
         include: {
           confirmations: {
             where: { user_id: userId },
-            select: { id: true, confirmed_at: true }
+            select: { id: true, confirmed_at: true, is_dismissed: true }
           }
         },
         orderBy: { created_at: 'desc' },
@@ -313,6 +320,45 @@ router.post('/system/:id/confirm', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('确认系统通知失败:', error)
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '确认失败' })
+  }
+})
+
+// 删除（dismiss）系统通知（对当前用户隐藏）
+router.delete('/system/:id/dismiss', authenticateToken, async (req, res) => {
+  try {
+    const userId = BigInt(req.user.id)
+    const notificationId = BigInt(req.params.id)
+
+    const notification = await prisma.systemNotification.findUnique({
+      where: { id: notificationId }
+    })
+
+    if (!notification) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '系统通知不存在' })
+    }
+
+    // 使用 upsert 创建或更新确认记录，标记为已删除
+    await prisma.systemNotificationConfirmation.upsert({
+      where: {
+        notification_id_user_id: {
+          notification_id: notificationId,
+          user_id: userId
+        }
+      },
+      create: {
+        notification_id: notificationId,
+        user_id: userId,
+        is_dismissed: true
+      },
+      update: {
+        is_dismissed: true
+      }
+    })
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '删除成功' })
+  } catch (error) {
+    console.error('删除系统通知失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '删除失败' })
   }
 })
 

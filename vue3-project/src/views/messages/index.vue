@@ -138,12 +138,12 @@
 
       <div class="notification-list" v-if="currentInteractionList.length > 0">
         <div v-for="item in currentInteractionList" :key="'int-' + item.id" class="notification-item interaction-item"
-          :class="{ unread: !item.is_read }">
+          :class="{ unread: !item.is_read }" @click="handleInteractionClick(item)">
           <div class="notification-dot" v-if="!item.is_read"></div>
           <div class="notification-avatar" v-if="item.sender" @click.stop="goToUserProfile(item.sender)">
             <img :src="item.sender.avatar || defaultAvatar" :alt="item.sender.nickname" @error="handleAvatarError" />
           </div>
-          <div class="notification-body" @click.stop="handleInteractionClick(item)">
+          <div class="notification-body">
             <div class="notification-title">
               <span class="sender-name">{{ item.sender?.nickname }}</span>
               {{ item.title }}
@@ -298,8 +298,8 @@ const closeMenu = () => {
 const handleDeleteSystemNotification = async (item, type) => {
   openMenuId.value = null
   try {
-    // 确认通知以标记为已读/已处理
-    await notificationStore.confirmSystemNotification(item.id)
+    // 调用dismiss API，将通知标记为已删除（对当前用户隐藏）
+    await notificationStore.dismissSystemNotification(item.id)
     // 从本地列表中移除
     if (type === 'system') {
       systemNotifications.value = systemNotifications.value.filter(n => n.id !== item.id)
