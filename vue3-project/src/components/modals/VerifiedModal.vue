@@ -62,34 +62,30 @@
           <!-- 个人认证表单 -->
           <div v-if="form.type === 2" class="verification-form">
             <div class="form-group">
-              <label class="form-label">邮箱</label>
-              <input v-model="form.email" type="email" class="form-input" placeholder="请输入联系邮箱"
-                :disabled="loading" />
-            </div>
-
-            <div class="form-group">
               <label class="form-label">认证名称</label>
               <input v-model="form.verifiedName" type="text" class="form-input" placeholder="请输入认证名称，如：某某博主"
                 :disabled="loading" />
             </div>
 
-            <div class="form-group">
-              <label class="form-label">真实姓名</label>
-              <input v-model="form.personalInfo.realName" type="text" class="form-input" placeholder="请输入真实姓名"
-                :disabled="loading" />
-            </div>
+            <template v-if="collectSensitiveInfo">
+              <div class="form-group">
+                <label class="form-label">真实姓名</label>
+                <input v-model="form.personalInfo.realName" type="text" class="form-input" placeholder="请输入真实姓名"
+                  :disabled="loading" />
+              </div>
 
-            <div class="form-group">
-              <label class="form-label">身份证号</label>
-              <input v-model="form.personalInfo.idCard" type="text" class="form-input" placeholder="请输入身份证号"
-                :disabled="loading" />
-            </div>
+              <div class="form-group">
+                <label class="form-label">身份证号</label>
+                <input v-model="form.personalInfo.idCard" type="text" class="form-input" placeholder="请输入身份证号"
+                  :disabled="loading" />
+              </div>
 
-            <div class="form-group">
-              <label class="form-label">职业/身份</label>
-              <input v-model="form.personalInfo.occupation" type="text" class="form-input" placeholder="请输入职业或身份描述"
-                :disabled="loading" />
-            </div>
+              <div class="form-group">
+                <label class="form-label">职业/身份</label>
+                <input v-model="form.personalInfo.occupation" type="text" class="form-input" placeholder="请输入职业或身份描述"
+                  :disabled="loading" />
+              </div>
+            </template>
 
             <div class="form-group">
               <label class="form-label">认证详情</label>
@@ -119,40 +115,36 @@
           <!-- 官方认证表单 -->
           <div v-if="form.type === 1" class="verification-form">
             <div class="form-group">
-              <label class="form-label">邮箱</label>
-              <input v-model="form.email" type="email" class="form-input" placeholder="请输入联系邮箱"
-                :disabled="loading" />
-            </div>
-
-            <div class="form-group">
               <label class="form-label">认证名称</label>
               <input v-model="form.verifiedName" type="text" class="form-input" placeholder="请输入认证名称，如：某某官方"
                 :disabled="loading" />
             </div>
 
-            <div class="form-group">
-              <label class="form-label">机构/企业名称</label>
-              <input v-model="form.officialInfo.organizationName" type="text" class="form-input"
-                placeholder="请输入机构或企业全称" :disabled="loading" />
-            </div>
+            <template v-if="collectSensitiveInfo">
+              <div class="form-group">
+                <label class="form-label">机构/企业名称</label>
+                <input v-model="form.officialInfo.organizationName" type="text" class="form-input"
+                  placeholder="请输入机构或企业全称" :disabled="loading" />
+              </div>
 
-            <div class="form-group">
-              <label class="form-label">统一社会信用代码</label>
-              <input v-model="form.officialInfo.creditCode" type="text" class="form-input" placeholder="请输入统一社会信用代码"
-                :disabled="loading" />
-            </div>
+              <div class="form-group">
+                <label class="form-label">统一社会信用代码</label>
+                <input v-model="form.officialInfo.creditCode" type="text" class="form-input" placeholder="请输入统一社会信用代码"
+                  :disabled="loading" />
+              </div>
 
-            <div class="form-group">
-              <label class="form-label">联系人姓名</label>
-              <input v-model="form.officialInfo.contactName" type="text" class="form-input" placeholder="请输入联系人姓名"
-                :disabled="loading" />
-            </div>
+              <div class="form-group">
+                <label class="form-label">联系人姓名</label>
+                <input v-model="form.officialInfo.contactName" type="text" class="form-input" placeholder="请输入联系人姓名"
+                  :disabled="loading" />
+              </div>
 
-            <div class="form-group">
-              <label class="form-label">联系电话</label>
-              <input v-model="form.officialInfo.contactPhone" type="tel" class="form-input" placeholder="请输入联系电话"
-                :disabled="loading" />
-            </div>
+              <div class="form-group">
+                <label class="form-label">联系电话</label>
+                <input v-model="form.officialInfo.contactPhone" type="tel" class="form-input" placeholder="请输入联系电话"
+                  :disabled="loading" />
+              </div>
+            </template>
 
             <div class="form-group">
               <label class="form-label">认证详情</label>
@@ -213,10 +205,12 @@ const userStore = useUserStore()
 // 动画状态
 const isAnimating = ref(false)
 
+// 是否收集敏感信息（从后端配置获取）
+const collectSensitiveInfo = ref(false)
+
 // 表单数据
 const form = reactive({
   type: null, // 1-官方认证，2-个人认证
-  email: '',
   verifiedName: '',
   images: [],
   personalInfo: {
@@ -311,10 +305,24 @@ const fetchVerificationStatus = async () => {
   }
 }
 
+// 获取认证配置
+const fetchVerificationConfig = async () => {
+  try {
+    const response = await fetch('/api/auth/auth-config')
+    const result = await response.json()
+    if (result.code === 200 && result.data) {
+      collectSensitiveInfo.value = result.data.verificationCollectSensitiveInfo || false
+    }
+  } catch (error) {
+    console.error('获取认证配置失败:', error)
+  }
+}
+
 // 组件挂载时启动动画并获取认证状态
 onMounted(() => {
   lock()
   fetchVerificationStatus()
+  fetchVerificationConfig()
   setTimeout(() => {
     isAnimating.value = true
   }, 10)
@@ -388,17 +396,7 @@ const generateContentHtml = () => {
 
   if (form.type === 2) {
     // 个人认证
-    return `
-      <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
-        <caption style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">个人认证申请</caption>
-        <tr>
-          <td style=" font-weight: bold; width: 30%;">邮箱</td>
-          <td>${form.email}</td>
-        </tr>
-        <tr>
-          <td style=" font-weight: bold;">认证名称</td>
-          <td>${form.verifiedName}</td>
-        </tr>
+    const sensitiveRows = collectSensitiveInfo.value ? `
         <tr>
           <td style=" font-weight: bold;">真实姓名</td>
           <td>${form.personalInfo.realName}</td>
@@ -410,7 +408,15 @@ const generateContentHtml = () => {
         <tr>
           <td style=" font-weight: bold;">职业/身份</td>
           <td>${form.personalInfo.occupation}</td>
+        </tr>` : ''
+    return `
+      <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
+        <caption style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">个人认证申请</caption>
+        <tr>
+          <td style=" font-weight: bold; width: 30%;">认证名称</td>
+          <td>${form.verifiedName}</td>
         </tr>
+        ${sensitiveRows}
         <tr>
           <td style=" font-weight: bold;">认证详情</td>
           <td>${form.personalInfo.reason}</td>
@@ -420,17 +426,7 @@ const generateContentHtml = () => {
     `
   } else if (form.type === 1) {
     // 官方认证
-    return `
-      <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
-        <caption style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">官方认证申请</caption>
-        <tr>
-          <td style=" font-weight: bold; width: 30%;">邮箱</td>
-          <td>${form.email}</td>
-        </tr>
-        <tr>
-          <td style=" font-weight: bold;">认证名称</td>
-          <td>${form.verifiedName}</td>
-        </tr>
+    const sensitiveRows = collectSensitiveInfo.value ? `
         <tr>
           <td style=" font-weight: bold;">机构/企业名称</td>
           <td>${form.officialInfo.organizationName}</td>
@@ -446,7 +442,15 @@ const generateContentHtml = () => {
         <tr>
           <td style=" font-weight: bold;">联系电话</td>
           <td>${form.officialInfo.contactPhone}</td>
+        </tr>` : ''
+    return `
+      <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
+        <caption style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">官方认证申请</caption>
+        <tr>
+          <td style=" font-weight: bold; width: 30%;">认证名称</td>
+          <td>${form.verifiedName}</td>
         </tr>
+        ${sensitiveRows}
         <tr>
           <td style=" font-weight: bold;">认证详情</td>
           <td>${form.officialInfo.reason}</td>
@@ -467,10 +471,6 @@ const handleSubmitVerification = async () => {
   }
 
   // 公共字段验证
-  if (!form.email) {
-    $message.error('请输入邮箱')
-    return
-  }
   if (!form.verifiedName) {
     $message.error('请输入认证名称')
     return
@@ -478,17 +478,19 @@ const handleSubmitVerification = async () => {
 
   if (form.type === 2) {
     // 个人认证验证
-    if (!form.personalInfo.realName) {
-      $message.error('请输入真实姓名')
-      return
-    }
-    if (!form.personalInfo.idCard) {
-      $message.error('请输入身份证号')
-      return
-    }
-    if (!form.personalInfo.occupation) {
-      $message.error('请输入职业或身份')
-      return
+    if (collectSensitiveInfo.value) {
+      if (!form.personalInfo.realName) {
+        $message.error('请输入真实姓名')
+        return
+      }
+      if (!form.personalInfo.idCard) {
+        $message.error('请输入身份证号')
+        return
+      }
+      if (!form.personalInfo.occupation) {
+        $message.error('请输入职业或身份')
+        return
+      }
     }
     if (!form.personalInfo.reason) {
       $message.error('请输入认证详情')
@@ -496,21 +498,23 @@ const handleSubmitVerification = async () => {
     }
   } else if (form.type === 1) {
     // 官方认证验证
-    if (!form.officialInfo.organizationName) {
-      $message.error('请输入机构或企业名称')
-      return
-    }
-    if (!form.officialInfo.creditCode) {
-      $message.error('请输入统一社会信用代码')
-      return
-    }
-    if (!form.officialInfo.contactName) {
-      $message.error('请输入联系人姓名')
-      return
-    }
-    if (!form.officialInfo.contactPhone) {
-      $message.error('请输入联系电话')
-      return
+    if (collectSensitiveInfo.value) {
+      if (!form.officialInfo.organizationName) {
+        $message.error('请输入机构或企业名称')
+        return
+      }
+      if (!form.officialInfo.creditCode) {
+        $message.error('请输入统一社会信用代码')
+        return
+      }
+      if (!form.officialInfo.contactName) {
+        $message.error('请输入联系人姓名')
+        return
+      }
+      if (!form.officialInfo.contactPhone) {
+        $message.error('请输入联系电话')
+        return
+      }
     }
     if (!form.officialInfo.reason) {
       $message.error('请输入认证详情')
@@ -543,7 +547,6 @@ const handleSubmitVerification = async () => {
 
       // 重置表单
       form.type = null
-      form.email = ''
       form.verifiedName = ''
       form.images = []
       form.personalInfo = {

@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useKeyboardShortcutsStore } from '@/stores/keyboardShortcuts'
 import { useAccountSecurityStore } from '@/stores/accountSecurity'
 import { useBalanceStore } from '@/stores/balance'
+import { useVerifiedStore } from '@/stores/verified'
 import ColorPickerMenuItem from '@/components/menu/ColorPickerMenuItem.vue'
 import { onMounted } from 'vue'
 
@@ -15,6 +16,7 @@ const authStore = useAuthStore()
 const keyboardShortcutsStore = useKeyboardShortcutsStore()
 const accountSecurityStore = useAccountSecurityStore()
 const balanceStore = useBalanceStore()
+const verifiedStore = useVerifiedStore()
 
 // 登录处理
 const handleLoginClick = () => {
@@ -44,6 +46,8 @@ const handleMenuClick = (action) => {
     keyboardShortcutsStore.openKeyboardShortcutsModal()
   } else if (action === 'balanceCenter') {
     balanceStore.openBalanceModal()
+  } else if (action === 'applyVerification') {
+    verifiedStore.openVerifiedModal()
   }
 }
 
@@ -60,6 +64,9 @@ onMounted(() => {
   </DropdownItem>
   <DropdownItem v-if="userStore.isLoggedIn" @click="handleMenuClick('accountSecurity')">
     账号与安全
+  </DropdownItem>
+  <DropdownItem v-if="userStore.isLoggedIn" @click="handleMenuClick('applyVerification')">
+    申请认证
   </DropdownItem>
   <DropdownItem v-if="userStore.isLoggedIn && balanceStore.enabled" @click="handleMenuClick('balanceCenter')">
     余额中心

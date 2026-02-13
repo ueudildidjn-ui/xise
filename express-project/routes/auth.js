@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
-const { pool, prisma, email: emailConfig, oauth2: oauth2Config, queue: queueConfig, geetest: geetestConfig } = require('../config/config');
+const { pool, prisma, email: emailConfig, oauth2: oauth2Config, queue: queueConfig, geetest: geetestConfig, verification: verificationConfig } = require('../config/config');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/jwt');
 const { authenticateToken } = require('../middleware/auth');
 const { getIPLocation, getRealIP } = require('../utils/ipLocation');
@@ -102,7 +102,9 @@ router.get('/auth-config', (req, res) => {
       oauth2LoginUrl: oauth2Config.enabled ? oauth2Config.loginUrl : '',
       // 极验验证码配置
       geetestEnabled: geetestConfig.enabled,
-      geetestCaptchaId: geetestConfig.enabled ? geetestConfig.captchaId : ''
+      geetestCaptchaId: geetestConfig.enabled ? geetestConfig.captchaId : '',
+      // 认证申请配置
+      verificationCollectSensitiveInfo: verificationConfig.collectSensitiveInfo
     },
     message: 'success'
   });
