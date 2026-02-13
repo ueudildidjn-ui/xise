@@ -257,10 +257,14 @@ async function initContent() {
         let content = []
         let result = null
 
-        // 优先使用预加载的笔记数据（来自搜索页面的筛选结果）
+        // 优先使用预加载的笔记数据（来自搜索页面的筛选结果或朋友页面）
         if (props.preloadedPosts && props.preloadedPosts.length > 0) {
             content = props.preloadedPosts
             hasMore.value = false // 预加载数据不支持分页，所以设置为false
+        } else if (props.category === 'friends') {
+            // 朋友页面使用预加载数据，不回退到推荐算法
+            content = props.preloadedPosts || []
+            hasMore.value = false
         } else if (!props.searchKeyword && !props.searchTag && !props.userId) {
             // 无搜索条件时使用推荐算法
             console.log('📊 [WaterfallFlow] 使用推荐算法获取笔记')
@@ -364,8 +368,8 @@ async function initContent() {
 
 // 加载更多内容
 async function loadMoreContent() {
-    // 如果使用预加载数据，不支持加载更多
-    if (props.preloadedPosts && props.preloadedPosts.length > 0) {
+    // 如果使用预加载数据或朋友页面，不支持加载更多
+    if ((props.preloadedPosts && props.preloadedPosts.length > 0) || props.category === 'friends') {
         return
     }
 
