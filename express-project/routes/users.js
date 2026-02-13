@@ -1960,7 +1960,7 @@ router.get('/verification/status', authenticateToken, async (req, res) => {
 router.post('/verification', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id);
-    const { type, content } = req.body;
+    const { type, content, verifiedName } = req.body;
 
     if (!type || !content) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少必填字段' });
@@ -1989,7 +1989,8 @@ router.post('/verification', authenticateToken, async (req, res) => {
         user_id: userId,
         type: type,
         content: content,
-        status: AUDIT_STATUS.PENDING
+        status: AUDIT_STATUS.PENDING,
+        audit_result: verifiedName ? { verifiedName } : undefined
       }
     });
 

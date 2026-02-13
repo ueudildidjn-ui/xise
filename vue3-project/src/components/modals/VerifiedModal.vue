@@ -336,6 +336,8 @@ const selectVerificationType = (type) => {
 }
 
 // 图片上传处理
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB
+
 const handleImageUpload = async (event) => {
   const file = event.target.files[0]
   if (!file) return
@@ -346,7 +348,12 @@ const handleImageUpload = async (event) => {
     return
   }
 
-  if (file.size > 10 * 1024 * 1024) {
+  if (!file.type.startsWith('image/')) {
+    $message.error('请上传图片文件')
+    return
+  }
+
+  if (file.size > MAX_IMAGE_SIZE) {
     $message.error('图片大小不能超过10MB')
     return
   }
@@ -354,7 +361,12 @@ const handleImageUpload = async (event) => {
   try {
     const reader = new FileReader()
     reader.onload = (e) => {
-      form.images.push(e.target.result)
+      const result = e.target.result
+      if (typeof result === 'string' && result.startsWith('data:image/')) {
+        form.images.push(result)
+      } else {
+        $message.error('无效的图片格式')
+      }
     }
     reader.readAsDataURL(file)
   } catch (error) {
@@ -519,7 +531,8 @@ const handleSubmitVerification = async () => {
       },
       body: JSON.stringify({
         type: form.type,
-        content: contentHtml
+        content: contentHtml,
+        verifiedName: form.verifiedName
       })
     })
 

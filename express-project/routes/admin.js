@@ -4359,16 +4359,10 @@ router.put('/audit/:id/approve', adminAuth, async (req, res) => {
       data: { status: 1, audit_time: new Date() }
     })
 
-    // 解析认证内容中的认证名称
+    // 从audit_result JSON中读取认证名称
     let verifiedName = null
-    try {
-      // 尝试从HTML内容中提取认证名称
-      const nameMatch = audit.content.match(/认证名称<\/td>\s*<td[^>]*>([^<]+)<\/td>/)
-      if (nameMatch) {
-        verifiedName = nameMatch[1].trim()
-      }
-    } catch (e) {
-      // 忽略解析错误
+    if (audit.audit_result && typeof audit.audit_result === 'object' && audit.audit_result.verifiedName) {
+      verifiedName = audit.audit_result.verifiedName
     }
 
     // 更新用户认证状态：type 1=官方认证, type 2=个人认证
