@@ -611,7 +611,7 @@ router.get('/following', authenticateToken, async (req, res) => {
       },
       select: { follower_id: true }
     });
-    const mutualFollowIds = new Set(mutualFollows.map(f => f.follower_id));
+    const mutualFollowIds = mutualFollows.map(f => f.follower_id);
 
     // 获取黑名单用户
     const blockedUserIds = await getBlockedUserIds(currentUserId);
@@ -622,7 +622,7 @@ router.get('/following', authenticateToken, async (req, res) => {
       is_draft: false,
       OR: [
         { visibility: VISIBILITY_PUBLIC },
-        { visibility: VISIBILITY_FRIENDS_ONLY, user_id: { in: Array.from(mutualFollowIds) } }
+        { visibility: VISIBILITY_FRIENDS_ONLY, user_id: { in: mutualFollowIds } }
       ]
     };
 
