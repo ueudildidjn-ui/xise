@@ -1945,6 +1945,7 @@ router.get('/verification/status', authenticateToken, async (req, res) => {
       content: a.content,
       status: a.status,
       reason: a.reason,
+      audit_result: a.audit_result,
       created_at: a.created_at,
       audit_time: a.audit_time
     }));

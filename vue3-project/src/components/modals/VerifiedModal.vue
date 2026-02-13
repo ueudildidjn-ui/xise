@@ -20,12 +20,31 @@
         <!-- 认证状态提示 -->
         <div v-else-if="hasVerification.hasPending || hasVerification.hasApproved || hasVerification.hasRejected"
           class="verification-status">
-          <div class="status-icon">
-            <SvgIcon v-if="hasVerification.hasPending" name="clock" width="48" height="48" />
-            <SvgIcon v-else-if="hasVerification.hasApproved" name="verified" width="48" height="48" />
-            <SvgIcon v-else name="close" width="48" height="48" />
-          </div>
-          <p class="status-text">{{ hasVerification.statusText }}</p>
+          <!-- 已通过认证 - 显示详细认证信息 -->
+          <template v-if="hasVerification.hasApproved">
+            <div class="cert-info">
+              <div class="cert-info-header">
+                <VerifiedBadge :verified="hasVerification.approvedType" size="large" />
+                <span class="cert-type-text">{{ hasVerification.approvedType === 1 ? '官方认证' : '个人认证' }}</span>
+              </div>
+              <div class="cert-info-item">
+                <span class="cert-label">认证名称</span>
+                <span class="cert-value">{{ hasVerification.verifiedName || '-' }}</span>
+              </div>
+              <div v-if="hasVerification.approvedTime" class="cert-info-item">
+                <span class="cert-label">认证时间</span>
+                <span class="cert-value">{{ formatTime(hasVerification.approvedTime) }}</span>
+              </div>
+            </div>
+          </template>
+          <!-- 审核中或已拒绝 -->
+          <template v-else>
+            <div class="status-icon">
+              <SvgIcon v-if="hasVerification.hasPending" name="clock" width="48" height="48" />
+              <SvgIcon v-else name="close" width="48" height="48" />
+            </div>
+            <p class="status-text">{{ hasVerification.statusText }}</p>
+          </template>
         </div>
 
         <!-- 认证申请表单 -->
@@ -244,10 +263,14 @@ const hasVerification = computed(() => {
 
   if (approvedAudit) {
     const typeText = approvedAudit.type === 1 ? '官方认证' : '个人认证'
+    const verifiedName = approvedAudit.audit_result?.verifiedName || ''
     return {
       hasPending: false,
       hasApproved: true,
       hasRejected: false,
+      approvedType: approvedAudit.type,
+      verifiedName: verifiedName,
+      approvedTime: approvedAudit.audit_time,
       statusText: `您已通过${typeText}`
     }
   }
@@ -332,6 +355,13 @@ const handleClose = () => {
   setTimeout(() => {
     emit('close')
   }, 200)
+}
+
+// 格式化时间
+const formatTime = (time) => {
+  if (!time) return ''
+  const date = new Date(time)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
 // 选择认证类型
@@ -893,6 +923,46 @@ const handleSubmitVerification = async () => {
   color: var(--primary-color);
 }
 
+.cert-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cert-info-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-color-primary);
+}
+
+.cert-type-text {
+  color: var(--text-color-primary);
+}
+
+.cert-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-color-secondary);
+  border-radius: 8px;
+}
+
+.cert-label {
+  font-size: 14px;
+  color: var(--text-color-secondary);
+}
+
+.cert-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color-primary);
+}
 
 .status-text {
   font-size: 16px;

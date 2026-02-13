@@ -491,11 +491,13 @@ function handleCollect(data) {
         <div class="user-basic">
           <div class="user-nickname">
             <span>{{ userStore.userInfo?.nickname || '用户' }}</span>
-            <VerifiedBadge v-if="userStore.userInfo?.verified" :verified="userStore.userInfo.verified" :user-id="userStore.userInfo?.user_id" size="large"/>
           </div>
           <div class="user-content">
-            <div class="user-id text-ellipsis">汐社号：{{ userStore.userInfo?.user_id || '' }}</div>
-            <div v-if="userStore.userInfo?.verified && userStore.userInfo?.verified_name" class="user-id text-ellipsis">认证名称：{{ userStore.userInfo.verified_name }}</div>
+            <div v-if="userStore.userInfo?.verified && userStore.userInfo?.verified_name" class="user-id text-ellipsis verified-name-row">
+              <VerifiedBadge :verified="userStore.userInfo.verified" :user-id="userStore.userInfo?.user_id" size="medium"/>
+              <span>{{ userStore.userInfo.verified_name }}</span>
+            </div>
+            <div v-else class="user-id text-ellipsis">汐社号：{{ userStore.userInfo?.user_id || '' }}</div>
           </div>
         </div>
         <div class="edit-profile-button-wrapper">
@@ -842,6 +844,13 @@ function handleCollect(data) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.verified-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
 }
 
 /* 大屏幕下恢复分隔线和宽度限制 */
