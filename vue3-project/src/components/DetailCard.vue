@@ -1416,12 +1416,6 @@ const locateTargetComment = async () => {
     return
   }
 
-  // 在移动端锁定页面滚动，避免定位过程中的滚动冲突
-  const isMobile = window.innerWidth <= 768
-  if (isMobile) {
-    lock()
-  }
-
   try {
     // 首先在当前已加载的评论中查找（支持递归搜索子评论）
     const findCommentInCurrent = () => {
@@ -1501,8 +1495,18 @@ const locateTargetComment = async () => {
         // 添加高亮样式
         commentElement.classList.add('comment-highlight')
 
-        // 滚动到目标评论
-        commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        // 使用scrollable容器直接滚动，避免body锁定干扰scrollIntoView
+        const isMobile = window.innerWidth <= 768
+        const container = isMobile ? contentSection.value : scrollableContent.value
+        if (container) {
+          const containerRect = container.getBoundingClientRect()
+          const elementRect = commentElement.getBoundingClientRect()
+          const scrollTop = container.scrollTop + (elementRect.top - containerRect.top) - (containerRect.height / 2) + (elementRect.height / 2)
+          container.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' })
+        } else {
+          // 降级到scrollIntoView
+          commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
 
         // 3秒后移除高亮样式
         setTimeout(() => {
@@ -1510,14 +1514,8 @@ const locateTargetComment = async () => {
         }, 3000)
       }
     }
-  } finally {
-    // 定位完成后，在移动端解锁页面滚动
-    if (isMobile) {
-      // 延迟解锁，确保滚动动画完成
-      setTimeout(() => {
-        unlock()
-      }, 1000)
-    }
+  } catch (error) {
+    console.error('定位目标评论失败:', error)
   }
 }
 
