@@ -1305,7 +1305,7 @@ router.post('/', authenticateToken, async (req, res) => {
       const mentionedUsers = extractMentionedUsers(content);
       for (const mentionedUser of mentionedUsers) {
         try {
-          const user = await prisma.user.findUnique({ where: { user_id: mentionedUser.userId }, select: { id: true } });
+          const user = await prisma.user.findUnique({ where: { user_id: mentionedUser.userId }, select: { id: true, email: true } });
           if (user && user.id !== userId) {
             const notificationData = NotificationHelper.createNotificationData({
               userId: Number(user.id),
@@ -1313,11 +1313,47 @@ router.post('/', authenticateToken, async (req, res) => {
               type: NotificationHelper.TYPES.MENTION,
               targetId: Number(postId)
             });
-            await NotificationHelper.insertNotification(prisma, notificationData);
+            const sender = await prisma.user.findUnique({ where: { id: userId }, select: { nickname: true } });
+            await NotificationHelper.insertNotificationWithChannels(prisma, notificationData, {
+              senderName: sender?.nickname || '',
+              recipientEmail: user.email || ''
+            });
           }
         } catch (error) {
           console.error(`处理@用户通知失败:`, error);
         }
+      }
+    }
+
+    // 关注者发布新帖子通知（非草稿时）
+    if (!is_draft) {
+      try {
+        const { notifyUser } = require('../utils/notificationChannels');
+        const author = await prisma.user.findUnique({ where: { id: userId }, select: { nickname: true } });
+        // 查询关注者列表
+        const followers = await prisma.follow.findMany({
+          where: { following_id: userId },
+          select: {
+            follower: { select: { id: true, email: true } }
+          }
+        });
+        for (const f of followers) {
+          try {
+            const follower = f.follower;
+            const notificationData = NotificationHelper.createNewPostNotification(
+              Number(follower.id), Number(userId), Number(postId), title || ''
+            );
+            await NotificationHelper.insertNotificationWithChannels(prisma, notificationData, {
+              senderName: author?.nickname || '',
+              recipientEmail: follower.email || '',
+              postTitle: title || ''
+            });
+          } catch (err) {
+            console.error('关注者新帖通知创建失败:', err.message);
+          }
+        }
+      } catch (error) {
+        console.error('关注者新帖通知处理失败:', error);
       }
     }
 

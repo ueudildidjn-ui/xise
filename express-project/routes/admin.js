@@ -8,6 +8,7 @@ const { batchCleanupFiles } = require('../utils/fileCleanup')
 const { getQueueStats, getQueueJobs, getJobDetails, retryJob, cleanQueue, isQueueEnabled, QUEUE_NAMES } = require('../utils/queueService')
 const crypto = require('crypto')
 const settingsService = require('../utils/settingsService')
+const { notifySystemNotification, DEFAULT_TEMPLATES, loadCustomTemplates, updateCustomTemplate, clearCustomTemplates } = require('../utils/notificationChannels')
 
 // ===================== AI审核设置 =====================
 // 使用 Redis 持久化的设置服务
@@ -4145,6 +4146,23 @@ router.post('/system-notifications', adminAuth, async (req, res) => {
 
     const notification = await prisma.systemNotification.create({ data })
 
+    // 异步发送邮件和Discord通知（不阻塞响应）
+    try {
+      const users = await prisma.user.findMany({
+        where: { is_active: true, email: { not: null } },
+        select: { email: true }
+      });
+      const emails = users.map(u => u.email).filter(Boolean);
+      notifySystemNotification({
+        type: data.type,
+        title: data.title,
+        content: data.content,
+        emails
+      }).catch(err => console.error('系统通知推送失败:', err.message));
+    } catch (pushError) {
+      console.error('系统通知推送准备失败:', pushError);
+    }
+
     res.json({ code: RESPONSE_CODES.SUCCESS, data: { id: notification.id }, message: '创建成功' })
   } catch (error) {
     console.error('创建系统通知失败:', error)
@@ -4252,6 +4270,247 @@ router.post('/system-notifications/:id/resend', adminAuth, async (req, res) => {
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '重新发送失败' })
   }
 })
+
+// ===================== 通知模板管理 =====================
+
+// 检查 NotificationTemplate 模型是否可用
+const isNotificationTemplateAvailable = () => {
+  return prisma.notificationTemplate !== undefined
+}
+
+// 获取通知模板列表
+router.get('/notification-templates', adminAuth, async (req, res) => {
+  try {
+    if (!isNotificationTemplateAvailable()) {
+      return res.status(503).json({ code: RESPONSE_CODES.ERROR, message: '通知模板功能暂不可用，请先运行数据库迁移' })
+    }
+
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 20
+    const skip = (page - 1) * limit
+    const { template_key, name } = req.query
+
+    const where = {}
+    if (template_key) where.template_key = template_key
+    if (name) where.name = { contains: name }
+
+    const [total, templates] = await Promise.all([
+      prisma.notificationTemplate.count({ where }),
+      prisma.notificationTemplate.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        take: limit,
+        skip
+      })
+    ])
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: { data: templates, pagination: { page, limit, total, pages: Math.ceil(total / limit) } },
+      message: 'success'
+    })
+  } catch (error) {
+    console.error('获取通知模板列表失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '获取失败' })
+  }
+})
+
+// 获取默认模板列表（供参考）
+router.get('/notification-templates/defaults', adminAuth, async (req, res) => {
+  try {
+    const defaults = Object.entries(DEFAULT_TEMPLATES).map(([key, tpl]) => ({
+      template_key: key,
+      system_template: tpl.system || '',
+      email_subject: tpl.email?.subject || '',
+      email_body: tpl.email?.body || ''
+    }))
+    res.json({ code: RESPONSE_CODES.SUCCESS, data: defaults, message: 'success' })
+  } catch (error) {
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '获取失败' })
+  }
+})
+
+// 获取单个通知模板
+router.get('/notification-templates/:id', adminAuth, async (req, res) => {
+  try {
+    if (!isNotificationTemplateAvailable()) {
+      return res.status(503).json({ code: RESPONSE_CODES.ERROR, message: '通知模板功能暂不可用' })
+    }
+
+    const id = BigInt(req.params.id)
+    const template = await prisma.notificationTemplate.findUnique({ where: { id } })
+
+    if (!template) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '通知模板不存在' })
+    }
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, data: template, message: 'success' })
+  } catch (error) {
+    console.error('获取通知模板详情失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '获取失败' })
+  }
+})
+
+// 创建/保存通知模板
+router.post('/notification-templates', adminAuth, async (req, res) => {
+  try {
+    if (!isNotificationTemplateAvailable()) {
+      return res.status(503).json({ code: RESPONSE_CODES.ERROR, message: '通知模板功能暂不可用' })
+    }
+
+    const { template_key, name, description, system_template, email_subject, email_body, is_active } = req.body
+
+    if (!template_key || !template_key.trim()) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '模板键名不能为空' })
+    }
+    if (!name || !name.trim()) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '模板名称不能为空' })
+    }
+
+    // 使用 upsert 支持同 template_key 更新
+    const template = await prisma.notificationTemplate.upsert({
+      where: { template_key: template_key.trim() },
+      update: {
+        name: name.trim(),
+        description: description?.trim() || null,
+        system_template: system_template || null,
+        email_subject: email_subject || null,
+        email_body: email_body || null,
+        is_active: is_active !== undefined ? Boolean(is_active) : true
+      },
+      create: {
+        template_key: template_key.trim(),
+        name: name.trim(),
+        description: description?.trim() || null,
+        system_template: system_template || null,
+        email_subject: email_subject || null,
+        email_body: email_body || null,
+        is_active: is_active !== undefined ? Boolean(is_active) : true
+      }
+    })
+
+    // 更新内存缓存
+    if (template.is_active) {
+      updateCustomTemplate(template.template_key, {
+        system: template.system_template || '',
+        email: {
+          subject: template.email_subject || '',
+          body: template.email_body || ''
+        }
+      })
+    } else {
+      clearCustomTemplates(template.template_key)
+    }
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, data: { id: template.id }, message: '保存成功' })
+  } catch (error) {
+    console.error('保存通知模板失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '保存失败' })
+  }
+})
+
+// 更新通知模板
+router.put('/notification-templates/:id', adminAuth, async (req, res) => {
+  try {
+    if (!isNotificationTemplateAvailable()) {
+      return res.status(503).json({ code: RESPONSE_CODES.ERROR, message: '通知模板功能暂不可用' })
+    }
+
+    const id = BigInt(req.params.id)
+    const existing = await prisma.notificationTemplate.findUnique({ where: { id } })
+    if (!existing) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '通知模板不存在' })
+    }
+
+    const { name, description, system_template, email_subject, email_body, is_active } = req.body
+    const data = {}
+    if (name !== undefined) data.name = name.trim()
+    if (description !== undefined) data.description = description ? description.trim() : null
+    if (system_template !== undefined) data.system_template = system_template || null
+    if (email_subject !== undefined) data.email_subject = email_subject || null
+    if (email_body !== undefined) data.email_body = email_body || null
+    if (is_active !== undefined) data.is_active = Boolean(is_active)
+
+    const updated = await prisma.notificationTemplate.update({ where: { id }, data })
+
+    // 更新内存缓存
+    if (updated.is_active) {
+      updateCustomTemplate(updated.template_key, {
+        system: updated.system_template || '',
+        email: {
+          subject: updated.email_subject || '',
+          body: updated.email_body || ''
+        }
+      })
+    } else {
+      clearCustomTemplates(updated.template_key)
+    }
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '更新成功' })
+  } catch (error) {
+    console.error('更新通知模板失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '更新失败' })
+  }
+})
+
+// 删除通知模板
+router.delete('/notification-templates/:id', adminAuth, async (req, res) => {
+  try {
+    if (!isNotificationTemplateAvailable()) {
+      return res.status(503).json({ code: RESPONSE_CODES.ERROR, message: '通知模板功能暂不可用' })
+    }
+
+    const id = BigInt(req.params.id)
+    const existing = await prisma.notificationTemplate.findUnique({ where: { id } })
+    if (!existing) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '通知模板不存在' })
+    }
+
+    await prisma.notificationTemplate.delete({ where: { id } })
+    clearCustomTemplates(existing.template_key)
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: '删除成功' })
+  } catch (error) {
+    console.error('删除通知模板失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '删除失败' })
+  }
+})
+
+// 批量删除通知模板
+router.delete('/notification-templates', adminAuth, async (req, res) => {
+  try {
+    if (!isNotificationTemplateAvailable()) {
+      return res.status(503).json({ code: RESPONSE_CODES.ERROR, message: '通知模板功能暂不可用' })
+    }
+
+    const { ids } = req.body
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '请提供要删除的ID列表' })
+    }
+
+    await prisma.notificationTemplate.deleteMany({
+      where: { id: { in: ids.map(id => BigInt(id)) } }
+    })
+    clearCustomTemplates()
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: `成功删除 ${ids.length} 条通知模板` })
+  } catch (error) {
+    console.error('批量删除通知模板失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '批量删除失败' })
+  }
+})
+
+// 服务启动时加载自定义模板
+;(async () => {
+  try {
+    if (isNotificationTemplateAvailable()) {
+      const templates = await prisma.notificationTemplate.findMany({ where: { is_active: true } })
+      loadCustomTemplates(templates)
+      console.log(`📋 已加载 ${templates.length} 个自定义通知模板`)
+    }
+  } catch (error) {
+    console.log('通知模板加载跳过（表可能不存在）')
+  }
+})()
 
 // ===================== 认证管理 (审核 type 1,2) =====================
 

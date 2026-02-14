@@ -467,6 +467,24 @@ model SystemNotificationConfirmation {
   @@map("system_notification_confirmations")
 }
 
+// 通知模板表
+model NotificationTemplate {
+  id              BigInt   @id @default(autoincrement())
+  template_key    String   @unique @db.VarChar(50)
+  name            String   @db.VarChar(100)
+  description     String?  @db.VarChar(500)
+  system_template String?  @db.Text
+  email_subject   String?  @db.VarChar(500)
+  email_body      String?  @db.Text
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@index([template_key], name: "idx_notification_template_key")
+  @@index([is_active], name: "idx_notification_template_active")
+  @@map("notification_templates")
+}
+
 // 标签表
 model Tag {
   id         Int      @id @default(autoincrement())
