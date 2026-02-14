@@ -501,6 +501,7 @@ CREATE TABLE `users`  (
   `major` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   `interests` json NULL,
   `verified` tinyint(1) NOT NULL DEFAULT 0,
+  `verified_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   `oauth2_id` bigint NULL DEFAULT NULL,
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `users_user_id_key`(`user_id` ASC) USING BTREE,

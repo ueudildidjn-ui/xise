@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES } = require('../constants');
-const { pool, prisma, email: emailConfig, oauth2: oauth2Config, queue: queueConfig, geetest: geetestConfig } = require('../config/config');
+const { pool, prisma, email: emailConfig, oauth2: oauth2Config, queue: queueConfig, geetest: geetestConfig, verification: verificationConfig } = require('../config/config');
 const { generateAccessToken, generateRefreshToken, verifyToken } = require('../utils/jwt');
 const { authenticateToken } = require('../middleware/auth');
 const { getIPLocation, getRealIP } = require('../utils/ipLocation');
@@ -102,7 +102,9 @@ router.get('/auth-config', (req, res) => {
       oauth2LoginUrl: oauth2Config.enabled ? oauth2Config.loginUrl : '',
       // 极验验证码配置
       geetestEnabled: geetestConfig.enabled,
-      geetestCaptchaId: geetestConfig.enabled ? geetestConfig.captchaId : ''
+      geetestCaptchaId: geetestConfig.enabled ? geetestConfig.captchaId : '',
+      // 认证申请配置
+      verificationCollectSensitiveInfo: verificationConfig.collectSensitiveInfo
     },
     message: 'success'
   });
@@ -998,7 +1000,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { id: BigInt(userId) },
-      select: { id: true, user_id: true, nickname: true, avatar: true, background: true, bio: true, location: true, email: true, follow_count: true, fans_count: true, like_count: true, is_active: true, created_at: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, verified: true }
+      select: { id: true, user_id: true, nickname: true, avatar: true, background: true, bio: true, location: true, email: true, follow_count: true, fans_count: true, like_count: true, is_active: true, created_at: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, verified: true, verified_name: true }
     });
 
     if (!user) {

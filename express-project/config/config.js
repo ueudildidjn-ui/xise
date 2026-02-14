@@ -444,6 +444,12 @@ const config = {
     captchaKey: process.env.GEETEST_CAPTCHA_KEY || '',
     // 极验API服务器地址
     apiServer: 'https://gcaptcha4.geetest.com'
+  },
+
+  // 认证申请配置
+  verification: {
+    // 是否收集敏感信息（真实姓名、身份证号、机构名称、信用代码、联系人、联系电话）
+    collectSensitiveInfo: process.env.VERIFICATION_COLLECT_SENSITIVE_INFO === 'true' // 默认不收集
   }
 };
 

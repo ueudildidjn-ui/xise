@@ -337,10 +337,13 @@ onMounted(async () => {
         <div class="user-basic">
           <div class="user-nickname">
             <span>{{ userInfo?.nickname || '用户' }}</span>
-            <VerifiedBadge :verified="userInfo?.verified" size="large" />
           </div>
           <div class="user-content">
-            <div class="user-id text-ellipsis">汐社号：{{ userInfo?.user_id || '' }}</div>
+            <div v-if="userInfo?.verified && userInfo?.verified_name" class="user-id text-ellipsis verified-name-row">
+              <VerifiedBadge :verified="userInfo?.verified" :user-id="userInfo?.user_id" size="medium" />
+              <span>{{ userInfo.verified_name }}</span>
+            </div>
+            <div v-else class="user-id text-ellipsis">汐社号：{{ userInfo?.user_id || '' }}</div>
           </div>
         </div>
 
@@ -611,6 +614,13 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.verified-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
 }
 
 /* 大屏幕下恢复分隔线和宽度限制 */

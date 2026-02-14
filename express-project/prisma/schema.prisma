@@ -641,7 +641,8 @@ model User {
   education        String?   @db.VarChar(50)
   major            String?   @db.VarChar(100)
   interests        Json?
-  verified         Boolean   @default(false)
+  verified         Int       @default(0) @db.SmallInt // 0:未认证 1:官方认证 2:个人认证
+  verified_name    String?   @db.VarChar(100) // 认证名称
   oauth2_id        BigInt?   @unique
 
   posts                           Post[]
