@@ -8,7 +8,9 @@ const { batchCleanupFiles } = require('../utils/fileCleanup')
 const { getQueueStats, getQueueJobs, getJobDetails, retryJob, cleanQueue, isQueueEnabled, QUEUE_NAMES } = require('../utils/queueService')
 const crypto = require('crypto')
 const settingsService = require('../utils/settingsService')
-const { notifySystemNotification, DEFAULT_TEMPLATES, loadCustomTemplates, updateCustomTemplate, clearCustomTemplates } = require('../utils/notificationChannels')
+const { notifySystemNotification, DEFAULT_TEMPLATES, loadCustomTemplates, updateCustomTemplate, clearCustomTemplates, renderTemplate, sendDiscordNotification } = require('../utils/notificationChannels')
+const { sendMail } = require('../utils/email')
+const { email: emailConfig, notificationChannels: notifChannelsConfig } = require('../config/config')
 
 // ===================== AI审核设置 =====================
 // 使用 Redis 持久化的设置服务
@@ -4496,6 +4498,130 @@ router.delete('/notification-templates', adminAuth, async (req, res) => {
   } catch (error) {
     console.error('批量删除通知模板失败:', error)
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '批量删除失败' })
+  }
+})
+
+// 获取测试用示例变量
+function getTestSampleVariables() {
+  return {
+    siteName: notifChannelsConfig.discord?.siteName || '汐社校园图文社区',
+    senderName: '测试用户',
+    postTitle: '这是一篇测试笔记标题',
+    commentContent: '这是一条测试评论内容，用于测试模板的展示效果。',
+    title: '测试通知标题',
+    content: '这是测试通知的正文内容，用于测试模板效果。'
+  }
+}
+
+// 预览通知模板（渲染HTML返回）
+router.post('/notification-templates/preview', adminAuth, async (req, res) => {
+  try {
+    const { template_key, email_subject, email_body, system_template } = req.body
+
+    const sampleVariables = getTestSampleVariables()
+
+    const renderedSubject = renderTemplate(email_subject || '', sampleVariables)
+    const renderedBody = renderTemplate(email_body || '', sampleVariables)
+    const renderedSystem = renderTemplate(system_template || '', sampleVariables)
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: {
+        subject: renderedSubject,
+        body: renderedBody,
+        system: renderedSystem,
+        variables: sampleVariables
+      },
+      message: 'success'
+    })
+  } catch (error) {
+    console.error('预览通知模板失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '预览失败' })
+  }
+})
+
+// 测试发送邮件
+router.post('/notification-templates/:id/test-email', adminAuth, async (req, res) => {
+  try {
+    if (!isNotificationTemplateAvailable()) {
+      return res.status(503).json({ code: RESPONSE_CODES.ERROR, message: '通知模板功能暂不可用' })
+    }
+
+    const { email: testEmail } = req.body
+    if (!testEmail || !testEmail.trim()) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '请提供测试邮箱地址' })
+    }
+
+    if (!emailConfig.enabled) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.ERROR, message: '邮件服务未启用，请先在.env中配置 EMAIL_ENABLED=true 并配置SMTP' })
+    }
+
+    const id = BigInt(req.params.id)
+    const template = await prisma.notificationTemplate.findUnique({ where: { id } })
+    if (!template) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '通知模板不存在' })
+    }
+
+    const sampleVariables = getTestSampleVariables()
+
+    // 优先使用自定义模板，回退到默认模板
+    const emailSubject = template.email_subject || DEFAULT_TEMPLATES[template.template_key]?.email?.subject || '测试邮件'
+    const emailBody = template.email_body || DEFAULT_TEMPLATES[template.template_key]?.email?.body || '<p>测试邮件内容</p>'
+
+    const renderedSubject = renderTemplate(emailSubject, sampleVariables)
+    const renderedBody = renderTemplate(emailBody, sampleVariables)
+
+    await sendMail({
+      to: testEmail.trim(),
+      subject: `[测试] ${renderedSubject}`,
+      html: renderedBody
+    })
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: `测试邮件已发送至 ${testEmail.trim()}` })
+  } catch (error) {
+    console.error('测试发送邮件失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: `发送失败: ${error.message}` })
+  }
+})
+
+// 测试发送Discord通知
+router.post('/notification-templates/:id/test-discord', adminAuth, async (req, res) => {
+  try {
+    if (!isNotificationTemplateAvailable()) {
+      return res.status(503).json({ code: RESPONSE_CODES.ERROR, message: '通知模板功能暂不可用' })
+    }
+
+    const { discord } = notifChannelsConfig
+    if (!discord.enabled || !discord.webhookUrl) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.ERROR, message: 'Discord Webhook未启用，请先在.env中配置 DISCORD_WEBHOOK_ENABLED=true 和 DISCORD_WEBHOOK_URL' })
+    }
+
+    const id = BigInt(req.params.id)
+    const template = await prisma.notificationTemplate.findUnique({ where: { id } })
+    if (!template) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '通知模板不存在' })
+    }
+
+    const sampleVariables = getTestSampleVariables()
+    const siteName = sampleVariables.siteName
+
+    const systemTemplate = template.system_template || DEFAULT_TEMPLATES[template.template_key]?.system || '测试通知'
+    const text = renderTemplate(systemTemplate, sampleVariables)
+
+    const embed = {
+      title: `🧪 [测试] ${siteName}`,
+      description: text,
+      color: 16776960,
+      footer: { text: `模板: ${template.name} (${template.template_key})` },
+      timestamp: new Date().toISOString()
+    }
+
+    await sendDiscordNotification(null, embed)
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: 'Discord测试通知已发送' })
+  } catch (error) {
+    console.error('测试发送Discord失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: `发送失败: ${error.message}` })
   }
 })
 
