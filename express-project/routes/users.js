@@ -500,13 +500,14 @@ router.put('/privacy-settings', authenticateToken, async (req, res) => {
 });
 
 // 获取用户个性标签
-router.get('/:id/personality-tags', async (req, res) => {
+router.get('/:id/personality-tags', optionalAuth, async (req, res) => {
   try {
     const userIdParam = req.params.id;
+    const currentUserId = req.user ? BigInt(req.user.id) : null;
 
     const user = await prisma.user.findUnique({
       where: { user_id: userIdParam },
-      select: { gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true }
+      select: { id: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, privacy_zodiac: true, privacy_mbti: true }
     });
 
     if (!user) {
@@ -517,10 +518,21 @@ router.get('/:id/personality-tags', async (req, res) => {
       });
     }
 
+    const isOwner = currentUserId && currentUserId === user.id;
+
+    const data = {
+      gender: user.gender,
+      zodiac_sign: isOwner || user.privacy_zodiac ? user.zodiac_sign : null,
+      mbti: isOwner || user.privacy_mbti ? user.mbti : null,
+      education: user.education,
+      major: user.major,
+      interests: user.interests
+    };
+
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
-      data: user
+      data
     });
   } catch (error) {
     console.error('获取用户个性标签失败:', error);
@@ -582,7 +594,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       // 已通过(1)：正常显示
     }
 
-    // 格式化用户数据
+    // 格式化用户数据（根据隐私设置过滤敏感字段）
     const userData = {
       id: Number(user.id),
       user_id: user.user_id,
@@ -599,11 +611,12 @@ router.get('/:id', optionalAuth, async (req, res) => {
       verified: user.verified,
       verified_name: user.verified_name,
       gender: user.gender,
-      zodiac_sign: user.zodiac_sign,
-      mbti: user.mbti,
+      zodiac_sign: isOwner || user.privacy_zodiac ? user.zodiac_sign : null,
+      mbti: isOwner || user.privacy_mbti ? user.mbti : null,
       education: user.education,
       major: user.major,
       interests: user.interests,
+      birthday: isOwner ? user.birthday : (user.privacy_birthday ? user.birthday : null),
       isBlocked,
       isBlockedBy
     };

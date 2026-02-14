@@ -327,4 +327,28 @@ const router = createRouter({
   ],
 })
 
+// 全局前置守卫：未完成引导的已登录用户强制跳转到引导页
+router.beforeEach((to, from, next) => {
+  // 不拦截引导页本身和管理后台路由
+  if (to.name === 'onboarding' || to.path.startsWith('/admin')) {
+    return next()
+  }
+
+  const savedUserInfo = localStorage.getItem('userInfo')
+  const token = localStorage.getItem('token')
+
+  if (token && savedUserInfo) {
+    try {
+      const userInfo = JSON.parse(savedUserInfo)
+      if (userInfo && userInfo.id && userInfo.profile_completed === false) {
+        return next({ name: 'onboarding' })
+      }
+    } catch (e) {
+      // 解析失败则不拦截
+    }
+  }
+
+  next()
+})
+
 export default router
