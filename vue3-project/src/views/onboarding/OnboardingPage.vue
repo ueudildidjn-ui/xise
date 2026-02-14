@@ -78,7 +78,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { userApi } from '@/api/index.js'
@@ -112,6 +112,51 @@ const totalSteps = computed(() => {
   return customFieldDefs.value.length > 0 ? 4 : 3
 })
 
+// 保存草稿到 Redis（防抖）
+let saveDraftTimer = null
+const saveDraft = () => {
+  clearTimeout(saveDraftTimer)
+  saveDraftTimer = setTimeout(async () => {
+    try {
+      await userApi.saveOnboardingDraft({
+        currentStep: currentStep.value,
+        gender: form.value.gender,
+        birthday: form.value.birthday,
+        interests: form.value.interests,
+        customFields: form.value.customFields
+      })
+    } catch (error) {
+      // 草稿保存失败不影响用户操作
+    }
+  }, 500)
+}
+
+// 监听表单和步骤变化，自动保存草稿
+watch([currentStep, () => form.value.gender, () => form.value.birthday, () => form.value.interests, () => form.value.customFields], saveDraft, { deep: true })
+
+// 从后台加载草稿
+const loadDraft = async () => {
+  try {
+    const response = await userApi.getOnboardingDraft()
+    if ((response.success || response.code === 200) && response.data) {
+      const draft = response.data
+      if (draft.gender) form.value.gender = draft.gender
+      if (draft.birthday) form.value.birthday = draft.birthday
+      if (Array.isArray(draft.interests) && draft.interests.length > 0) {
+        form.value.interests = draft.interests
+      }
+      if (draft.customFields && typeof draft.customFields === 'object') {
+        form.value.customFields = draft.customFields
+      }
+      if (draft.currentStep && draft.currentStep >= 1 && draft.currentStep <= totalSteps.value) {
+        currentStep.value = draft.currentStep
+      }
+    }
+  } catch (error) {
+    // 加载草稿失败不影响用户操作
+  }
+}
+
 // 从后台加载兴趣选项配置
 const loadInterestOptions = async () => {
   try {
@@ -134,8 +179,9 @@ const loadInterestOptions = async () => {
   }
 }
 
-onMounted(() => {
-  loadInterestOptions()
+onMounted(async () => {
+  await loadInterestOptions()
+  await loadDraft()
 })
 
 const todayStr = computed(() => {
