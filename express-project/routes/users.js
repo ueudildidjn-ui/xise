@@ -345,6 +345,160 @@ router.delete('/history', authenticateToken, async (req, res) => {
   }
 });
 
+// 完成开始页面引导（填写性别、生日、兴趣爱好）
+router.post('/onboarding', authenticateToken, async (req, res) => {
+  try {
+    const userId = BigInt(req.user.id);
+    const { gender, birthday, interests } = req.body;
+
+    const updateData = { profile_completed: true };
+
+    if (gender !== undefined) {
+      const validGenders = ['男', '女', ''];
+      if (!validGenders.includes(gender)) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '性别参数无效' });
+      }
+      updateData.gender = gender || null;
+    }
+
+    if (birthday !== undefined && birthday) {
+      const birthDate = new Date(birthday);
+      if (isNaN(birthDate.getTime())) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '生日格式无效' });
+      }
+      const now = new Date();
+      if (birthDate > now) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '生日不能是未来日期' });
+      }
+      updateData.birthday = birthDate;
+
+      // 根据生日自动计算星座
+      const month = birthDate.getMonth() + 1;
+      const day = birthDate.getDate();
+      const zodiacSigns = [
+        { sign: '摩羯座', start: [1, 1], end: [1, 19] },
+        { sign: '水瓶座', start: [1, 20], end: [2, 18] },
+        { sign: '双鱼座', start: [2, 19], end: [3, 20] },
+        { sign: '白羊座', start: [3, 21], end: [4, 19] },
+        { sign: '金牛座', start: [4, 20], end: [5, 20] },
+        { sign: '双子座', start: [5, 21], end: [6, 21] },
+        { sign: '巨蟹座', start: [6, 22], end: [7, 22] },
+        { sign: '狮子座', start: [7, 23], end: [8, 22] },
+        { sign: '处女座', start: [8, 23], end: [9, 22] },
+        { sign: '天秤座', start: [9, 23], end: [10, 23] },
+        { sign: '天蝎座', start: [10, 24], end: [11, 22] },
+        { sign: '射手座', start: [11, 23], end: [12, 21] },
+        { sign: '摩羯座', start: [12, 22], end: [12, 31] }
+      ];
+      const zodiac = zodiacSigns.find(z => {
+        const afterStart = month > z.start[0] || (month === z.start[0] && day >= z.start[1]);
+        const beforeEnd = month < z.end[0] || (month === z.end[0] && day <= z.end[1]);
+        return afterStart && beforeEnd;
+      });
+      if (zodiac) {
+        updateData.zodiac_sign = zodiac.sign;
+      }
+    }
+
+    if (interests !== undefined) {
+      updateData.interests = interests || null;
+    }
+
+    await prisma.user.update({ where: { id: userId }, data: updateData });
+
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, user_id: true, nickname: true, avatar: true, background: true, bio: true,
+        location: true, email: true, gender: true, birthday: true, zodiac_sign: true, mbti: true,
+        interests: true, profile_completed: true, follow_count: true, fans_count: true, like_count: true,
+        privacy_birthday: true, privacy_age: true, privacy_zodiac: true, privacy_mbti: true
+      }
+    });
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: '引导信息保存成功',
+      success: true,
+      data: { ...updatedUser, id: Number(updatedUser.id) }
+    });
+  } catch (error) {
+    console.error('保存引导信息失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 获取隐私设置
+router.get('/privacy-settings', authenticateToken, async (req, res) => {
+  try {
+    const userId = BigInt(req.user.id);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        privacy_birthday: true,
+        privacy_age: true,
+        privacy_zodiac: true,
+        privacy_mbti: true
+      }
+    });
+
+    if (!user) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: '用户不存在' });
+    }
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success',
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    console.error('获取隐私设置失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+// 更新隐私设置
+router.put('/privacy-settings', authenticateToken, async (req, res) => {
+  try {
+    const userId = BigInt(req.user.id);
+    const { privacy_birthday, privacy_age, privacy_zodiac, privacy_mbti } = req.body;
+
+    const updateData = {};
+    if (privacy_birthday !== undefined) updateData.privacy_birthday = !!privacy_birthday;
+    if (privacy_age !== undefined) updateData.privacy_age = !!privacy_age;
+    if (privacy_zodiac !== undefined) updateData.privacy_zodiac = !!privacy_zodiac;
+    if (privacy_mbti !== undefined) updateData.privacy_mbti = !!privacy_mbti;
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '没有需要更新的设置' });
+    }
+
+    await prisma.user.update({ where: { id: userId }, data: updateData });
+
+    const updatedSettings = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        privacy_birthday: true,
+        privacy_age: true,
+        privacy_zodiac: true,
+        privacy_mbti: true
+      }
+    });
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: '隐私设置更新成功',
+      success: true,
+      data: updatedSettings
+    });
+  } catch (error) {
+    console.error('更新隐私设置失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
 // 获取用户个性标签
 router.get('/:id/personality-tags', async (req, res) => {
   try {
@@ -504,7 +658,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const currentUserId = BigInt(req.user.id);
-    const { nickname, avatar, background, bio, location, gender, zodiac_sign, mbti, education, major, interests } = req.body;
+    const { nickname, avatar, background, bio, location, gender, zodiac_sign, mbti, education, major, interests, birthday } = req.body;
 
     // 始终通过汐社号查找对应的数字ID
     const userRecord = await prisma.user.findUnique({
@@ -546,6 +700,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (education !== undefined) updateData.education = education || null;
     if (major !== undefined) updateData.major = major || null;
     if (interests !== undefined) updateData.interests = interests || null;
+    if (birthday !== undefined) {
+      if (birthday) {
+        const birthDate = new Date(birthday);
+        if (!isNaN(birthDate.getTime())) {
+          updateData.birthday = birthDate;
+        }
+      } else {
+        updateData.birthday = null;
+      }
+    }
 
     // 检查昵称违禁词
     if (nicknameChanged) {
@@ -650,8 +814,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
       where: { id: targetUserId },
       select: {
         id: true, user_id: true, nickname: true, avatar: true, background: true, bio: true, bio_audit_status: true,
-        location: true, email: true, gender: true, zodiac_sign: true, mbti: true, education: true,
-        major: true, interests: true, follow_count: true, fans_count: true, like_count: true
+        location: true, email: true, gender: true, birthday: true, zodiac_sign: true, mbti: true, education: true,
+        major: true, interests: true, follow_count: true, fans_count: true, like_count: true,
+        profile_completed: true, privacy_birthday: true, privacy_age: true, privacy_zodiac: true, privacy_mbti: true
       }
     });
 
