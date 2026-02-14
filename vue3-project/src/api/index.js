@@ -125,6 +125,16 @@ export const userApi = {
   // 获取初始设置页面配置
   getOnboardingConfig() {
     return request.get('/users/onboarding-config')
+  },
+
+  // 获取引导页草稿
+  getOnboardingDraft() {
+    return request.get('/users/onboarding-draft')
+  },
+
+  // 保存引导页草稿
+  saveOnboardingDraft(data) {
+    return request.put('/users/onboarding-draft', data)
   }
 }
 
