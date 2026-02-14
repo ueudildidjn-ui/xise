@@ -93,6 +93,16 @@ const visibleTags = computed(() => {
         }
     })
 
+    // 添加自定义字段标签
+    const customFields = userInfo.custom_fields
+    if (customFields && typeof customFields === 'object') {
+        Object.values(customFields).forEach(val => {
+            if (val && String(val).trim()) {
+                tags.push(String(val))
+            }
+        })
+    }
+
     return tags
 })
 

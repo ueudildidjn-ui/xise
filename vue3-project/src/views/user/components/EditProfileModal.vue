@@ -154,6 +154,17 @@
               </div>
             </div>
           </div>
+
+          <template v-if="customFieldDefs.length > 0">
+            <div v-for="field in customFieldDefs" :key="field.name" class="form-group">
+              <label class="form-label">{{ field.name }}:</label>
+              <select v-if="field.type === 'select'" v-model="form.custom_fields[field.name]" class="custom-field-select" :aria-label="field.name">
+                <option value="">暂不设置</option>
+                <option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
+              </select>
+              <input v-else v-model="form.custom_fields[field.name]" type="text" :placeholder="'请输入' + field.name" maxlength="50" />
+            </div>
+          </template>
         </form>
       </div>
       <div class="modal-footer">
@@ -194,7 +205,7 @@
 <script setup>
 import { ref, reactive, nextTick, watch, inject, computed, onMounted } from 'vue'
 import SvgIcon from '@/components/SvgIcon.vue'
-import { imageUploadApi, authApi } from '@/api/index.js'
+import { imageUploadApi, authApi, userApi } from '@/api/index.js'
 import Cropper from 'cropperjs'
 import 'cropperjs/dist/cropper.css'
 import EmojiPicker from '@/components/EmojiPicker.vue'
@@ -339,6 +350,7 @@ const confirmUnbindEmail = async () => {
 // 组件挂载时获取邮件配置
 onMounted(() => {
   fetchEmailConfig()
+  loadCustomFieldDefs()
 })
 
 // 表单数据
@@ -346,15 +358,16 @@ const form = reactive({
   avatar: '',
   nickname: '',
   bio: '',
-  background: '', // 背景图
+  background: '',
 
   gender: '',
-  birthday: '', // 生日
+  birthday: '',
   zodiac_sign: '',
   mbti: '',
   interests: [],
-  avatarBlob: null, // 存储裁剪后的图片blob
-  backgroundBlob: null // 存储裁剪后的背景图blob
+  custom_fields: {},
+  avatarBlob: null,
+  backgroundBlob: null
 })
 
 // 生日相关计算
@@ -377,6 +390,23 @@ const computedAge = computed(() => {
 
 // 兴趣爱好相关
 const newInterest = ref('')
+
+// 自定义字段定义
+const customFieldDefs = ref([])
+
+const loadCustomFieldDefs = async () => {
+  try {
+    const response = await userApi.getOnboardingConfig()
+    if (response.success || response.code === 200) {
+      const fields = response.data?.custom_fields
+      if (Array.isArray(fields) && fields.length > 0) {
+        customFieldDefs.value = fields
+      }
+    }
+  } catch (error) {
+    console.warn('加载自定义字段配置失败:', error)
+  }
+}
 
 // 用于mention功能的用户数据
 const mentionUsers = ref([
@@ -525,6 +555,14 @@ watch(() => props.visible, (newValue) => {
     avatarError.value = ''
     newInterest.value = ''
     form.backgroundBlob = null
+
+    // 初始化自定义字段
+    const cf = props.userInfo.custom_fields
+    if (cf && typeof cf === 'object' && !Array.isArray(cf)) {
+      form.custom_fields = { ...cf }
+    } else {
+      form.custom_fields = {}
+    }
   } else {
     // 解锁滚动
     unlock()
@@ -1666,5 +1704,22 @@ const handleSave = async () => {
 .email-error {
   color: var(--primary-color);
   font-size: 12px;
+}
+
+.custom-field-select {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--border-color-primary);
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 14px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.custom-field-select:focus {
+  border-color: var(--primary-color);
 }
 </style>

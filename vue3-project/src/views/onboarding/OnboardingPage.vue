@@ -3,7 +3,7 @@
     <div class="onboarding-container">
       <!-- 步骤指示器 -->
       <div class="step-indicator">
-        <div v-for="i in 3" :key="i" class="step-dot" :class="{ active: currentStep >= i, done: currentStep > i }"></div>
+        <div v-for="i in totalSteps" :key="i" class="step-dot" :class="{ active: currentStep >= i, done: currentStep > i }"></div>
       </div>
 
       <!-- 步骤1：选择性别 -->
@@ -47,11 +47,27 @@
         </div>
       </div>
 
+      <!-- 步骤4：自定义字段（如果有配置） -->
+      <div v-if="currentStep === 4 && customFieldDefs.length > 0" class="step-content">
+        <h2 class="step-title">完善个人信息</h2>
+        <p class="step-desc">填写更多个人信息，帮助我们更好地了解你</p>
+        <div class="custom-fields-form">
+          <div v-for="field in customFieldDefs" :key="field.name" class="custom-field-group">
+            <label class="custom-field-label">{{ field.name }}</label>
+            <select v-if="field.type === 'select'" v-model="form.customFields[field.name]" class="custom-field-select" :aria-label="field.name">
+              <option value="">请选择</option>
+              <option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+            <input v-else v-model="form.customFields[field.name]" type="text" :placeholder="'请输入' + field.name" maxlength="50" class="custom-field-input" />
+          </div>
+        </div>
+      </div>
+
       <!-- 操作按钮 -->
       <div class="step-actions">
         <button v-if="currentStep > 1" class="btn-secondary" @click="prevStep">上一步</button>
-        <button v-if="currentStep < 3" class="btn-primary" @click="nextStep">下一步</button>
-        <button v-if="currentStep === 3" class="btn-primary" :disabled="isSubmitting" @click="handleSubmit">
+        <button v-if="currentStep < totalSteps" class="btn-primary" @click="nextStep">下一步</button>
+        <button v-if="currentStep === totalSteps" class="btn-primary" :disabled="isSubmitting" @click="handleSubmit">
           {{ isSubmitting ? '保存中...' : '完成' }}
         </button>
       </div>
@@ -77,7 +93,8 @@ const isSubmitting = ref(false)
 const form = ref({
   gender: '',
   birthday: '',
-  interests: []
+  interests: [],
+  customFields: {}
 })
 
 const defaultInterestOptions = [
@@ -88,6 +105,11 @@ const defaultInterestOptions = [
 ]
 
 const interestOptions = ref([...defaultInterestOptions])
+const customFieldDefs = ref([])
+
+const totalSteps = computed(() => {
+  return customFieldDefs.value.length > 0 ? 4 : 3
+})
 
 // 从后台加载兴趣选项配置
 const loadInterestOptions = async () => {
@@ -98,9 +120,12 @@ const loadInterestOptions = async () => {
       if (Array.isArray(options) && options.length > 0) {
         interestOptions.value = options
       }
+      const fields = response.data?.custom_fields
+      if (Array.isArray(fields) && fields.length > 0) {
+        customFieldDefs.value = fields
+      }
     }
   } catch (error) {
-    // 加载失败使用默认选项
     console.warn('加载兴趣选项配置失败，使用默认选项:', error)
   }
 }
@@ -164,7 +189,7 @@ const toggleInterest = (interest) => {
 }
 
 const nextStep = () => {
-  if (currentStep.value < 3) currentStep.value++
+  if (currentStep.value < totalSteps.value) currentStep.value++
 }
 
 const prevStep = () => {
@@ -177,7 +202,8 @@ const handleSubmit = async () => {
     const data = {
       gender: form.value.gender || '',
       birthday: form.value.birthday || '',
-      interests: form.value.interests.length > 0 ? form.value.interests : null
+      interests: form.value.interests.length > 0 ? form.value.interests : null,
+      custom_fields: Object.keys(form.value.customFields).length > 0 ? form.value.customFields : undefined
     }
     const response = await userApi.submitOnboarding(data)
     if (response.success || response.code === 200) {
@@ -428,5 +454,47 @@ const handleSkip = async () => {
 
 .skip-btn:hover {
   color: var(--text-color-secondary);
+}
+
+/* 自定义字段表单 */
+.custom-fields-form {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.custom-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.custom-field-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color-primary);
+}
+
+.custom-field-select,
+.custom-field-input {
+  width: 100%;
+  height: 44px;
+  border: 2px solid var(--border-color-primary);
+  border-radius: 12px;
+  padding: 0 16px;
+  font-size: 15px;
+  background: var(--bg-color-secondary);
+  color: var(--text-color-primary);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.custom-field-select:focus,
+.custom-field-input:focus {
+  border-color: var(--primary-color);
 }
 </style>
