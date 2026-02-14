@@ -616,7 +616,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       education: user.education,
       major: user.major,
       interests: user.interests,
-      birthday: isOwner ? user.birthday : (user.privacy_birthday ? user.birthday : null),
+      birthday: isOwner || user.privacy_birthday ? user.birthday : null,
       isBlocked,
       isBlockedBy
     };
