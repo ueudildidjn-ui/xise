@@ -584,7 +584,12 @@ const performSubmit = async () => {
       setTimeout(() => {
         emit('success')
         closeModal()
-        window.location.reload()
+        // 注册成功后跳转到引导页面，登录则刷新页面
+        if (!isLoginMode.value) {
+          window.location.href = '/onboarding'
+        } else {
+          window.location.reload()
+        }
       }, 1000)
     } else {
       // 如果是图形验证码相关错误

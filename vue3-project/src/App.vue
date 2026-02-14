@@ -1,5 +1,5 @@
 <script setup>
-import { RouterView } from 'vue-router'
+import { RouterView, useRouter } from 'vue-router'
 import { onMounted, ref } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
@@ -9,6 +9,7 @@ import { useKeyboardShortcutsStore } from '@/stores/keyboardShortcuts'
 import { useAccountSecurityStore } from '@/stores/accountSecurity'
 import { useBalanceStore } from '@/stores/balance'
 import { useVerifiedStore } from '@/stores/verified'
+import { usePrivacyStore } from '@/stores/privacy'
 import AuthModal from '@/components/modals/AuthModal.vue'
 import ResetPasswordModal from '@/components/modals/ResetPasswordModal.vue'
 import VerifiedModal from '@/components/modals/VerifiedModal.vue'
@@ -18,9 +19,11 @@ import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue'
 import KeyboardShortcutsModal from '@/components/modals/KeyboardShortcutsModal.vue'
 import AccountSecurityModal from '@/components/modals/AccountSecurityModal.vue'
 import BalanceModal from '@/components/modals/BalanceModal.vue'
+import PrivacySettingsModal from '@/components/modals/PrivacySettingsModal.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useConfirm } from '@/views/admin/composables/useConfirm'
 
+const router = useRouter()
 const userStore = useUserStore()
 const authStore = useAuthStore()
 const changePasswordStore = useChangePasswordStore()
@@ -28,6 +31,7 @@ const keyboardShortcutsStore = useKeyboardShortcutsStore()
 const accountSecurityStore = useAccountSecurityStore()
 const balanceStore = useBalanceStore()
 const verifiedStore = useVerifiedStore()
+const privacyStore = usePrivacyStore()
 const { confirmState, handleConfirm, handleCancel } = useConfirm()
 
 // 找回密码模态框状态
@@ -168,12 +172,28 @@ const restoreThemeColor = () => {
 }
 
 // 应用启动时初始化用户信息和主题色
-onMounted(() => {
+onMounted(async () => {
   // 先处理OAuth2回调
   handleOAuth2Callback()
   
   userStore.initUserInfo()
   restoreThemeColor()
+
+  // 已登录用户：从服务器获取最新用户信息，检查是否需要跳转到引导页
+  if (userStore.isLoggedIn) {
+    try {
+      const freshUserInfo = await userStore.getCurrentUser()
+      if (freshUserInfo && freshUserInfo.profile_completed === false) {
+        const currentPath = router.currentRoute.value.path
+        if (currentPath !== '/onboarding' && !currentPath.startsWith('/admin') && !currentPath.startsWith('/user/')) {
+          router.replace({ name: 'onboarding' })
+        }
+      }
+    } catch (e) {
+      // 获取用户信息失败不阻塞应用（可能是网络错误或token过期）
+      console.warn('获取用户信息失败，跳过引导页检查:', e)
+    }
+  }
 })
 </script>
 
@@ -192,6 +212,8 @@ onMounted(() => {
       @close="accountSecurityStore.closeAccountSecurityModal" />
     <BalanceModal v-model:visible="balanceStore.showBalanceModal" @close="balanceStore.closeBalanceModal" />
     <VerifiedModal v-if="verifiedStore.showVerifiedModal" @close="verifiedStore.closeVerifiedModal" />
+    <PrivacySettingsModal v-model:visible="privacyStore.showPrivacyModal"
+      @close="privacyStore.closePrivacyModal" />
     <ConfirmDialog v-model:visible="confirmState.visible" :title="confirmState.title" :message="confirmState.message"
       :type="confirmState.type" :confirm-text="confirmState.confirmText" :cancel-text="confirmState.cancelText"
       :show-cancel="confirmState.showCancel" @confirm="handleConfirm" @cancel="handleCancel" />

@@ -767,7 +767,7 @@ router.post('/register', async (req, res) => {
     // 获取完整用户信息
     const userInfo = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, user_id: true, nickname: true, avatar: true, bio: true, location: true, follow_count: true, fans_count: true, like_count: true }
+      select: { id: true, user_id: true, nickname: true, avatar: true, bio: true, location: true, follow_count: true, fans_count: true, like_count: true, profile_completed: true }
     });
 
     console.log(`用户注册成功 - 用户ID: ${userId}, 汐社号: ${userInfo.user_id}`);
@@ -801,7 +801,7 @@ router.post('/login', async (req, res) => {
     // 查找用户
     const user = await prisma.user.findUnique({
       where: { user_id: user_id.toString() },
-      select: { id: true, user_id: true, nickname: true, password: true, avatar: true, background: true, bio: true, location: true, follow_count: true, fans_count: true, like_count: true, is_active: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true }
+      select: { id: true, user_id: true, nickname: true, password: true, avatar: true, background: true, bio: true, location: true, follow_count: true, fans_count: true, like_count: true, is_active: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, profile_completed: true }
     });
 
     if (!user) {
@@ -1000,7 +1000,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { id: BigInt(userId) },
-      select: { id: true, user_id: true, nickname: true, avatar: true, background: true, bio: true, location: true, email: true, follow_count: true, fans_count: true, like_count: true, is_active: true, created_at: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, verified: true, verified_name: true }
+      select: { id: true, user_id: true, nickname: true, avatar: true, background: true, bio: true, location: true, email: true, follow_count: true, fans_count: true, like_count: true, is_active: true, created_at: true, gender: true, birthday: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, custom_fields: true, verified: true, verified_name: true, profile_completed: true, privacy_birthday: true, privacy_age: true, privacy_zodiac: true, privacy_mbti: true }
     });
 
     if (!user) {

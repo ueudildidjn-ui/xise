@@ -105,6 +105,26 @@ export const userApi = {
   // 获取黑名单状态
   getBlockStatus(userId) {
     return request.get(`/users/${userId}/block-status`)
+  },
+
+  // 完成开始页面引导
+  submitOnboarding(data) {
+    return request.post('/users/onboarding', data)
+  },
+
+  // 获取隐私设置
+  getPrivacySettings() {
+    return request.get('/users/privacy-settings')
+  },
+
+  // 更新隐私设置
+  updatePrivacySettings(data) {
+    return request.put('/users/privacy-settings', data)
+  },
+
+  // 获取初始设置页面配置
+  getOnboardingConfig() {
+    return request.get('/users/onboarding-config')
   }
 }
 

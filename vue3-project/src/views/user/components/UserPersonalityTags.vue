@@ -32,6 +32,26 @@ const visibleTags = computed(() => {
 
     if (!userInfo) return tags
 
+    // 计算年龄（从birthday）
+    if (userInfo.birthday) {
+        try {
+            const birth = new Date(userInfo.birthday)
+            if (!isNaN(birth.getTime())) {
+                const now = new Date()
+                let age = now.getFullYear() - birth.getFullYear()
+                const m = now.getMonth() - birth.getMonth()
+                if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+                    age--
+                }
+                if (age > 0 && age < 150) {
+                    tags.push(`${age}岁`)
+                }
+            }
+        } catch {
+            // 忽略无效日期
+        }
+    }
+
     // 按顺序检查各个标签字段（已移除education和major）
     const tagFields = [
         { key: 'zodiac_sign', label: userInfo.zodiac_sign },
@@ -72,6 +92,16 @@ const visibleTags = computed(() => {
             tags.push(interest)
         }
     })
+
+    // 添加自定义字段标签
+    const customFields = userInfo.custom_fields
+    if (customFields && typeof customFields === 'object') {
+        Object.values(customFields).forEach(val => {
+            if (val && String(val).trim()) {
+                tags.push(String(val))
+            }
+        })
+    }
 
     return tags
 })

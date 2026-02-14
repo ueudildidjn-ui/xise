@@ -8,6 +8,7 @@ import { useKeyboardShortcutsStore } from '@/stores/keyboardShortcuts'
 import { useAccountSecurityStore } from '@/stores/accountSecurity'
 import { useBalanceStore } from '@/stores/balance'
 import { useVerifiedStore } from '@/stores/verified'
+import { usePrivacyStore } from '@/stores/privacy'
 import ColorPickerMenuItem from '@/components/menu/ColorPickerMenuItem.vue'
 import { onMounted } from 'vue'
 
@@ -17,6 +18,7 @@ const keyboardShortcutsStore = useKeyboardShortcutsStore()
 const accountSecurityStore = useAccountSecurityStore()
 const balanceStore = useBalanceStore()
 const verifiedStore = useVerifiedStore()
+const privacyStore = usePrivacyStore()
 
 // 登录处理
 const handleLoginClick = () => {
@@ -48,6 +50,8 @@ const handleMenuClick = (action) => {
     balanceStore.openBalanceModal()
   } else if (action === 'applyVerification') {
     verifiedStore.openVerifiedModal()
+  } else if (action === 'privacySettings') {
+    privacyStore.openPrivacyModal()
   }
 }
 
@@ -70,6 +74,9 @@ onMounted(() => {
   </DropdownItem>
   <DropdownItem v-if="userStore.isLoggedIn && balanceStore.enabled" @click="handleMenuClick('balanceCenter')">
     余额中心
+  </DropdownItem>
+  <DropdownItem v-if="userStore.isLoggedIn" @click="handleMenuClick('privacySettings')">
+    隐私设置
   </DropdownItem>
   <DropdownDivider />
   <ColorPickerMenuItem />

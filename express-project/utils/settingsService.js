@@ -22,6 +22,18 @@ const DEFAULT_SETTINGS = {
   
   // 访问控制相关设置
   'guest_access_restricted': false,     // 游客访问限制开关
+
+  // 初始设置页面配置
+  'onboarding_interest_options': JSON.stringify([
+    '美食', '旅行', '摄影', '音乐', '电影',
+    '阅读', '运动', '游戏', '绘画', '舞蹈',
+    '编程', '设计', '时尚', '美妆', '宠物',
+    '动漫', '手工', '健身', '科技', '数码'
+  ]),
+  // 初始设置自定义字段配置
+  'onboarding_custom_fields': JSON.stringify([]),
+  // 是否允许跳过初始设置页面
+  'onboarding_allow_skip': true,
 };
 
 /**
@@ -282,6 +294,71 @@ async function setGuestAccessRestricted(restricted) {
   return await setSetting('guest_access_restricted', Boolean(restricted));
 }
 
+/**
+ * 获取初始设置页面兴趣选项
+ * @returns {string[]}
+ */
+function getOnboardingInterestOptions() {
+  const raw = getSettingSync('onboarding_interest_options');
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 设置初始设置页面兴趣选项
+ * @param {string[]} options
+ * @returns {Promise<boolean>}
+ */
+async function setOnboardingInterestOptions(options) {
+  return await setSetting('onboarding_interest_options', JSON.stringify(options));
+}
+
+/**
+ * 获取初始设置自定义字段配置
+ * @returns {Array} 自定义字段数组 [{name, type, options?}]
+ */
+function getOnboardingCustomFields() {
+  const raw = getSettingSync('onboarding_custom_fields');
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 设置初始设置自定义字段配置
+ * @param {Array} fields - [{name, type, options?}]
+ * @returns {Promise<boolean>}
+ */
+async function setOnboardingCustomFields(fields) {
+  return await setSetting('onboarding_custom_fields', JSON.stringify(fields));
+}
+
+/**
+ * 检查是否允许跳过初始设置页面
+ * @returns {boolean}
+ */
+function isOnboardingSkipAllowed() {
+  return Boolean(getSettingSync('onboarding_allow_skip'));
+}
+
+/**
+ * 设置是否允许跳过初始设置页面
+ * @param {boolean} allowed
+ * @returns {Promise<boolean>}
+ */
+async function setOnboardingAllowSkip(allowed) {
+  return await setSetting('onboarding_allow_skip', Boolean(allowed));
+}
+
 module.exports = {
   // 通用设置操作
   getSetting,
@@ -301,6 +378,12 @@ module.exports = {
   setAiUsernameReviewEnabled,
   setAiContentReviewEnabled,
   setGuestAccessRestricted,
+  getOnboardingInterestOptions,
+  setOnboardingInterestOptions,
+  getOnboardingCustomFields,
+  setOnboardingCustomFields,
+  isOnboardingSkipAllowed,
+  setOnboardingAllowSkip,
   
   // 常量
   DEFAULT_SETTINGS,
