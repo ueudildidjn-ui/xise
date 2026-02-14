@@ -329,8 +329,8 @@ const router = createRouter({
 
 // 全局前置守卫：未完成引导的已登录用户强制跳转到引导页
 router.beforeEach((to, from, next) => {
-  // 不拦截引导页本身和管理后台路由
-  if (to.name === 'onboarding' || to.path.startsWith('/admin')) {
+  // 不拦截引导页本身、管理后台路由和用户个人主页（避免访问他人主页时被重定向）
+  if (to.name === 'onboarding' || to.path.startsWith('/admin') || to.path.startsWith('/user/')) {
     return next()
   }
 

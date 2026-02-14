@@ -185,7 +185,7 @@ onMounted(async () => {
       const freshUserInfo = await userStore.getCurrentUser()
       if (freshUserInfo && freshUserInfo.profile_completed === false) {
         const currentPath = router.currentRoute.value.path
-        if (currentPath !== '/onboarding' && !currentPath.startsWith('/admin')) {
+        if (currentPath !== '/onboarding' && !currentPath.startsWith('/admin') && !currentPath.startsWith('/user/')) {
           router.replace({ name: 'onboarding' })
         }
       }

@@ -70,6 +70,18 @@
           <p class="section-description">配置用户初始设置页面的选项，同步到前端初始页面和用户资料页面</p>
         </div>
         <div class="settings-list">
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">允许跳过初始页</span>
+              <span class="setting-description">启用后，用户可以跳过初始设置页面直接使用</span>
+            </div>
+            <div class="setting-control">
+              <div class="toggle-switch" :class="{ active: settings.onboarding_allow_skip }" @click="toggleSetting('onboarding_allow_skip')">
+                <div class="toggle-slider"></div>
+              </div>
+            </div>
+          </div>
+
           <div class="setting-item setting-item-vertical">
             <div class="setting-info">
               <span class="setting-label">兴趣爱好选项</span>
@@ -182,7 +194,8 @@ const settings = reactive({
   ai_username_review_enabled: false,
   ai_content_review_enabled: false,
   onboarding_interest_options: [],
-  onboarding_custom_fields: []
+  onboarding_custom_fields: [],
+  onboarding_allow_skip: true
 })
 
 // 原始设置（用于检测变更）
@@ -191,7 +204,8 @@ const originalSettings = reactive({
   ai_username_review_enabled: false,
   ai_content_review_enabled: false,
   onboarding_interest_options: [],
-  onboarding_custom_fields: []
+  onboarding_custom_fields: [],
+  onboarding_allow_skip: true
 })
 
 const isSaving = ref(false)
@@ -365,6 +379,10 @@ async function loadSettings() {
         settings.onboarding_custom_fields = Array.isArray(fields) ? JSON.parse(JSON.stringify(fields)) : []
         originalSettings.onboarding_custom_fields = Array.isArray(fields) ? JSON.parse(JSON.stringify(fields)) : []
       }
+      if (data.onboarding?.settings?.onboarding_allow_skip) {
+        settings.onboarding_allow_skip = data.onboarding.settings.onboarding_allow_skip.value
+        originalSettings.onboarding_allow_skip = data.onboarding.settings.onboarding_allow_skip.value
+      }
     }
   } catch (error) {
     console.error('加载设置失败:', error)
@@ -390,7 +408,8 @@ async function saveSettings() {
           onboarding_custom_fields: settings.onboarding_custom_fields.map(f => {
             const { _newOption, ...rest } = f
             return rest
-          })
+          }),
+          onboarding_allow_skip: settings.onboarding_allow_skip
         }
       })
     })
@@ -422,6 +441,7 @@ function resetSettings() {
   settings.ai_content_review_enabled = originalSettings.ai_content_review_enabled
   settings.onboarding_interest_options = [...originalSettings.onboarding_interest_options]
   settings.onboarding_custom_fields = JSON.parse(JSON.stringify(originalSettings.onboarding_custom_fields))
+  settings.onboarding_allow_skip = originalSettings.onboarding_allow_skip
 }
 
 onMounted(() => {

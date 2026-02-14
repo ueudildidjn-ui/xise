@@ -72,7 +72,7 @@
         </button>
       </div>
 
-      <button class="skip-btn" @click="handleSkip">跳过</button>
+      <button v-if="allowSkip" class="skip-btn" @click="handleSkip">跳过</button>
     </div>
   </div>
 </template>
@@ -106,6 +106,7 @@ const defaultInterestOptions = [
 
 const interestOptions = ref([...defaultInterestOptions])
 const customFieldDefs = ref([])
+const allowSkip = ref(true)
 
 const totalSteps = computed(() => {
   return customFieldDefs.value.length > 0 ? 4 : 3
@@ -123,6 +124,9 @@ const loadInterestOptions = async () => {
       const fields = response.data?.custom_fields
       if (Array.isArray(fields) && fields.length > 0) {
         customFieldDefs.value = fields
+      }
+      if (response.data?.allow_skip !== undefined) {
+        allowSkip.value = response.data.allow_skip
       }
     }
   } catch (error) {

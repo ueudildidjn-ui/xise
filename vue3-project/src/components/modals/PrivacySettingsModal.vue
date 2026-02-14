@@ -55,6 +55,18 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+
+          <!-- 动态自定义字段隐私设置 -->
+          <div v-for="field in customFieldDefs" :key="field.name" class="privacy-item">
+            <div class="item-info">
+              <div class="item-title">公开{{ field.name }}</div>
+              <div class="item-desc">其他用户可以看到你的{{ field.name }}</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" :checked="getCustomFieldPrivacy(field.name)" @change="toggleCustomFieldPrivacy(field.name, $event)" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
         </div>
 
         <div v-if="saveMessage" class="save-message" :class="{ error: saveError }">
@@ -86,8 +98,11 @@ const settings = ref({
   privacy_birthday: true,
   privacy_age: true,
   privacy_zodiac: true,
-  privacy_mbti: true
+  privacy_mbti: true,
+  privacy_custom_fields: {}
 })
+
+const customFieldDefs = ref([])
 
 const saveMessage = ref('')
 const saveError = ref(false)
@@ -98,15 +113,45 @@ const handleClose = () => {
   emit('close')
 }
 
+const loadCustomFieldDefs = async () => {
+  try {
+    const response = await userApi.getOnboardingConfig()
+    if (response.success || response.code === 200) {
+      const fields = response.data?.custom_fields
+      if (Array.isArray(fields) && fields.length > 0) {
+        customFieldDefs.value = fields
+      }
+    }
+  } catch (error) {
+    console.warn('加载自定义字段配置失败:', error)
+  }
+}
+
 const fetchSettings = async () => {
   try {
     const response = await userApi.getPrivacySettings()
     if (response.success || response.data) {
       settings.value = { ...settings.value, ...response.data }
+      if (!settings.value.privacy_custom_fields) {
+        settings.value.privacy_custom_fields = {}
+      }
     }
   } catch (error) {
     console.error('获取隐私设置失败:', error)
   }
+}
+
+const getCustomFieldPrivacy = (fieldName) => {
+  const pcf = settings.value.privacy_custom_fields
+  return pcf && pcf[fieldName] !== undefined ? pcf[fieldName] : true
+}
+
+const toggleCustomFieldPrivacy = (fieldName, event) => {
+  if (!settings.value.privacy_custom_fields) {
+    settings.value.privacy_custom_fields = {}
+  }
+  settings.value.privacy_custom_fields[fieldName] = event.target.checked
+  handleSettingChange()
 }
 
 const handleSettingChange = async () => {
@@ -135,6 +180,7 @@ watch(() => props.visible, (newVal) => {
   if (newVal) {
     lock()
     fetchSettings()
+    loadCustomFieldDefs()
   } else {
     unlock()
     saveMessage.value = ''
