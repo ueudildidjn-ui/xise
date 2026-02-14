@@ -4499,8 +4499,8 @@ router.delete('/notification-templates', adminAuth, async (req, res) => {
   }
 })
 
-// 服务启动时加载自定义模板
-;(async () => {
+// 服务启动时从数据库加载自定义通知模板到内存缓存
+async function initNotificationTemplates() {
   try {
     if (isNotificationTemplateAvailable()) {
       const templates = await prisma.notificationTemplate.findMany({ where: { is_active: true } })
@@ -4510,7 +4510,8 @@ router.delete('/notification-templates', adminAuth, async (req, res) => {
   } catch (error) {
     console.log('通知模板加载跳过（表可能不存在）')
   }
-})()
+}
+initNotificationTemplates()
 
 // ===================== 认证管理 (审核 type 1,2) =====================
 

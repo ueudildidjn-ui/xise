@@ -122,11 +122,9 @@ let customTemplates = {};
  */
 function renderTemplate(template, variables = {}) {
   if (!template) return '';
-  let result = template;
-  for (const [key, value] of Object.entries(variables)) {
-    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value || '');
-  }
-  return result;
+  return template.replace(/\{(\w+)\}/g, (match, key) => {
+    return variables[key] !== undefined ? (variables[key] || '') : match;
+  });
 }
 
 /**

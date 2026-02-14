@@ -17,6 +17,7 @@ const {
 } = require('../utils/paidContentHelper');
 const { getRecommendedPosts, getHotPosts } = require('../utils/recommendationService');
 const { invalidate } = require('../utils/cache');
+const { notifyUser } = require('../utils/notificationChannels');
 
 // Post type constants
 const POST_TYPE_IMAGE = 1;
@@ -1328,7 +1329,6 @@ router.post('/', authenticateToken, async (req, res) => {
     // 关注者发布新帖子通知（非草稿时）
     if (!is_draft) {
       try {
-        const { notifyUser } = require('../utils/notificationChannels');
         const author = await prisma.user.findUnique({ where: { id: userId }, select: { nickname: true } });
         // 查询关注者列表
         const followers = await prisma.follow.findMany({
@@ -1337,19 +1337,22 @@ router.post('/', authenticateToken, async (req, res) => {
             follower: { select: { id: true, email: true } }
           }
         });
-        for (const f of followers) {
-          try {
-            const follower = f.follower;
-            const notificationData = NotificationHelper.createNewPostNotification(
-              Number(follower.id), Number(userId), Number(postId), title || ''
-            );
-            await NotificationHelper.insertNotificationWithChannels(prisma, notificationData, {
-              senderName: author?.nickname || '',
-              recipientEmail: follower.email || '',
-              postTitle: title || ''
-            });
-          } catch (err) {
-            console.error('关注者新帖通知创建失败:', err.message);
+        // 批量创建通知数据
+        const notificationsToCreate = followers.map(f => NotificationHelper.createNewPostNotification(
+          Number(f.follower.id), Number(userId), Number(postId), title || ''
+        ));
+        if (notificationsToCreate.length > 0) {
+          await prisma.notification.createMany({ data: notificationsToCreate });
+          // 异步发送邮件/Discord通知（不阻塞主流程）
+          for (const f of followers) {
+            notifyUser({
+              templateKey: 'new_post',
+              variables: {
+                senderName: author?.nickname || '',
+                postTitle: title || ''
+              },
+              recipientEmail: f.follower.email || ''
+            }).catch(err => console.error('关注者新帖邮件/Discord通知失败:', err.message));
           }
         }
       } catch (error) {
