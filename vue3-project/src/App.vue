@@ -9,6 +9,7 @@ import { useKeyboardShortcutsStore } from '@/stores/keyboardShortcuts'
 import { useAccountSecurityStore } from '@/stores/accountSecurity'
 import { useBalanceStore } from '@/stores/balance'
 import { useVerifiedStore } from '@/stores/verified'
+import { usePrivacyStore } from '@/stores/privacy'
 import AuthModal from '@/components/modals/AuthModal.vue'
 import ResetPasswordModal from '@/components/modals/ResetPasswordModal.vue'
 import VerifiedModal from '@/components/modals/VerifiedModal.vue'
@@ -18,6 +19,7 @@ import ChangePasswordModal from '@/components/modals/ChangePasswordModal.vue'
 import KeyboardShortcutsModal from '@/components/modals/KeyboardShortcutsModal.vue'
 import AccountSecurityModal from '@/components/modals/AccountSecurityModal.vue'
 import BalanceModal from '@/components/modals/BalanceModal.vue'
+import PrivacySettingsModal from '@/components/modals/PrivacySettingsModal.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useConfirm } from '@/views/admin/composables/useConfirm'
 
@@ -28,6 +30,7 @@ const keyboardShortcutsStore = useKeyboardShortcutsStore()
 const accountSecurityStore = useAccountSecurityStore()
 const balanceStore = useBalanceStore()
 const verifiedStore = useVerifiedStore()
+const privacyStore = usePrivacyStore()
 const { confirmState, handleConfirm, handleCancel } = useConfirm()
 
 // 找回密码模态框状态
@@ -192,6 +195,8 @@ onMounted(() => {
       @close="accountSecurityStore.closeAccountSecurityModal" />
     <BalanceModal v-model:visible="balanceStore.showBalanceModal" @close="balanceStore.closeBalanceModal" />
     <VerifiedModal v-if="verifiedStore.showVerifiedModal" @close="verifiedStore.closeVerifiedModal" />
+    <PrivacySettingsModal v-model:visible="privacyStore.showPrivacyModal"
+      @close="privacyStore.closePrivacyModal" />
     <ConfirmDialog v-model:visible="confirmState.visible" :title="confirmState.title" :message="confirmState.message"
       :type="confirmState.type" :confirm-text="confirmState.confirmText" :cancel-text="confirmState.cancelText"
       :show-cancel="confirmState.showCancel" @confirm="handleConfirm" @cancel="handleCancel" />

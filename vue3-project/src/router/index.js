@@ -16,6 +16,7 @@ import PostManagementPage from '@/views/post-management/index.vue'
 import DraftBoxPage from '@/views/draft-box/index.vue'
 import CreatorCenterPage from '@/views/creator-center/index.vue'
 import MessagesPage from '@/views/messages/index.vue'
+import OnboardingPage from '@/views/onboarding/OnboardingPage.vue'
 import NotFound from '@/views/NotFound.vue'
 import { getValidChannelPaths } from '@/config/channels'
 
@@ -195,6 +196,12 @@ const router = createRouter({
           component: NotFound
         }
       ]
+    },
+    // 开始引导页面
+    {
+      path: '/onboarding',
+      name: 'onboarding',
+      component: OnboardingPage
     },
     // Admin登录页面
     {
