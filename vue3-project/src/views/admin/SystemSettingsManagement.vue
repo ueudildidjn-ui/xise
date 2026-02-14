@@ -277,7 +277,7 @@ function removeCustomField(index) {
 function addCustomFieldOption(fIndex) {
   const field = settings.onboarding_custom_fields[fIndex]
   const val = (field._newOption || '').trim()
-  if (val && !field.options.includes(val)) {
+  if (val && field.options && !field.options.includes(val)) {
     field.options.push(val)
   }
   field._newOption = ''

@@ -203,7 +203,14 @@ const handleSubmit = async () => {
       gender: form.value.gender || '',
       birthday: form.value.birthday || '',
       interests: form.value.interests.length > 0 ? form.value.interests : null,
-      custom_fields: Object.keys(form.value.customFields).length > 0 ? form.value.customFields : undefined
+      custom_fields: (() => {
+        const cf = form.value.customFields
+        const filtered = {}
+        for (const [k, v] of Object.entries(cf)) {
+          if (v && String(v).trim()) filtered[k] = String(v).trim()
+        }
+        return Object.keys(filtered).length > 0 ? filtered : undefined
+      })()
     }
     const response = await userApi.submitOnboarding(data)
     if (response.success || response.code === 200) {

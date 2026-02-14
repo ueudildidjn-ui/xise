@@ -424,8 +424,14 @@ router.post('/onboarding', authenticateToken, async (req, res) => {
       updateData.interests = interests || null;
     }
 
-    if (custom_fields !== undefined && typeof custom_fields === 'object') {
-      updateData.custom_fields = custom_fields;
+    if (custom_fields !== undefined && typeof custom_fields === 'object' && !Array.isArray(custom_fields)) {
+      const sanitized = {};
+      for (const [key, val] of Object.entries(custom_fields)) {
+        if (typeof key === 'string' && key.length <= 20 && typeof val === 'string' && val.length <= 50) {
+          sanitized[key] = val;
+        }
+      }
+      updateData.custom_fields = Object.keys(sanitized).length > 0 ? sanitized : null;
     }
 
     await prisma.user.update({ where: { id: userId }, data: updateData });
@@ -749,8 +755,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
         updateData.birthday = null;
       }
     }
-    if (custom_fields !== undefined && typeof custom_fields === 'object') {
-      updateData.custom_fields = custom_fields;
+    if (custom_fields !== undefined && typeof custom_fields === 'object' && !Array.isArray(custom_fields)) {
+      const sanitized = {};
+      for (const [key, val] of Object.entries(custom_fields)) {
+        if (typeof key === 'string' && key.length <= 20 && typeof val === 'string' && val.length <= 50) {
+          sanitized[key] = val;
+        }
+      }
+      updateData.custom_fields = Object.keys(sanitized).length > 0 ? sanitized : null;
     }
 
     // 检查昵称违禁词
