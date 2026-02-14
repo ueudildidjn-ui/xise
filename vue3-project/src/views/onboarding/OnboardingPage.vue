@@ -78,7 +78,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { userApi } from '@/api/index.js'
@@ -113,10 +113,10 @@ const totalSteps = computed(() => {
 })
 
 // 保存草稿到 Redis（防抖）
-let saveDraftTimer = null
+const saveDraftTimer = ref(null)
 const saveDraft = () => {
-  clearTimeout(saveDraftTimer)
-  saveDraftTimer = setTimeout(async () => {
+  clearTimeout(saveDraftTimer.value)
+  saveDraftTimer.value = setTimeout(async () => {
     try {
       await userApi.saveOnboardingDraft({
         currentStep: currentStep.value,
@@ -132,7 +132,7 @@ const saveDraft = () => {
 }
 
 // 监听表单和步骤变化，自动保存草稿
-watch([currentStep, () => form.value.gender, () => form.value.birthday, () => form.value.interests, () => form.value.customFields], saveDraft, { deep: true })
+watch([currentStep, form], saveDraft, { deep: true })
 
 // 从后台加载草稿
 const loadDraft = async () => {
@@ -182,6 +182,10 @@ const loadInterestOptions = async () => {
 onMounted(async () => {
   await loadInterestOptions()
   await loadDraft()
+})
+
+onUnmounted(() => {
+  clearTimeout(saveDraftTimer.value)
 })
 
 const todayStr = computed(() => {
