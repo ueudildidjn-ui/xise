@@ -648,6 +648,7 @@ model User {
   privacy_age      Boolean   @default(true) // 是否公开年龄
   privacy_zodiac   Boolean   @default(true) // 是否公开星座
   privacy_mbti     Boolean   @default(true) // 是否公开MBTI
+  privacy_custom_fields Json? // 自定义字段隐私设置 { fieldName: boolean }
   verified         Int       @default(0) @db.SmallInt // 0:未认证 1:官方认证 2:个人认证
   verified_name    String?   @db.VarChar(100) // 认证名称
   oauth2_id        BigInt?   @unique

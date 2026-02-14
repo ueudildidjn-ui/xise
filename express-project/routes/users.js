@@ -351,12 +351,14 @@ router.get('/onboarding-config', async (req, res) => {
     const settingsService = require('../utils/settingsService');
     const interestOptions = settingsService.getOnboardingInterestOptions();
     const customFields = settingsService.getOnboardingCustomFields();
+    const allowSkip = settingsService.isOnboardingSkipAllowed();
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
       data: {
         interest_options: interestOptions,
-        custom_fields: customFields
+        custom_fields: customFields,
+        allow_skip: allowSkip
       }
     });
   } catch (error) {
@@ -469,7 +471,8 @@ router.get('/privacy-settings', authenticateToken, async (req, res) => {
         privacy_birthday: true,
         privacy_age: true,
         privacy_zodiac: true,
-        privacy_mbti: true
+        privacy_mbti: true,
+        privacy_custom_fields: true
       }
     });
 
@@ -493,13 +496,16 @@ router.get('/privacy-settings', authenticateToken, async (req, res) => {
 router.put('/privacy-settings', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id);
-    const { privacy_birthday, privacy_age, privacy_zodiac, privacy_mbti } = req.body;
+    const { privacy_birthday, privacy_age, privacy_zodiac, privacy_mbti, privacy_custom_fields } = req.body;
 
     const updateData = {};
     if (privacy_birthday !== undefined) updateData.privacy_birthday = !!privacy_birthday;
     if (privacy_age !== undefined) updateData.privacy_age = !!privacy_age;
     if (privacy_zodiac !== undefined) updateData.privacy_zodiac = !!privacy_zodiac;
     if (privacy_mbti !== undefined) updateData.privacy_mbti = !!privacy_mbti;
+    if (privacy_custom_fields !== undefined && typeof privacy_custom_fields === 'object') {
+      updateData.privacy_custom_fields = privacy_custom_fields;
+    }
 
     if (Object.keys(updateData).length === 0) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '没有需要更新的设置' });
@@ -513,7 +519,8 @@ router.put('/privacy-settings', authenticateToken, async (req, res) => {
         privacy_birthday: true,
         privacy_age: true,
         privacy_zodiac: true,
-        privacy_mbti: true
+        privacy_mbti: true,
+        privacy_custom_fields: true
       }
     });
 
@@ -537,7 +544,7 @@ router.get('/:id/personality-tags', optionalAuth, async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { user_id: userIdParam },
-      select: { id: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, custom_fields: true, privacy_zodiac: true, privacy_mbti: true }
+      select: { id: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, custom_fields: true, privacy_zodiac: true, privacy_mbti: true, privacy_custom_fields: true }
     });
 
     if (!user) {
@@ -550,6 +557,18 @@ router.get('/:id/personality-tags', optionalAuth, async (req, res) => {
 
     const isOwner = currentUserId && currentUserId === user.id;
 
+    // 过滤自定义字段隐私
+    let filteredCustomFields = user.custom_fields;
+    if (!isOwner && user.custom_fields && user.privacy_custom_fields) {
+      const privacyCf = user.privacy_custom_fields;
+      filteredCustomFields = {};
+      for (const [key, val] of Object.entries(user.custom_fields)) {
+        if (privacyCf[key] !== false) {
+          filteredCustomFields[key] = val;
+        }
+      }
+    }
+
     const data = {
       gender: user.gender,
       zodiac_sign: isOwner || user.privacy_zodiac ? user.zodiac_sign : null,
@@ -557,7 +576,7 @@ router.get('/:id/personality-tags', optionalAuth, async (req, res) => {
       education: user.education,
       major: user.major,
       interests: user.interests,
-      custom_fields: user.custom_fields
+      custom_fields: filteredCustomFields
     };
 
     res.json({
@@ -647,7 +666,17 @@ router.get('/:id', optionalAuth, async (req, res) => {
       education: user.education,
       major: user.major,
       interests: user.interests,
-      custom_fields: user.custom_fields,
+      custom_fields: (() => {
+        if (isOwner || !user.custom_fields) return user.custom_fields;
+        if (!user.privacy_custom_fields) return user.custom_fields;
+        const filtered = {};
+        for (const [key, val] of Object.entries(user.custom_fields)) {
+          if (user.privacy_custom_fields[key] !== false) {
+            filtered[key] = val;
+          }
+        }
+        return filtered;
+      })(),
       birthday: isOwner || user.privacy_birthday ? user.birthday : null,
       isBlocked,
       isBlockedBy

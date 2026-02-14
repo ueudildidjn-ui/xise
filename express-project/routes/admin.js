@@ -128,6 +128,12 @@ router.get('/system-settings', adminAuth, async (req, res) => {
             description: '配置初始设置页面的自定义字段（如身高、体重等），支持选项和填空类型',
             value: settingsService.getOnboardingCustomFields(),
             type: 'json_array'
+          },
+          onboarding_allow_skip: {
+            label: '允许跳过初始页',
+            description: '启用后，用户可以跳过初始设置页面',
+            value: settingsService.isOnboardingSkipAllowed(),
+            type: 'boolean'
           }
         }
       }
@@ -181,6 +187,12 @@ router.put('/system-settings', adminAuth, async (req, res) => {
         await settingsService.setOnboardingCustomFields(fields)
         messages.push(`自定义字段已更新（${fields.length}个）`)
       }
+
+      // 处理是否允许跳过初始设置
+      if (settings.onboarding_allow_skip !== undefined) {
+        await settingsService.setOnboardingAllowSkip(Boolean(settings.onboarding_allow_skip))
+        messages.push(`允许跳过初始页已${settings.onboarding_allow_skip ? '开启' : '关闭'}`)
+      }
     }
     
     // 返回更新后的设置
@@ -189,7 +201,8 @@ router.put('/system-settings', adminAuth, async (req, res) => {
       ai_username_review_enabled: settingsService.isAiUsernameReviewEnabled(),
       ai_content_review_enabled: settingsService.isAiContentReviewEnabled(),
       onboarding_interest_options: settingsService.getOnboardingInterestOptions(),
-      onboarding_custom_fields: settingsService.getOnboardingCustomFields()
+      onboarding_custom_fields: settingsService.getOnboardingCustomFields(),
+      onboarding_allow_skip: settingsService.isOnboardingSkipAllowed()
     }
     
     res.json({ 

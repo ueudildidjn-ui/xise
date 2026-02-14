@@ -32,6 +32,8 @@ const DEFAULT_SETTINGS = {
   ]),
   // 初始设置自定义字段配置
   'onboarding_custom_fields': JSON.stringify([]),
+  // 是否允许跳过初始设置页面
+  'onboarding_allow_skip': true,
 };
 
 /**
@@ -340,6 +342,23 @@ async function setOnboardingCustomFields(fields) {
   return await setSetting('onboarding_custom_fields', JSON.stringify(fields));
 }
 
+/**
+ * 检查是否允许跳过初始设置页面
+ * @returns {boolean}
+ */
+function isOnboardingSkipAllowed() {
+  return Boolean(getSettingSync('onboarding_allow_skip'));
+}
+
+/**
+ * 设置是否允许跳过初始设置页面
+ * @param {boolean} allowed
+ * @returns {Promise<boolean>}
+ */
+async function setOnboardingAllowSkip(allowed) {
+  return await setSetting('onboarding_allow_skip', Boolean(allowed));
+}
+
 module.exports = {
   // 通用设置操作
   getSetting,
@@ -363,6 +382,8 @@ module.exports = {
   setOnboardingInterestOptions,
   getOnboardingCustomFields,
   setOnboardingCustomFields,
+  isOnboardingSkipAllowed,
+  setOnboardingAllowSkip,
   
   // 常量
   DEFAULT_SETTINGS,
