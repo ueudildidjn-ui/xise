@@ -350,11 +350,13 @@ router.get('/onboarding-config', async (req, res) => {
   try {
     const settingsService = require('../utils/settingsService');
     const interestOptions = settingsService.getOnboardingInterestOptions();
+    const customFields = settingsService.getOnboardingCustomFields();
     res.json({
       code: RESPONSE_CODES.SUCCESS,
       message: 'success',
       data: {
-        interest_options: interestOptions
+        interest_options: interestOptions,
+        custom_fields: customFields
       }
     });
   } catch (error) {
@@ -367,7 +369,7 @@ router.get('/onboarding-config', async (req, res) => {
 router.post('/onboarding', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id);
-    const { gender, birthday, interests } = req.body;
+    const { gender, birthday, interests, custom_fields } = req.body;
 
     const updateData = { profile_completed: true };
 
@@ -422,6 +424,10 @@ router.post('/onboarding', authenticateToken, async (req, res) => {
       updateData.interests = interests || null;
     }
 
+    if (custom_fields !== undefined && typeof custom_fields === 'object') {
+      updateData.custom_fields = custom_fields;
+    }
+
     await prisma.user.update({ where: { id: userId }, data: updateData });
 
     const updatedUser = await prisma.user.findUnique({
@@ -429,7 +435,7 @@ router.post('/onboarding', authenticateToken, async (req, res) => {
       select: {
         id: true, user_id: true, nickname: true, avatar: true, background: true, bio: true,
         location: true, email: true, gender: true, birthday: true, zodiac_sign: true, mbti: true,
-        interests: true, profile_completed: true, follow_count: true, fans_count: true, like_count: true,
+        interests: true, custom_fields: true, profile_completed: true, follow_count: true, fans_count: true, like_count: true,
         privacy_birthday: true, privacy_age: true, privacy_zodiac: true, privacy_mbti: true
       }
     });
@@ -525,7 +531,7 @@ router.get('/:id/personality-tags', optionalAuth, async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { user_id: userIdParam },
-      select: { id: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, privacy_zodiac: true, privacy_mbti: true }
+      select: { id: true, gender: true, zodiac_sign: true, mbti: true, education: true, major: true, interests: true, custom_fields: true, privacy_zodiac: true, privacy_mbti: true }
     });
 
     if (!user) {
@@ -544,7 +550,8 @@ router.get('/:id/personality-tags', optionalAuth, async (req, res) => {
       mbti: isOwner || user.privacy_mbti ? user.mbti : null,
       education: user.education,
       major: user.major,
-      interests: user.interests
+      interests: user.interests,
+      custom_fields: user.custom_fields
     };
 
     res.json({
@@ -634,6 +641,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       education: user.education,
       major: user.major,
       interests: user.interests,
+      custom_fields: user.custom_fields,
       birthday: isOwner || user.privacy_birthday ? user.birthday : null,
       isBlocked,
       isBlockedBy
@@ -689,7 +697,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const currentUserId = BigInt(req.user.id);
-    const { nickname, avatar, background, bio, location, gender, zodiac_sign, mbti, education, major, interests, birthday } = req.body;
+    const { nickname, avatar, background, bio, location, gender, zodiac_sign, mbti, education, major, interests, birthday, custom_fields } = req.body;
 
     // 始终通过汐社号查找对应的数字ID
     const userRecord = await prisma.user.findUnique({
@@ -740,6 +748,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
       } else {
         updateData.birthday = null;
       }
+    }
+    if (custom_fields !== undefined && typeof custom_fields === 'object') {
+      updateData.custom_fields = custom_fields;
     }
 
     // 检查昵称违禁词
@@ -846,7 +857,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       select: {
         id: true, user_id: true, nickname: true, avatar: true, background: true, bio: true, bio_audit_status: true,
         location: true, email: true, gender: true, birthday: true, zodiac_sign: true, mbti: true, education: true,
-        major: true, interests: true, follow_count: true, fans_count: true, like_count: true,
+        major: true, interests: true, custom_fields: true, follow_count: true, fans_count: true, like_count: true,
         profile_completed: true, privacy_birthday: true, privacy_age: true, privacy_zodiac: true, privacy_mbti: true
       }
     });

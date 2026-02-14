@@ -30,6 +30,8 @@ const DEFAULT_SETTINGS = {
     '编程', '设计', '时尚', '美妆', '宠物',
     '动漫', '手工', '健身', '科技', '数码'
   ]),
+  // 初始设置自定义字段配置
+  'onboarding_custom_fields': JSON.stringify([]),
 };
 
 /**
@@ -314,6 +316,30 @@ async function setOnboardingInterestOptions(options) {
   return await setSetting('onboarding_interest_options', JSON.stringify(options));
 }
 
+/**
+ * 获取初始设置自定义字段配置
+ * @returns {Array} 自定义字段数组 [{name, type, options?}]
+ */
+function getOnboardingCustomFields() {
+  const raw = getSettingSync('onboarding_custom_fields');
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 设置初始设置自定义字段配置
+ * @param {Array} fields - [{name, type, options?}]
+ * @returns {Promise<boolean>}
+ */
+async function setOnboardingCustomFields(fields) {
+  return await setSetting('onboarding_custom_fields', JSON.stringify(fields));
+}
+
 module.exports = {
   // 通用设置操作
   getSetting,
@@ -335,6 +361,8 @@ module.exports = {
   setGuestAccessRestricted,
   getOnboardingInterestOptions,
   setOnboardingInterestOptions,
+  getOnboardingCustomFields,
+  setOnboardingCustomFields,
   
   // 常量
   DEFAULT_SETTINGS,

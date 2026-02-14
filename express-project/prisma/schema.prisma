@@ -642,6 +642,7 @@ model User {
   major            String?   @db.VarChar(100)
   interests        Json?
   birthday         DateTime? @db.Date // 生日
+  custom_fields    Json?     // 用户自定义字段数据 { fieldName: value }
   profile_completed Boolean  @default(false) // 是否完成开始页面引导
   privacy_birthday Boolean   @default(true) // 是否公开生日
   privacy_age      Boolean   @default(true) // 是否公开年龄

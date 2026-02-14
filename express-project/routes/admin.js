@@ -122,6 +122,12 @@ router.get('/system-settings', adminAuth, async (req, res) => {
             description: '配置用户初始设置页面和个人资料中的兴趣爱好选项，同步到前端初始页面和用户页面显示',
             value: settingsService.getOnboardingInterestOptions(),
             type: 'json_array'
+          },
+          onboarding_custom_fields: {
+            label: '自定义字段',
+            description: '配置初始设置页面的自定义字段（如身高、体重等），支持选项和填空类型',
+            value: settingsService.getOnboardingCustomFields(),
+            type: 'json_array'
           }
         }
       }
@@ -168,6 +174,13 @@ router.put('/system-settings', adminAuth, async (req, res) => {
         await settingsService.setOnboardingInterestOptions(options)
         messages.push(`兴趣爱好选项已更新（${options.length}个）`)
       }
+
+      // 处理自定义字段配置
+      if (settings.onboarding_custom_fields !== undefined) {
+        const fields = Array.isArray(settings.onboarding_custom_fields) ? settings.onboarding_custom_fields : []
+        await settingsService.setOnboardingCustomFields(fields)
+        messages.push(`自定义字段已更新（${fields.length}个）`)
+      }
     }
     
     // 返回更新后的设置
@@ -175,7 +188,8 @@ router.put('/system-settings', adminAuth, async (req, res) => {
       guest_access_restricted: settingsService.isGuestAccessRestricted(),
       ai_username_review_enabled: settingsService.isAiUsernameReviewEnabled(),
       ai_content_review_enabled: settingsService.isAiContentReviewEnabled(),
-      onboarding_interest_options: settingsService.getOnboardingInterestOptions()
+      onboarding_interest_options: settingsService.getOnboardingInterestOptions(),
+      onboarding_custom_fields: settingsService.getOnboardingCustomFields()
     }
     
     res.json({ 
@@ -186,6 +200,25 @@ router.put('/system-settings', adminAuth, async (req, res) => {
   } catch (error) {
     console.error('更新系统设置失败:', error)
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '更新系统设置失败' })
+  }
+})
+
+// 重置全部用户初始设置（将所有用户的profile_completed标记为false）
+router.post('/reset-all-onboarding', adminAuth, async (req, res) => {
+  try {
+    const result = await prisma.user.updateMany({
+      where: { profile_completed: true },
+      data: { profile_completed: false }
+    })
+    
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: `已重置 ${result.count} 个用户的初始设置状态，所有用户需重新完成初始设置`,
+      data: { affected_count: result.count }
+    })
+  } catch (error) {
+    console.error('重置全部初始设置失败:', error)
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '重置全部初始设置失败' })
   }
 })
 
