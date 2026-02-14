@@ -112,6 +112,18 @@ router.get('/system-settings', adminAuth, async (req, res) => {
             type: 'boolean'
           }
         }
+      },
+      // 初始设置页面配置
+      onboarding: {
+        label: '初始设置',
+        settings: {
+          onboarding_interest_options: {
+            label: '兴趣爱好选项',
+            description: '配置用户初始设置页面和个人资料中的兴趣爱好选项，同步到前端初始页面和用户页面显示',
+            value: settingsService.getOnboardingInterestOptions(),
+            type: 'json_array'
+          }
+        }
       }
     }
     
@@ -149,13 +161,21 @@ router.put('/system-settings', adminAuth, async (req, res) => {
         await settingsService.setAiContentReviewEnabled(Boolean(settings.ai_content_review_enabled))
         messages.push(`内容AI审核已${settings.ai_content_review_enabled ? '开启' : '关闭'}`)
       }
+
+      // 处理初始设置页面配置
+      if (settings.onboarding_interest_options !== undefined) {
+        const options = Array.isArray(settings.onboarding_interest_options) ? settings.onboarding_interest_options : []
+        await settingsService.setOnboardingInterestOptions(options)
+        messages.push(`兴趣爱好选项已更新（${options.length}个）`)
+      }
     }
     
     // 返回更新后的设置
     const updatedSettings = {
       guest_access_restricted: settingsService.isGuestAccessRestricted(),
       ai_username_review_enabled: settingsService.isAiUsernameReviewEnabled(),
-      ai_content_review_enabled: settingsService.isAiContentReviewEnabled()
+      ai_content_review_enabled: settingsService.isAiContentReviewEnabled(),
+      onboarding_interest_options: settingsService.getOnboardingInterestOptions()
     }
     
     res.json({ 

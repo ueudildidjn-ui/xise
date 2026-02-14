@@ -112,6 +112,12 @@
               value-key="value" min-width="100%" />
           </div>
 
+          <div class="form-group">
+            <label class="form-label">生日:</label>
+            <input v-model="form.birthday" type="date" :max="todayStr" class="birthday-input" />
+            <div v-if="form.birthday && computedAge > 0" class="birthday-hint">{{ computedAge }}岁</div>
+          </div>
+
 
           <div class="form-group">
             <label class="form-label">星座:</label>
@@ -343,11 +349,30 @@ const form = reactive({
   background: '', // 背景图
 
   gender: '',
+  birthday: '', // 生日
   zodiac_sign: '',
   mbti: '',
   interests: [],
   avatarBlob: null, // 存储裁剪后的图片blob
   backgroundBlob: null // 存储裁剪后的背景图blob
+})
+
+// 生日相关计算
+const todayStr = computed(() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+})
+
+const computedAge = computed(() => {
+  if (!form.birthday) return 0
+  const birth = new Date(form.birthday)
+  const now = new Date()
+  let age = now.getFullYear() - birth.getFullYear()
+  const m = now.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+    age--
+  }
+  return age
 })
 
 // 兴趣爱好相关
@@ -463,6 +488,17 @@ watch(() => props.visible, (newValue) => {
     form.background = props.userInfo.background || ''
 
     form.gender = props.userInfo.gender || ''
+    // 处理生日：从ISO格式提取日期部分
+    if (props.userInfo.birthday) {
+      const bd = new Date(props.userInfo.birthday)
+      if (!isNaN(bd.getTime())) {
+        form.birthday = `${bd.getFullYear()}-${String(bd.getMonth() + 1).padStart(2, '0')}-${String(bd.getDate()).padStart(2, '0')}`
+      } else {
+        form.birthday = ''
+      }
+    } else {
+      form.birthday = ''
+    }
     form.zodiac_sign = props.userInfo.zodiac_sign || ''
     form.mbti = props.userInfo.mbti || ''
     // 处理兴趣爱好：支持JSON字符串、逗号分隔字符串和数组格式
@@ -1236,6 +1272,18 @@ const handleSave = async () => {
   color: var(--text-color-secondary);
   margin-top: 4px;
   text-align: right;
+}
+
+.birthday-input {
+  width: 100%;
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.birthday-hint {
+  font-size: 12px;
+  color: var(--text-color-secondary);
+  margin-top: 4px;
 }
 
 

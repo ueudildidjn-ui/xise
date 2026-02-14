@@ -60,6 +60,39 @@
         </div>
       </div>
 
+      <!-- 初始设置页面配置 -->
+      <div class="settings-section">
+        <div class="section-header">
+          <h3 class="section-title">
+            <SvgIcon name="edit" class="section-icon" />
+            初始设置
+          </h3>
+          <p class="section-description">配置用户初始设置页面的选项，同步到前端初始页面和用户资料页面</p>
+        </div>
+        <div class="settings-list">
+          <div class="setting-item setting-item-vertical">
+            <div class="setting-info">
+              <span class="setting-label">兴趣爱好选项</span>
+              <span class="setting-description">配置初始设置页面和个人资料中可选的兴趣爱好标签</span>
+            </div>
+            <div class="interest-tags-editor">
+              <div class="interest-tags-list">
+                <span v-for="(tag, index) in settings.onboarding_interest_options" :key="index" class="interest-tag-item">
+                  {{ tag }}
+                  <button type="button" class="remove-tag-btn" @click="removeInterestOption(index)">×</button>
+                </span>
+              </div>
+              <div class="add-tag-row">
+                <input v-model="newInterestOption" type="text" placeholder="输入兴趣选项后按回车添加" maxlength="8"
+                  @keyup.enter="addInterestOption" class="tag-input" />
+                <button type="button" class="add-tag-btn" @click="addInterestOption"
+                  :disabled="!newInterestOption.trim()">添加</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 保存按钮 -->
       <div class="settings-actions">
         <button class="btn btn-primary" @click="saveSettings" :disabled="!hasChanges || isSaving">
@@ -87,14 +120,16 @@ import { apiConfig } from '@/config/api'
 const settings = reactive({
   guest_access_restricted: false,
   ai_username_review_enabled: false,
-  ai_content_review_enabled: false
+  ai_content_review_enabled: false,
+  onboarding_interest_options: []
 })
 
 // 原始设置（用于检测变更）
 const originalSettings = reactive({
   guest_access_restricted: false,
   ai_username_review_enabled: false,
-  ai_content_review_enabled: false
+  ai_content_review_enabled: false,
+  onboarding_interest_options: []
 })
 
 const isSaving = ref(false)
@@ -107,7 +142,12 @@ const toastType = ref('success')
 
 // 检测是否有变更
 const hasChanges = computed(() => {
-  return Object.keys(settings).some(key => settings[key] !== originalSettings[key])
+  return Object.keys(settings).some(key => {
+    if (Array.isArray(settings[key])) {
+      return JSON.stringify(settings[key]) !== JSON.stringify(originalSettings[key])
+    }
+    return settings[key] !== originalSettings[key]
+  })
 })
 
 // 获取认证头
@@ -128,6 +168,21 @@ function showToastMessage(message, type = 'success') {
 
 function handleToastClose() {
   showToast.value = false
+}
+
+// 兴趣爱好选项编辑
+const newInterestOption = ref('')
+
+function addInterestOption() {
+  const val = newInterestOption.value.trim()
+  if (val && !settings.onboarding_interest_options.includes(val)) {
+    settings.onboarding_interest_options.push(val)
+  }
+  newInterestOption.value = ''
+}
+
+function removeInterestOption(index) {
+  settings.onboarding_interest_options.splice(index, 1)
 }
 
 // 切换设置
@@ -168,6 +223,13 @@ async function loadSettings() {
         settings.ai_content_review_enabled = data.ai_review.settings.ai_content_review_enabled.value
         originalSettings.ai_content_review_enabled = data.ai_review.settings.ai_content_review_enabled.value
       }
+
+      // 初始设置页面配置
+      if (data.onboarding?.settings?.onboarding_interest_options) {
+        const options = data.onboarding.settings.onboarding_interest_options.value
+        settings.onboarding_interest_options = Array.isArray(options) ? [...options] : []
+        originalSettings.onboarding_interest_options = Array.isArray(options) ? [...options] : []
+      }
     }
   } catch (error) {
     console.error('加载设置失败:', error)
@@ -188,7 +250,8 @@ async function saveSettings() {
         settings: {
           guest_access_restricted: settings.guest_access_restricted,
           ai_username_review_enabled: settings.ai_username_review_enabled,
-          ai_content_review_enabled: settings.ai_content_review_enabled
+          ai_content_review_enabled: settings.ai_content_review_enabled,
+          onboarding_interest_options: settings.onboarding_interest_options
         }
       })
     })
@@ -215,7 +278,10 @@ async function saveSettings() {
 
 // 重置设置
 function resetSettings() {
-  Object.assign(settings, originalSettings)
+  settings.guest_access_restricted = originalSettings.guest_access_restricted
+  settings.ai_username_review_enabled = originalSettings.ai_username_review_enabled
+  settings.ai_content_review_enabled = originalSettings.ai_content_review_enabled
+  settings.onboarding_interest_options = [...originalSettings.onboarding_interest_options]
 }
 
 onMounted(() => {
@@ -405,5 +471,93 @@ onMounted(() => {
   .btn {
     width: 100%;
   }
+}
+
+/* 兴趣爱好选项编辑器 */
+.setting-item-vertical {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.interest-tags-editor {
+  width: 100%;
+}
+
+.interest-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  min-height: 32px;
+}
+
+.interest-tag-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--bg-color-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  font-size: 13px;
+  color: var(--text-color);
+  gap: 4px;
+}
+
+.interest-tag-item .remove-tag-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color-secondary);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  margin-left: 2px;
+}
+
+.interest-tag-item .remove-tag-btn:hover {
+  color: var(--primary-color);
+}
+
+.add-tag-row {
+  display: flex;
+  gap: 8px;
+}
+
+.tag-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  outline: none;
+}
+
+.tag-input:focus {
+  border-color: var(--primary-color);
+}
+
+.add-tag-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--primary-color);
+  background: transparent;
+  color: var(--primary-color);
+  transition: all 0.2s;
+}
+
+.add-tag-btn:hover:not(:disabled) {
+  background: var(--primary-color);
+  color: white;
+}
+
+.add-tag-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

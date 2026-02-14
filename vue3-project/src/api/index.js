@@ -120,6 +120,11 @@ export const userApi = {
   // 更新隐私设置
   updatePrivacySettings(data) {
     return request.put('/users/privacy-settings', data)
+  },
+
+  // 获取初始设置页面配置
+  getOnboardingConfig() {
+    return request.get('/users/onboarding-config')
   }
 }
 

@@ -345,6 +345,24 @@ router.delete('/history', authenticateToken, async (req, res) => {
   }
 });
 
+// 获取初始设置页面配置（公开接口，不需要登录）
+router.get('/onboarding-config', async (req, res) => {
+  try {
+    const settingsService = require('../utils/settingsService');
+    const interestOptions = settingsService.getOnboardingInterestOptions();
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success',
+      data: {
+        interest_options: interestOptions
+      }
+    });
+  } catch (error) {
+    console.error('获取初始设置配置失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '获取配置失败' });
+  }
+});
+
 // 完成开始页面引导（填写性别、生日、兴趣爱好）
 router.post('/onboarding', authenticateToken, async (req, res) => {
   try {

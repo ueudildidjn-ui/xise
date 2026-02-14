@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { userApi } from '@/api/index.js'
@@ -80,12 +80,34 @@ const form = ref({
   interests: []
 })
 
-const interestOptions = [
+const defaultInterestOptions = [
   '美食', '旅行', '摄影', '音乐', '电影',
   '阅读', '运动', '游戏', '绘画', '舞蹈',
   '编程', '设计', '时尚', '美妆', '宠物',
   '动漫', '手工', '健身', '科技', '数码'
 ]
+
+const interestOptions = ref([...defaultInterestOptions])
+
+// 从后台加载兴趣选项配置
+const loadInterestOptions = async () => {
+  try {
+    const response = await userApi.getOnboardingConfig()
+    if (response.success || response.code === 200) {
+      const options = response.data?.interest_options
+      if (Array.isArray(options) && options.length > 0) {
+        interestOptions.value = options
+      }
+    }
+  } catch (error) {
+    // 加载失败使用默认选项
+    console.warn('加载兴趣选项配置失败，使用默认选项:', error)
+  }
+}
+
+onMounted(() => {
+  loadInterestOptions()
+})
 
 const todayStr = computed(() => {
   const d = new Date()
