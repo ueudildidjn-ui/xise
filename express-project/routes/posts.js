@@ -17,6 +17,7 @@ const {
 } = require('../utils/paidContentHelper');
 const { getRecommendedPosts, getHotPosts } = require('../utils/recommendationService');
 const { invalidate } = require('../utils/cache');
+const { notifyUser } = require('../utils/notificationChannels');
 
 // Post type constants
 const POST_TYPE_IMAGE = 1;
@@ -1305,7 +1306,7 @@ router.post('/', authenticateToken, async (req, res) => {
       const mentionedUsers = extractMentionedUsers(content);
       for (const mentionedUser of mentionedUsers) {
         try {
-          const user = await prisma.user.findUnique({ where: { user_id: mentionedUser.userId }, select: { id: true } });
+          const user = await prisma.user.findUnique({ where: { user_id: mentionedUser.userId }, select: { id: true, email: true } });
           if (user && user.id !== userId) {
             const notificationData = NotificationHelper.createNotificationData({
               userId: Number(user.id),
@@ -1313,11 +1314,49 @@ router.post('/', authenticateToken, async (req, res) => {
               type: NotificationHelper.TYPES.MENTION,
               targetId: Number(postId)
             });
-            await NotificationHelper.insertNotification(prisma, notificationData);
+            const sender = await prisma.user.findUnique({ where: { id: userId }, select: { nickname: true } });
+            await NotificationHelper.insertNotificationWithChannels(prisma, notificationData, {
+              senderName: sender?.nickname || '',
+              recipientEmail: user.email || ''
+            });
           }
         } catch (error) {
           console.error(`处理@用户通知失败:`, error);
         }
+      }
+    }
+
+    // 关注者发布新帖子通知（非草稿时）
+    if (!is_draft) {
+      try {
+        const author = await prisma.user.findUnique({ where: { id: userId }, select: { nickname: true } });
+        // 查询关注者列表
+        const followers = await prisma.follow.findMany({
+          where: { following_id: userId },
+          select: {
+            follower: { select: { id: true, email: true } }
+          }
+        });
+        // 批量创建通知数据
+        const notificationsToCreate = followers.map(f => NotificationHelper.createNewPostNotification(
+          Number(f.follower.id), Number(userId), Number(postId), title || ''
+        ));
+        if (notificationsToCreate.length > 0) {
+          await prisma.notification.createMany({ data: notificationsToCreate });
+          // 异步发送邮件/Discord通知（不阻塞主流程）
+          for (const f of followers) {
+            notifyUser({
+              templateKey: 'new_post',
+              variables: {
+                senderName: author?.nickname || '',
+                postTitle: title || ''
+              },
+              recipientEmail: f.follower.email || ''
+            }).catch(err => console.error('关注者新帖邮件/Discord通知失败:', err.message));
+          }
+        }
+      } catch (error) {
+        console.error('关注者新帖通知处理失败:', error);
       }
     }
 

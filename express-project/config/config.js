@@ -357,6 +357,21 @@ const config = {
     }
   },
 
+  // 通知渠道配置
+  notificationChannels: {
+    // 是否启用通知邮件推送（评论、回复、@提及、关注者发帖等）
+    emailEnabled: process.env.NOTIFICATION_EMAIL_ENABLED === 'true',
+    // 系统通知/活动通知是否发送邮件
+    systemEmailEnabled: process.env.SYSTEM_NOTIFICATION_EMAIL_ENABLED === 'true',
+    // Discord Webhook配置
+    discord: {
+      enabled: process.env.DISCORD_WEBHOOK_ENABLED === 'true',
+      webhookUrl: process.env.DISCORD_WEBHOOK_URL || '',
+      siteName: process.env.DISCORD_SITE_NAME || '汐社校园图文社区',
+      siteUrl: process.env.DISCORD_SITE_URL || 'http://localhost:5173'
+    }
+  },
+
   // OAuth2 登录配置
   oauth2: {
     // 是否启用OAuth2登录

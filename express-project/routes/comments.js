@@ -395,7 +395,16 @@ router.post('/', authenticateToken, async (req, res) => {
         const notificationData = NotificationHelper.createReplyCommentNotification(
           Number(parentComment.user_id), Number(userId), Number(post_id), Number(commentId)
         );
-        await NotificationHelper.insertNotification(prisma, notificationData);
+        // 查询发送者和接收者信息用于邮件/Discord通知
+        const [sender, recipient] = await Promise.all([
+          prisma.user.findUnique({ where: { id: userId }, select: { nickname: true } }),
+          prisma.user.findUnique({ where: { id: parentComment.user_id }, select: { email: true } })
+        ]);
+        await NotificationHelper.insertNotificationWithChannels(prisma, notificationData, {
+          senderName: sender?.nickname || '',
+          recipientEmail: recipient?.email || '',
+          commentContent: sanitizedContent.substring(0, 200)
+        });
       }
     } else {
       // 评论笔记，给笔记作者发通知
@@ -403,7 +412,15 @@ router.post('/', authenticateToken, async (req, res) => {
         const notificationData = NotificationHelper.createCommentPostNotification(
           Number(post.user_id), Number(userId), Number(post_id), Number(commentId)
         );
-        await NotificationHelper.insertNotification(prisma, notificationData);
+        const [sender, recipient] = await Promise.all([
+          prisma.user.findUnique({ where: { id: userId }, select: { nickname: true } }),
+          prisma.user.findUnique({ where: { id: post.user_id }, select: { email: true } })
+        ]);
+        await NotificationHelper.insertNotificationWithChannels(prisma, notificationData, {
+          senderName: sender?.nickname || '',
+          recipientEmail: recipient?.email || '',
+          commentContent: sanitizedContent.substring(0, 200)
+        });
       }
     }
 
@@ -415,7 +432,7 @@ router.post('/', authenticateToken, async (req, res) => {
         try {
           const userRow = await prisma.user.findUnique({
             where: { user_id: mentionedUser.userId },
-            select: { id: true }
+            select: { id: true, email: true }
           });
 
           if (userRow && userRow.id !== userId) {
@@ -427,7 +444,12 @@ router.post('/', authenticateToken, async (req, res) => {
               commentId: Number(commentId)
             });
 
-            await NotificationHelper.insertNotification(prisma, mentionNotificationData);
+            const sender = await prisma.user.findUnique({ where: { id: userId }, select: { nickname: true } });
+            await NotificationHelper.insertNotificationWithChannels(prisma, mentionNotificationData, {
+              senderName: sender?.nickname || '',
+              recipientEmail: userRow.email || '',
+              commentContent: sanitizedContent.substring(0, 200)
+            });
           }
         } catch (error) {
           console.error(`处理@用户通知失败 - 用户: ${mentionedUser.userId}:`, error);

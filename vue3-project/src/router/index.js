@@ -41,6 +41,7 @@ import BannedWordsManagement from '@/views/admin/BannedWordsManagement.vue'
 import NoteQualityManagement from '@/views/admin/NoteQualityManagement.vue'
 import SystemSettingsManagement from '@/views/admin/SystemSettingsManagement.vue'
 import NotificationManagement from '@/views/admin/NotificationManagement.vue'
+import NotificationTemplateManagement from '@/views/admin/NotificationTemplateManagement.vue'
 import AuditManagement from '@/views/admin/AuditManagement.vue'
 
 const router = createRouter({
@@ -316,6 +317,11 @@ const router = createRouter({
           path: 'notifications',
           name: 'admin_notifications',
           component: NotificationManagement
+        },
+        {
+          path: 'notification-templates',
+          name: 'admin_notification_templates',
+          component: NotificationTemplateManagement
         },
         {
           path: 'audit',
