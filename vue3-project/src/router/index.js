@@ -109,6 +109,14 @@ const router = createRouter({
           path: 'user/:userId',
           name: 'user_profile',
           component: userProfile,
+          beforeEnter: (to, from, next) => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+              next('/explore')
+            } else {
+              next()
+            }
+          }
         },
         {
           path: 'follow/:type',

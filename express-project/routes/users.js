@@ -1548,7 +1548,7 @@ router.get('/:id/mutual-follows', optionalAuth, async (req, res) => {
 });
 
 // 获取用户发布的笔记列表
-router.get('/:id/posts', optionalAuth, async (req, res) => {
+router.get('/:id/posts', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const page = parseInt(req.query.page) || 1;
