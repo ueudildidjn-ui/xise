@@ -3,6 +3,28 @@
  * Tests for aspect ratio preservation and resolution selection
  */
 
+// Mock the config module to avoid Prisma dependency
+jest.mock('../../config/config', () => ({
+  videoTranscoding: {
+    dash: {
+      resolutions: [
+        { width: 1920, height: 1080, bitrate: 5000 },
+        { width: 1280, height: 720, bitrate: 2500 },
+        { width: 854, height: 480, bitrate: 1000 },
+        { width: 640, height: 360, bitrate: 750 }
+      ],
+      originalMaxBitrate: 8000,
+      minBitrate: 500,
+      maxBitrate: 5000,
+      segmentDuration: 4
+    },
+    ffmpegPath: '',
+    ffprobePath: '',
+    enabled: false,
+    ffmpeg: {}
+  }
+}));
+
 const { calculateAspectRatioSize, selectResolutions } = require('../videoTranscoder');
 const config = require('../../config/config');
 
@@ -169,6 +191,288 @@ describe('Video Transcoder - Aspect Ratio Preservation', () => {
       
       const originalResolution = result.find(r => r.isOriginal);
       expect(originalResolution.bitrate).toBe(customBitrate);
+    });
+  });
+
+  describe('Unconventional aspect ratios', () => {
+    const testResolutions = config.videoTranscoding.dash.resolutions;
+
+    test('should handle 1:1 square video (1080x1080)', () => {
+      const result = selectResolutions(1080, 1080, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      result.forEach(resolution => {
+        // Square videos must stay square (width == height)
+        expect(resolution.width).toBe(resolution.height);
+      });
+    });
+
+    test('should handle 4:5 Instagram portrait (1080x1350)', () => {
+      const result = selectResolutions(1080, 1350, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      const sourceRatio = 1080 / 1350;
+      result.forEach(resolution => {
+        // Portrait must stay portrait (width < height)
+        expect(resolution.width).toBeLessThan(resolution.height);
+        const resRatio = resolution.width / resolution.height;
+        expect(Math.abs(sourceRatio - resRatio)).toBeLessThan(0.02);
+      });
+    });
+
+    test('should handle 9:16 full HD portrait (1080x1920)', () => {
+      const result = selectResolutions(1080, 1920, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      const sourceRatio = 1080 / 1920;
+      result.forEach(resolution => {
+        expect(resolution.width).toBeLessThan(resolution.height);
+        const resRatio = resolution.width / resolution.height;
+        expect(Math.abs(sourceRatio - resRatio)).toBeLessThan(0.02);
+      });
+    });
+
+    test('should handle 9:21 ultra-tall portrait (1080x2520)', () => {
+      const result = selectResolutions(1080, 2520, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      const sourceRatio = 1080 / 2520;
+      result.forEach(resolution => {
+        expect(resolution.width).toBeLessThan(resolution.height);
+        const resRatio = resolution.width / resolution.height;
+        expect(Math.abs(sourceRatio - resRatio)).toBeLessThan(0.02);
+      });
+    });
+
+    test('should handle 21:9 ultra-wide landscape (2560x1080)', () => {
+      const result = selectResolutions(2560, 1080, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      const sourceRatio = 2560 / 1080;
+      result.forEach(resolution => {
+        // Landscape must stay landscape (width > height)
+        expect(resolution.width).toBeGreaterThan(resolution.height);
+        const resRatio = resolution.width / resolution.height;
+        expect(Math.abs(sourceRatio - resRatio)).toBeLessThan(0.02);
+      });
+    });
+
+    test('should handle 3:4 portrait (960x1280)', () => {
+      const result = selectResolutions(960, 1280, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      const sourceRatio = 960 / 1280;
+      result.forEach(resolution => {
+        expect(resolution.width).toBeLessThan(resolution.height);
+        const resRatio = resolution.width / resolution.height;
+        expect(Math.abs(sourceRatio - resRatio)).toBeLessThan(0.02);
+      });
+    });
+
+    test('should handle 9:16 low resolution portrait (540x960)', () => {
+      const result = selectResolutions(540, 960, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      const sourceRatio = 540 / 960;
+      result.forEach(resolution => {
+        expect(resolution.width).toBeLessThan(resolution.height);
+        const resRatio = resolution.width / resolution.height;
+        expect(Math.abs(sourceRatio - resRatio)).toBeLessThan(0.02);
+      });
+    });
+
+    test('should handle 2:1 wide cinema (2160x1080)', () => {
+      const result = selectResolutions(2160, 1080, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      result.forEach(resolution => {
+        expect(resolution.width).toBeGreaterThan(resolution.height);
+      });
+    });
+
+    test('should handle very narrow portrait (320x1280)', () => {
+      const result = selectResolutions(320, 1280, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      const sourceRatio = 320 / 1280;
+      result.forEach(resolution => {
+        expect(resolution.width).toBeLessThan(resolution.height);
+        const resRatio = resolution.width / resolution.height;
+        expect(Math.abs(sourceRatio - resRatio)).toBeLessThan(0.02);
+      });
+    });
+
+    test('should handle phone screen recording portrait (1284x2778)', () => {
+      const result = selectResolutions(1284, 2778, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      const sourceRatio = 1284 / 2778;
+      result.forEach(resolution => {
+        expect(resolution.width).toBeLessThan(resolution.height);
+        const resRatio = resolution.width / resolution.height;
+        expect(Math.abs(sourceRatio - resRatio)).toBeLessThan(0.02);
+      });
+    });
+
+    test('should handle non-standard resolution (1000x1500)', () => {
+      const result = selectResolutions(1000, 1500, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+
+      const sourceRatio = 1000 / 1500;
+      result.forEach(resolution => {
+        expect(resolution.width).toBeLessThan(resolution.height);
+        const resRatio = resolution.width / resolution.height;
+        expect(Math.abs(sourceRatio - resRatio)).toBeLessThan(0.02);
+      });
+    });
+  });
+
+  describe('Portrait video must never become landscape', () => {
+    const testResolutions = config.videoTranscoding.dash.resolutions;
+
+    const portraitVideos = [
+      { w: 720, h: 1280, name: '9:16 (720x1280)' },
+      { w: 1080, h: 1920, name: '9:16 HD (1080x1920)' },
+      { w: 1080, h: 1350, name: '4:5 Instagram (1080x1350)' },
+      { w: 960, h: 1280, name: '3:4 (960x1280)' },
+      { w: 540, h: 960, name: '9:16 low-res (540x960)' },
+      { w: 320, h: 1280, name: '1:4 very narrow (320x1280)' },
+      { w: 1080, h: 2400, name: '9:20 tall phone (1080x2400)' },
+      { w: 1284, h: 2778, name: 'iPhone 13 Pro Max (1284x2778)' },
+      { w: 1080, h: 2520, name: '9:21 ultra-tall (1080x2520)' },
+      { w: 1000, h: 1500, name: '2:3 non-standard (1000x1500)' },
+      { w: 480, h: 854, name: '~9:16 low-res (480x854)' },
+      { w: 360, h: 640, name: '9:16 very low-res (360x640)' },
+    ];
+
+    test.each(portraitVideos)(
+      'portrait $name must not become landscape in any output resolution',
+      ({ w, h }) => {
+        const result = selectResolutions(w, h, testResolutions, {
+          includeOriginal: true,
+          originalMaxBitrate: 8000
+        });
+
+        expect(result.length).toBeGreaterThanOrEqual(1);
+        result.forEach(resolution => {
+          expect(resolution.width).toBeLessThan(resolution.height);
+        });
+      }
+    );
+
+    const landscapeVideos = [
+      { w: 1920, h: 1080, name: '16:9 (1920x1080)' },
+      { w: 3840, h: 2160, name: '16:9 4K (3840x2160)' },
+      { w: 2560, h: 1080, name: '21:9 ultra-wide (2560x1080)' },
+      { w: 1280, h: 720, name: '16:9 (1280x720)' },
+      { w: 854, h: 480, name: '~16:9 (854x480)' },
+    ];
+
+    test.each(landscapeVideos)(
+      'landscape $name must not become portrait in any output resolution',
+      ({ w, h }) => {
+        const result = selectResolutions(w, h, testResolutions, {
+          includeOriginal: true,
+          originalMaxBitrate: 8000
+        });
+
+        expect(result.length).toBeGreaterThanOrEqual(1);
+        result.forEach(resolution => {
+          expect(resolution.width).toBeGreaterThan(resolution.height);
+        });
+      }
+    );
+  });
+
+  describe('calculateAspectRatioSize - unconventional ratios', () => {
+    test('should handle 1:1 square (1080x1080) scaled to 720', () => {
+      const result = calculateAspectRatioSize(1080, 1080, 720);
+      expect(result.width).toBe(720);
+      expect(result.height).toBe(720);
+    });
+
+    test('should handle 4:5 portrait (1080x1350) scaled to 720', () => {
+      const result = calculateAspectRatioSize(1080, 1350, 720);
+      // 1080/1350 * 720 = 576
+      expect(result.width).toBe(576);
+      expect(result.height).toBe(720);
+      expect(result.width).toBeLessThan(result.height);
+    });
+
+    test('should handle 9:16 portrait (1080x1920) scaled to 720', () => {
+      const result = calculateAspectRatioSize(1080, 1920, 720);
+      // 1080/1920 * 720 = 405 → 406 (even)
+      expect(result.width).toBe(406);
+      expect(result.height).toBe(720);
+      expect(result.width).toBeLessThan(result.height);
+    });
+
+    test('should handle 21:9 ultra-wide (2560x1080) scaled to 720', () => {
+      const result = calculateAspectRatioSize(2560, 1080, 720);
+      // 2560/1080 * 720 ≈ 1706.67 → 1707 → 1708 (even)
+      expect(result.width).toBe(1708);
+      expect(result.height).toBe(720);
+      expect(result.width).toBeGreaterThan(result.height);
+    });
+
+    test('should handle very narrow portrait (320x1280) scaled to 720', () => {
+      const result = calculateAspectRatioSize(320, 1280, 720);
+      // 320/1280 * 720 = 180
+      expect(result.width).toBe(180);
+      expect(result.height).toBe(720);
+      expect(result.width).toBeLessThan(result.height);
+    });
+
+    test('should handle 9:20 tall phone (1080x2400) scaled to 720', () => {
+      const result = calculateAspectRatioSize(1080, 2400, 720);
+      // 1080/2400 * 720 = 324
+      expect(result.width).toBe(324);
+      expect(result.height).toBe(720);
+      expect(result.width).toBeLessThan(result.height);
+    });
+
+    test('should always return even dimensions', () => {
+      const testCases = [
+        { sw: 1080, sh: 1920, th: 721 },
+        { sw: 999, sh: 1777, th: 719 },
+        { sw: 321, sh: 1281, th: 481 },
+        { sw: 1081, sh: 1351, th: 361 },
+      ];
+
+      testCases.forEach(({ sw, sh, th }) => {
+        const result = calculateAspectRatioSize(sw, sh, th);
+        expect(result.width % 2).toBe(0);
+        expect(result.height % 2).toBe(0);
+      });
+    });
+
+    test('should throw error for invalid dimensions', () => {
+      expect(() => calculateAspectRatioSize(0, 1080, 720)).toThrow();
+      expect(() => calculateAspectRatioSize(1920, 0, 720)).toThrow();
+      expect(() => calculateAspectRatioSize(1920, 1080, 0)).toThrow();
+      expect(() => calculateAspectRatioSize(-1, 1080, 720)).toThrow();
     });
   });
 });
