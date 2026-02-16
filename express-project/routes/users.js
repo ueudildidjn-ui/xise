@@ -3,7 +3,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const { HTTP_STATUS, RESPONSE_CODES, ERROR_MESSAGES, AUDIT_TYPES, AUDIT_STATUS } = require('../constants');
 const { prisma } = require('../config/config');
-const { optionalAuth, authenticateToken } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 const NotificationHelper = require('../utils/notificationHelper');
 const { protectPostListItem } = require('../utils/paidContentHelper');
 const { auditNickname, auditBio, isAuditEnabled } = require('../utils/contentAudit');
@@ -16,7 +16,7 @@ const redis = require('../utils/redis');
 const MAX_CONTENT_LENGTH = 1000;
 
 // 搜索用户（必须放在 /:id 之前）
-router.get('/search', optionalAuth, async (req, res) => {
+router.get('/search', authenticateToken, async (req, res) => {
   try {
     const keyword = req.query.keyword;
     const page = parseInt(req.query.page) || 1;
@@ -574,7 +574,7 @@ router.put('/privacy-settings', authenticateToken, async (req, res) => {
 });
 
 // 获取用户个性标签
-router.get('/:id/personality-tags', optionalAuth, async (req, res) => {
+router.get('/:id/personality-tags', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const currentUserId = req.user ? BigInt(req.user.id) : null;
@@ -628,7 +628,7 @@ router.get('/:id/personality-tags', optionalAuth, async (req, res) => {
 });
 
 // 获取用户信息
-router.get('/:id', optionalAuth, async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const currentUserId = req.user ? BigInt(req.user.id) : null;
@@ -727,7 +727,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 });
 
 // 获取用户列表
-router.get('/', async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -1169,7 +1169,7 @@ router.delete('/:id/follow', authenticateToken, async (req, res) => {
 });
 
 // 获取关注状态
-router.get('/:id/follow-status', optionalAuth, async (req, res) => {
+router.get('/:id/follow-status', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const followerId = req.user ? BigInt(req.user.id) : null;
@@ -1232,7 +1232,7 @@ router.get('/:id/follow-status', optionalAuth, async (req, res) => {
 });
 
 // 获取用户关注列表
-router.get('/:id/following', optionalAuth, async (req, res) => {
+router.get('/:id/following', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const page = parseInt(req.query.page) || 1;
@@ -1333,7 +1333,7 @@ router.get('/:id/following', optionalAuth, async (req, res) => {
 });
 
 // 获取用户粉丝列表
-router.get('/:id/followers', optionalAuth, async (req, res) => {
+router.get('/:id/followers', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const page = parseInt(req.query.page) || 1;
@@ -1434,7 +1434,7 @@ router.get('/:id/followers', optionalAuth, async (req, res) => {
 });
 
 // 获取互相关注列表
-router.get('/:id/mutual-follows', optionalAuth, async (req, res) => {
+router.get('/:id/mutual-follows', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const page = parseInt(req.query.page) || 1;
@@ -1548,7 +1548,7 @@ router.get('/:id/mutual-follows', optionalAuth, async (req, res) => {
 });
 
 // 获取用户发布的笔记列表
-router.get('/:id/posts', optionalAuth, async (req, res) => {
+router.get('/:id/posts', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const page = parseInt(req.query.page) || 1;
@@ -1721,7 +1721,7 @@ router.get('/:id/posts', optionalAuth, async (req, res) => {
 });
 
 // 获取用户收藏列表
-router.get('/:id/collections', optionalAuth, async (req, res) => {
+router.get('/:id/collections', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const page = parseInt(req.query.page) || 1;
@@ -1858,7 +1858,7 @@ router.get('/:id/collections', optionalAuth, async (req, res) => {
 });
 
 // 获取用户点赞列表
-router.get('/:id/likes', optionalAuth, async (req, res) => {
+router.get('/:id/likes', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const page = parseInt(req.query.page) || 1;
@@ -1973,7 +1973,7 @@ router.get('/:id/likes', optionalAuth, async (req, res) => {
 });
 
 // 获取用户统计信息
-router.get('/:id/stats', async (req, res) => {
+router.get('/:id/stats', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
 
@@ -2020,8 +2020,8 @@ router.get('/:id/stats', async (req, res) => {
   }
 });
 
-// 获取用户页面工具栏配置（公开接口）
-router.get('/toolbar/items', async (req, res) => {
+// 获取用户页面工具栏配置
+router.get('/toolbar/items', authenticateToken, async (req, res) => {
   try {
     // 检查UserToolbar模型是否可用（数据库迁移后才能使用）
     if (!prisma.userToolbar) {
@@ -2165,7 +2165,7 @@ router.delete('/:id/block', authenticateToken, async (req, res) => {
 });
 
 // 获取黑名单状态
-router.get('/:id/block-status', optionalAuth, async (req, res) => {
+router.get('/:id/block-status', authenticateToken, async (req, res) => {
   try {
     const userIdParam = req.params.id;
     const currentUserId = req.user ? BigInt(req.user.id) : null;

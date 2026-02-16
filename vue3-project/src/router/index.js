@@ -44,6 +44,16 @@ import NotificationManagement from '@/views/admin/NotificationManagement.vue'
 import NotificationTemplateManagement from '@/views/admin/NotificationTemplateManagement.vue'
 import AuditManagement from '@/views/admin/AuditManagement.vue'
 
+// 登录鉴权守卫：未登录用户重定向到首页
+const requireAuth = (to, from, next) => {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    next('/explore')
+  } else {
+    next()
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -99,22 +109,30 @@ const router = createRouter({
           path: 'publish',
           name: 'publish',
           component: publish,
+          beforeEnter: requireAuth
         },
         {
           path: 'user',
           name: 'user',
           component: user,
+          beforeEnter: requireAuth
         },
         {
           path: 'user/:userId',
           name: 'user_profile',
           component: userProfile,
+          beforeEnter: requireAuth
         },
         {
           path: 'follow/:type',
           name: 'follow_list',
           component: FollowList,
           beforeEnter: (to, from, next) => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+              next('/explore')
+              return
+            }
             // 验证type参数是否有效
             const validTypes = ['mutual', 'following', 'followers']
             if (validTypes.includes(to.params.type)) {
@@ -131,7 +149,8 @@ const router = createRouter({
         {
           path: 'history',
           name: 'browsing_history',
-          component: BrowsingHistory
+          component: BrowsingHistory,
+          beforeEnter: requireAuth
         },
         {
           path: 'search',
@@ -173,22 +192,26 @@ const router = createRouter({
         {
           path: 'post-management',
           name: 'post_management',
-          component: PostManagementPage
+          component: PostManagementPage,
+          beforeEnter: requireAuth
         },
         {
           path: 'draft-box',
           name: 'draft_box',
-          component: DraftBoxPage
+          component: DraftBoxPage,
+          beforeEnter: requireAuth
         },
         {
           path: 'creator-center',
           name: 'creator_center',
-          component: CreatorCenterPage
+          component: CreatorCenterPage,
+          beforeEnter: requireAuth
         },
         {
           path: 'messages',
           name: 'messages',
-          component: MessagesPage
+          component: MessagesPage,
+          beforeEnter: requireAuth
         },
         // 404页面 - 捕获所有未匹配的路由
         {
