@@ -30,7 +30,6 @@
         "svg-captcha": "^1.4.0"
     },
     "devDependencies": {
-        "jest": "^30.2.0",
         "nodemon": "^3.0.1",
         "prisma": "^7.2.0"
     }
