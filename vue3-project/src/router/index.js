@@ -99,11 +99,27 @@ const router = createRouter({
           path: 'publish',
           name: 'publish',
           component: publish,
+          beforeEnter: (to, from, next) => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+              next('/explore')
+            } else {
+              next()
+            }
+          }
         },
         {
           path: 'user',
           name: 'user',
           component: user,
+          beforeEnter: (to, from, next) => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+              next('/explore')
+            } else {
+              next()
+            }
+          }
         },
         {
           path: 'user/:userId',
@@ -123,6 +139,10 @@ const router = createRouter({
           name: 'follow_list',
           component: FollowList,
           beforeEnter: (to, from, next) => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+              return next('/explore')
+            }
             // 验证type参数是否有效
             const validTypes = ['mutual', 'following', 'followers']
             if (validTypes.includes(to.params.type)) {
@@ -139,7 +159,15 @@ const router = createRouter({
         {
           path: 'history',
           name: 'browsing_history',
-          component: BrowsingHistory
+          component: BrowsingHistory,
+          beforeEnter: (to, from, next) => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+              next('/explore')
+            } else {
+              next()
+            }
+          }
         },
         {
           path: 'search',
@@ -181,22 +209,54 @@ const router = createRouter({
         {
           path: 'post-management',
           name: 'post_management',
-          component: PostManagementPage
+          component: PostManagementPage,
+          beforeEnter: (to, from, next) => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+              next('/explore')
+            } else {
+              next()
+            }
+          }
         },
         {
           path: 'draft-box',
           name: 'draft_box',
-          component: DraftBoxPage
+          component: DraftBoxPage,
+          beforeEnter: (to, from, next) => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+              next('/explore')
+            } else {
+              next()
+            }
+          }
         },
         {
           path: 'creator-center',
           name: 'creator_center',
-          component: CreatorCenterPage
+          component: CreatorCenterPage,
+          beforeEnter: (to, from, next) => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+              next('/explore')
+            } else {
+              next()
+            }
+          }
         },
         {
           path: 'messages',
           name: 'messages',
-          component: MessagesPage
+          component: MessagesPage,
+          beforeEnter: (to, from, next) => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+              next('/explore')
+            } else {
+              next()
+            }
+          }
         },
         // 404页面 - 捕获所有未匹配的路由
         {
