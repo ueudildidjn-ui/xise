@@ -3,7 +3,7 @@
  * Tests for aspect ratio preservation and resolution selection
  */
 
-const { calculateAspectRatioSize, selectResolutions } = require('../videoTranscoder');
+const { calculateAspectRatioSize, selectResolutions, buildScaleFilter } = require('../videoTranscoder');
 const config = require('../../config/config');
 
 describe('Video Transcoder - Aspect Ratio Preservation', () => {
@@ -169,6 +169,41 @@ describe('Video Transcoder - Aspect Ratio Preservation', () => {
       
       const originalResolution = result.find(r => r.isOriginal);
       expect(originalResolution.bitrate).toBe(customBitrate);
+    });
+  });
+
+  describe('buildScaleFilter', () => {
+    test('should use scale=-2:height format with lanczos flag', () => {
+      const result = buildScaleFilter(0, { width: 1280, height: 720 });
+      expect(result).toBe('-filter:v:0 scale=-2:720:flags=lanczos');
+    });
+
+    test('should use correct stream index', () => {
+      const result = buildScaleFilter(2, { width: 854, height: 480 });
+      expect(result).toBe('-filter:v:2 scale=-2:480:flags=lanczos');
+    });
+
+    test('should not fix both dimensions (avoid stretching)', () => {
+      const result = buildScaleFilter(0, { width: 1920, height: 1080 });
+      // Should NOT contain fixed width like "1920:1080"
+      expect(result).not.toContain('1920:1080');
+      // Should contain -2 for auto width calculation
+      expect(result).toContain('scale=-2:1080');
+    });
+
+    test('should include lanczos flag for high-quality scaling', () => {
+      const result = buildScaleFilter(0, { width: 640, height: 360 });
+      expect(result).toContain('flags=lanczos');
+    });
+
+    test('should handle original resolution the same way', () => {
+      const result = buildScaleFilter(0, { width: 1920, height: 1080, isOriginal: true });
+      expect(result).toBe('-filter:v:0 scale=-2:1080:flags=lanczos');
+    });
+
+    test('should handle portrait video resolution', () => {
+      const result = buildScaleFilter(1, { width: 204, height: 360 });
+      expect(result).toBe('-filter:v:1 scale=-2:360:flags=lanczos');
     });
   });
 });

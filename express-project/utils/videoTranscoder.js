@@ -84,6 +84,21 @@ function calculateAspectRatioSize(sourceWidth, sourceHeight, targetHeight) {
 }
 
 /**
+ * 构建FFmpeg scale滤镜参数
+ * 使用 scale=-2:height 保持宽高比（高度固定，宽度自动等比+偶数），
+ * 避免固定两个维度导致拉伸变形，并使用lanczos高质量缩放算法
+ * @param {number} streamIndex - 视频流索引
+ * @param {Object} resolution - 分辨率对象 { width, height, isOriginal }
+ * @returns {string} FFmpeg filter参数字符串
+ */
+function buildScaleFilter(streamIndex, resolution) {
+  // 使用 scale=-2:height，让FFmpeg自动计算宽度以保持宽高比
+  // -2 保证宽度为偶数（H.264编码要求）
+  // flags=lanczos 使用高质量的Lanczos缩放算法
+  return `-filter:v:${streamIndex} scale=-2:${resolution.height}:flags=lanczos`;
+}
+
+/**
  * 智能选择适合的分辨率（支持非标准分辨率和等比例缩放）
  * @param {number} videoWidth - 视频宽度
  * @param {number} videoHeight - 视频高度
@@ -294,7 +309,7 @@ async function convertToDash(inputPath, userId, progressCallback) {
       selectedResolutions.forEach((resolution, index) => {
         const videoOptions = [
           `-map 0:v:0`,
-          `-s:v:${index} ${resolution.width}x${resolution.height}`,
+          buildScaleFilter(index, resolution),
           `-c:v:${index} libx264`,
           `-profile:v:${index} ${ffmpegOpts.profile}`,
           `-preset:v:${index} ${ffmpegOpts.preset}`,
@@ -646,6 +661,7 @@ module.exports = {
   analyzeVideo,
   selectResolutions,
   calculateAspectRatioSize,
+  buildScaleFilter,
   generateOutputPath,
   convertToDash,
   checkFFmpegAvailable,
