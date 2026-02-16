@@ -10,6 +10,7 @@ const { auditNickname, auditBio, isAuditEnabled } = require('../utils/contentAud
 const { addContentAuditTask, addAuditLogTask, isQueueEnabled, generateRandomNickname, addBrowsingHistoryTask, cleanupExpiredBrowsingHistory, BROWSING_HISTORY_CONFIG } = require('../utils/queueService');
 const { checkUsernameBannedWords, checkBioBannedWords, getBannedWordAuditResult } = require('../utils/bannedWordsChecker');
 const { isAiUsernameReviewEnabled, isAiContentReviewEnabled } = require('../utils/aiReviewHelper');
+const redis = require('../utils/redis');
 
 // 内容最大长度限制
 const MAX_CONTENT_LENGTH = 1000;
@@ -367,6 +368,39 @@ router.get('/onboarding-config', async (req, res) => {
   }
 });
 
+// 获取引导页草稿（从 Redis）
+router.get('/onboarding-draft', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const draft = await redis.get(`onboarding_draft:${userId}`);
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success',
+      data: draft || null
+    });
+  } catch (error) {
+    console.error('获取引导页草稿失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '获取草稿失败' });
+  }
+});
+
+// 保存引导页草稿（到 Redis，7天过期）
+router.put('/onboarding-draft', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentStep, gender, birthday, interests, customFields } = req.body;
+    const draft = { currentStep, gender, birthday, interests, customFields };
+    await redis.set(`onboarding_draft:${userId}`, draft, 7 * 24 * 3600);
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'success'
+    });
+  } catch (error) {
+    console.error('保存引导页草稿失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: '保存草稿失败' });
+  }
+});
+
 // 完成开始页面引导（填写性别、生日、兴趣爱好）
 router.post('/onboarding', authenticateToken, async (req, res) => {
   try {
@@ -437,6 +471,9 @@ router.post('/onboarding', authenticateToken, async (req, res) => {
     }
 
     await prisma.user.update({ where: { id: userId }, data: updateData });
+
+    // 引导完成后清除 Redis 中的草稿
+    await redis.del(`onboarding_draft:${req.user.id}`);
 
     const updatedUser = await prisma.user.findUnique({
       where: { id: userId },
