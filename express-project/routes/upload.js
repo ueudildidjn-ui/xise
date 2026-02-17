@@ -19,7 +19,7 @@ const {
   mergeImageChunks,
   startCleanupScheduler
 } = require('../utils/chunkUploadHelper');
-const { validateVideoMedia, deleteInvalidVideo } = require('../utils/videoTranscoder');
+const { validateVideoMedia, deleteInvalidVideo, analyzeVideo } = require('../utils/videoTranscoder');
 
 const parseWatermarkFlag = (value) => value === true || value === 'true' || value === 1 || value === '1';
 
@@ -277,6 +277,15 @@ router.post('/video', authenticateToken, videoUpload.fields([
         code: RESPONSE_CODES.VALIDATION_ERROR, 
         message: uploadResult.message || '视频上传失败' 
       });
+    }
+
+    // 使用 ffprobe 分析上传的视频并打印详细信息到控制台
+    if (uploadResult.filePath) {
+      try {
+        await analyzeVideo(uploadResult.filePath, '上传视频');
+      } catch (analyzeErr) {
+        console.warn('⚠️ 视频分析失败（不影响上传）:', analyzeErr.message);
+      }
     }
 
     let coverUrl = null;

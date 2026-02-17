@@ -20,11 +20,12 @@ if (config.videoTranscoding.ffprobePath) {
 }
 
 /**
- * 使用 ffprobe 分析视频信息
+ * 使用 ffprobe 分析视频信息并打印详细信息到控制台
  * @param {string} videoPath - 视频文件路径
+ * @param {string} [label='源视频'] - 日志标签（如 '源视频' 或 '转码后视频'）
  * @returns {Promise<Object>} 视频信息
  */
-async function analyzeVideo(videoPath) {
+async function analyzeVideo(videoPath, label = '源视频') {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(videoPath, (err, metadata) => {
       if (err) {
@@ -53,7 +54,29 @@ async function analyzeVideo(videoPath) {
           })() : 30
       };
 
-      console.log('📊 视频分析结果:', info);
+      // 打印详细视频分析信息到控制台
+      console.log(`\n========== 📊 ${label}分析结果 ==========`);
+      console.log(`📁 文件路径: ${videoPath}`);
+      console.log(`🎞️ 分辨率: ${videoStream.width}x${videoStream.height}`);
+      console.log(`🎬 视频编码: ${videoStream.codec_name} (${videoStream.codec_long_name || 'N/A'})`);
+      console.log(`📐 像素格式: ${videoStream.pix_fmt || 'N/A'}`);
+      console.log(`🖼️ 帧率: ${info.fps.toFixed(2)} fps`);
+      console.log(`📦 容器格式: ${metadata.format.format_name || 'N/A'} (${metadata.format.format_long_name || 'N/A'})`);
+      console.log(`⏱️ 时长: ${metadata.format.duration ? Number(metadata.format.duration).toFixed(2) + '秒' : 'N/A'}`);
+      console.log(`📊 总码率: ${metadata.format.bit_rate ? (Number(metadata.format.bit_rate) / 1000).toFixed(0) + ' kbps' : 'N/A'}`);
+      console.log(`💾 文件大小: ${metadata.format.size ? (Number(metadata.format.size) / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}`);
+      if (audioStream) {
+        console.log(`🔊 音频编码: ${audioStream.codec_name} (${audioStream.codec_long_name || 'N/A'})`);
+        console.log(`🔊 音频采样率: ${audioStream.sample_rate || 'N/A'} Hz`);
+        console.log(`🔊 音频声道: ${audioStream.channels || 'N/A'}`);
+      } else {
+        console.log(`🔇 音频: 无`);
+      }
+      if (metadata.format.tags) {
+        console.log(`🏷️ 元数据:`, metadata.format.tags);
+      }
+      console.log(`==========================================\n`);
+
       resolve(info);
     });
   });
@@ -84,7 +107,8 @@ function calculateAspectRatioSize(sourceWidth, sourceHeight, targetHeight) {
 }
 
 /**
- * 智能选择适合的分辨率（支持非标准分辨率和等比例缩放）
+ * 智能选择适合的分辨率（自适应方法，使用标准分辨率+自适应缩放滤镜）
+ * 使用标准分辨率尺寸，通过 FFmpeg 的 scale/pad 滤镜自动适配不同宽高比的视频
  * @param {number} videoWidth - 视频宽度
  * @param {number} videoHeight - 视频高度
  * @param {Array} configResolutions - 配置的分辨率列表
@@ -101,35 +125,39 @@ function selectResolutions(videoWidth, videoHeight, configResolutions, options =
   const sourceAspectRatio = videoWidth / videoHeight;
   console.log(`📐 原视频尺寸: ${videoWidth}x${videoHeight}, 宽高比: ${sourceAspectRatio.toFixed(3)}`);
 
-  // 标准分辨率高度列表
+  // 标准分辨率映射（高度 -> 标准宽度），用于自适应缩放
+  const STANDARD_WIDTHS = { 2160: 3840, 1080: 1920, 720: 1280, 480: 854, 360: 640 };
   const standardHeights = [2160, 1080, 720, 480, 360];
   
-  // 为每个标准高度生成等比例缩放的分辨率
+  // 确定源视频的有效高度（取宽高中较大值用于判断，兼容竖屏视频）
+  const sourceMaxDimension = Math.max(videoWidth, videoHeight);
+  
   for (const targetHeight of standardHeights) {
-    // 只处理小于原视频高度的分辨率
-    if (targetHeight >= videoHeight) {
-      console.log(`⏭️ 跳过分辨率 ${targetHeight}p (大于或等于原视频高度 ${videoHeight})`);
+    // 只处理小于原视频最大维度的分辨率
+    if (targetHeight >= sourceMaxDimension) {
+      console.log(`⏭️ 跳过分辨率 ${targetHeight}p (大于或等于原视频最大维度 ${sourceMaxDimension})`);
       continue;
     }
     
-    // 计算保持宽高比的尺寸
-    const scaledSize = calculateAspectRatioSize(videoWidth, videoHeight, targetHeight);
+    // 使用标准宽度：优先从配置中查找，否则使用标准映射
+    const matchedConfig = configResolutions.find(r => r.height === targetHeight);
+    const targetWidth = matchedConfig ? matchedConfig.width : (STANDARD_WIDTHS[targetHeight] || Math.round(targetHeight * 16 / 9));
+    
+    // 确保宽高是偶数（H.264编码要求）
+    const evenWidth = targetWidth % 2 === 0 ? targetWidth : targetWidth + 1;
+    const evenHeight = targetHeight % 2 === 0 ? targetHeight : targetHeight + 1;
     
     // 从配置中查找匹配的码率，如果没有则根据高度估算
     let bitrate;
-    const matchedConfig = configResolutions.find(r => r.height === targetHeight);
-    
     if (matchedConfig) {
       bitrate = matchedConfig.bitrate;
     } else {
-      // 根据分辨率估算码率（每像素0.1 bits，30fps）
       const DEFAULT_FPS = 30;
       const BIT_DEPTH = 0.1;
       const COMPRESSION_RATIO = 1000;
       bitrate = Math.floor(
-        (scaledSize.width * scaledSize.height * DEFAULT_FPS * BIT_DEPTH) / COMPRESSION_RATIO
+        (evenWidth * evenHeight * DEFAULT_FPS * BIT_DEPTH) / COMPRESSION_RATIO
       );
-      // 限制在最小和最大码率之间
       bitrate = Math.max(
         config.videoTranscoding.dash.minBitrate,
         Math.min(bitrate, config.videoTranscoding.dash.maxBitrate)
@@ -137,13 +165,13 @@ function selectResolutions(videoWidth, videoHeight, configResolutions, options =
     }
     
     selectedResolutions.push({
-      width: scaledSize.width,
-      height: scaledSize.height,
+      width: evenWidth,
+      height: evenHeight,
       bitrate: bitrate,
       label: `${targetHeight}p`
     });
     
-    console.log(`✅ 添加分辨率 ${targetHeight}p: ${scaledSize.width}x${scaledSize.height}@${bitrate}kbps (等比例缩放)`);
+    console.log(`✅ 添加分辨率 ${targetHeight}p: ${evenWidth}x${evenHeight}@${bitrate}kbps (自适应缩放)`);
   }
 
   // 添加原始分辨率（压缩但保持原始尺寸）
@@ -170,7 +198,6 @@ function selectResolutions(videoWidth, videoHeight, configResolutions, options =
     const evenWidth = videoWidth % 2 === 0 ? videoWidth : videoWidth + 1;
     const evenHeight = videoHeight % 2 === 0 ? videoHeight : videoHeight + 1;
     
-    // 计算基于像素数和帧率的比特率
     const DEFAULT_FPS = 30;
     const BIT_DEPTH = 0.1;
     const COMPRESSION_RATIO = 1000;
@@ -221,6 +248,40 @@ function generateOutputPath(userId) {
 
   console.log(`📁 输出目录: ${outputDir}`);
   return outputDir;
+}
+
+/**
+ * 分析转码后的输出文件，打印详细信息到控制台
+ * @param {string} outputDir - 输出目录
+ * @param {Array} selectedResolutions - 选择的分辨率列表
+ */
+async function analyzeTranscodedOutput(outputDir, selectedResolutions) {
+  console.log(`\n========== 🎬 转码后输出分析 ==========`);
+  console.log(`📁 输出目录: ${outputDir}`);
+
+  // 列出输出目录中的所有文件
+  const files = fs.readdirSync(outputDir);
+  console.log(`📄 输出文件列表: ${files.join(', ')}`);
+
+  // 分析每个 init 段文件以获取转码后的实际视频参数
+  for (let i = 0; i < selectedResolutions.length; i++) {
+    const resolution = selectedResolutions[i];
+    const initFile = path.join(outputDir, `init-stream${i}.m4s`);
+
+    if (fs.existsSync(initFile)) {
+      try {
+        await analyzeVideo(initFile, `转码后流${i} (${resolution.label || resolution.height + 'p'})`);
+      } catch (err) {
+        console.log(`⚠️ 无法分析 init-stream${i}.m4s: ${err.message}`);
+        // 打印预期参数
+        console.log(`📊 流${i} 预期参数: ${resolution.width}x${resolution.height}@${resolution.bitrate}kbps (${resolution.label || resolution.height + 'p'})`);
+      }
+    } else {
+      console.log(`📊 流${i} 预期参数: ${resolution.width}x${resolution.height}@${resolution.bitrate}kbps (${resolution.label || resolution.height + 'p'})`);
+    }
+  }
+
+  console.log(`==========================================\n`);
 }
 
 /**
@@ -290,15 +351,20 @@ async function convertToDash(inputPath, userId, progressCallback) {
         }
       }
       
-      // 为每个分辨率添加输出流
+      // 为每个分辨率添加输出流（使用自适应缩放滤镜）
       selectedResolutions.forEach((resolution, index) => {
+        // 构建自适应缩放滤镜链
+        // scale: 缩放到目标尺寸，force_original_aspect_ratio=decrease 保持宽高比不超过目标
+        // pad: 居中填充到精确目标尺寸（添加黑边）
+        // format: 转换像素格式为 yuv420p
+        const adaptiveFilter = `scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=decrease,pad=${resolution.width}:${resolution.height}:(ow-iw)/2:(oh-ih)/2,format=${ffmpegOpts.pixelFormat}`;
+
         const videoOptions = [
           `-map 0:v:0`,
-          `-s:v:${index} ${resolution.width}x${resolution.height}`,
+          `-filter:v:${index} ${adaptiveFilter}`,
           `-c:v:${index} libx264`,
           `-profile:v:${index} ${ffmpegOpts.profile}`,
-          `-preset:v:${index} ${ffmpegOpts.preset}`,
-          `-pix_fmt:v:${index} ${ffmpegOpts.pixelFormat}`
+          `-preset:v:${index} ${ffmpegOpts.preset}`
         ];
         
         // 如果设置了 CRF，使用恒定质量模式（CRF本身就是动态码率）
@@ -417,8 +483,15 @@ async function convertToDash(inputPath, userId, progressCallback) {
       });
 
       // 完成处理
-      command.on('end', () => {
+      command.on('end', async () => {
         console.log('✅ 视频转码完成');
+
+        // 分析转码后的输出文件
+        try {
+          await analyzeTranscodedOutput(outputDir, selectedResolutions);
+        } catch (analyzeErr) {
+          console.warn('⚠️ 转码后分析失败（不影响转码结果）:', analyzeErr.message);
+        }
 
         // 删除原始文件（如果配置启用）
         if (config.videoTranscoding.deleteOriginal && fs.existsSync(inputPath)) {
@@ -647,6 +720,7 @@ module.exports = {
   selectResolutions,
   calculateAspectRatioSize,
   generateOutputPath,
+  analyzeTranscodedOutput,
   convertToDash,
   checkFFmpegAvailable,
   validateVideoMedia,
