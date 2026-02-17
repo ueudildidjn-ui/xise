@@ -55,6 +55,7 @@ function requiresAuth(middlewareName) {
 
 /**
  * 查找路由处理函数的结束位置（通过追踪大括号深度）
+ * 跳过字符串字面量中的大括号以避免误判
  * @param {string} source - 源代码字符串
  * @param {number} startPos - 路由定义的起始位置
  * @returns {number} 处理函数结束位置
@@ -66,7 +67,28 @@ function findHandlerEnd(source, startPos) {
 
   while (pos < source.length) {
     const ch = source[pos];
-    if (ch === '{') {
+
+    // 跳过字符串字面量（单引号、双引号、反引号）
+    if (ch === "'" || ch === '"' || ch === '`') {
+      const quote = ch;
+      pos++;
+      while (pos < source.length) {
+        if (source[pos] === '\\') {
+          pos++; // 跳过转义字符
+        } else if (source[pos] === quote) {
+          break;
+        }
+        pos++;
+      }
+    // 跳过单行注释
+    } else if (ch === '/' && pos + 1 < source.length && source[pos + 1] === '/') {
+      while (pos < source.length && source[pos] !== '\n') pos++;
+    // 跳过多行注释
+    } else if (ch === '/' && pos + 1 < source.length && source[pos + 1] === '*') {
+      pos += 2;
+      while (pos + 1 < source.length && !(source[pos] === '*' && source[pos + 1] === '/')) pos++;
+      pos++; // 跳过 '/'
+    } else if (ch === '{') {
       depth++;
       foundFirst = true;
     } else if (ch === '}') {
