@@ -7940,6 +7940,14 @@ router.get('/system-notifications/:id', adminAuth, async (req, res) => {
  *                 type: boolean
  *               is_active:
  *                 type: boolean
+ *               start_time:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 通知开始时间
+ *               end_time:
+ *                 type: string
+ *                 format: date-time
+ *                 description: 通知结束时间
  *     responses:
  *       200:
  *         description: 成功

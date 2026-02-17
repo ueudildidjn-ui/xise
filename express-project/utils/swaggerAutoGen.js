@@ -54,6 +54,33 @@ function requiresAuth(middlewareName) {
 }
 
 /**
+ * 查找路由处理函数的结束位置（通过追踪大括号深度）
+ * @param {string} source - 源代码字符串
+ * @param {number} startPos - 路由定义的起始位置
+ * @returns {number} 处理函数结束位置
+ */
+function findHandlerEnd(source, startPos) {
+  let pos = startPos;
+  let depth = 0;
+  let foundFirst = false;
+
+  while (pos < source.length) {
+    const ch = source[pos];
+    if (ch === '{') {
+      depth++;
+      foundFirst = true;
+    } else if (ch === '}') {
+      depth--;
+      if (foundFirst && depth === 0) {
+        return pos;
+      }
+    }
+    pos++;
+  }
+  return Math.min(startPos + 3000, source.length);
+}
+
+/**
  * 从路由源码文件中解析路由定义和参数
  * @param {string} filePath - 路由文件的绝对路径
  * @param {string} basePath - 路由基础前缀（如 /api/auth）
@@ -73,9 +100,10 @@ function parseRouteFile(filePath, basePath) {
     const routePath = match[2];
     const matchPos = match.index;
 
-    // 获取路由定义所在行以及前后上下文
+    // 获取路由处理函数的完整范围（通过追踪大括号深度）
+    const handlerEnd = findHandlerEnd(source, matchPos);
+    const afterContext = source.substring(matchPos, handlerEnd + 1);
     const beforeContext = source.substring(Math.max(0, matchPos - 200), matchPos);
-    const afterContext = source.substring(matchPos, Math.min(source.length, matchPos + 3000));
 
     // 检测中间件 - 支持带中间件和不带中间件的路由
     const middlewareMatch = afterContext.match(/router\.\w+\([^,]+,\s*([\w,\s]+),\s*(?:async\s+)?\(/);
