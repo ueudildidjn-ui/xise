@@ -568,10 +568,21 @@ function mergeWithAutoGen(existingSpec, routesDir, appJsPath) {
  * 支持自动从app.js检测路由挂载和内联路由，无需手动传入extraRoutes
  * @param {Object} swaggerSpec - 最终的swagger spec对象
  * @param {string} routesDir - 路由文件目录
- * @param {Array<{method: string, path: string}>} [extraRoutes] - 额外路由（兼容旧调用方式）
- * @param {string} [appJsPath] - app.js路径（可选，用于自动检测内联路由）
+ * @param {Object} [options] - 可选配置
+ * @param {Array<{method: string, path: string}>} [options.extraRoutes=[]] - 额外路由（兼容手动指定）
+ * @param {string} [options.appJsPath] - app.js路径（用于自动检测路由挂载和内联路由）
  */
-function validateSwaggerCompleteness(swaggerSpec, routesDir, extraRoutes = [], appJsPath) {
+function validateSwaggerCompleteness(swaggerSpec, routesDir, options = {}) {
+  // 兼容旧调用方式: validateSwaggerCompleteness(spec, dir, [], appJsPath)
+  let extraRoutes = [];
+  let appJsPath;
+  if (Array.isArray(options)) {
+    extraRoutes = options;
+    appJsPath = arguments[3];
+  } else {
+    extraRoutes = options.extraRoutes || [];
+    appJsPath = options.appJsPath;
+  }
   const specPaths = swaggerSpec.paths || {};
   const specEndpoints = new Set();
   for (const [path, methods] of Object.entries(specPaths)) {
@@ -632,31 +643,41 @@ function validateSwaggerCompleteness(swaggerSpec, routesDir, extraRoutes = [], a
  * @param {string} [appJsPath] - app.js路径
  */
 function watchRouteChanges(routesDir, appJsPath) {
-  const watchPaths = [routesDir];
-  if (appJsPath) watchPaths.push(path.dirname(appJsPath));
-
   // 使用防抖避免频繁触发
   let debounceTimer = null;
   const changedFiles = new Set();
 
-  for (const watchPath of watchPaths) {
+  function onFileChange(filename) {
+    changedFiles.add(filename);
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      console.log(`🔄 检测到路由文件变更: ${[...changedFiles].join(', ')}`);
+      console.log('   请重启服务以更新Swagger文档');
+      changedFiles.clear();
+    }, 1000);
+  }
+
+  // 监听路由目录中的.js文件
+  try {
+    fs.watch(routesDir, { recursive: false }, (eventType, filename) => {
+      if (filename && filename.endsWith('.js')) {
+        onFileChange(filename);
+      }
+    });
+  } catch (e) {
+    console.warn('⚠️  无法监听路由目录:', e.message);
+  }
+
+  // 单独监听app.js文件
+  if (appJsPath && fs.existsSync(appJsPath)) {
     try {
-      fs.watch(watchPath, { recursive: false }, (eventType, filename) => {
-        if (!filename) return;
-        // 只关注.js路由文件和app.js
-        if (!filename.endsWith('.js')) return;
-        if (watchPath === routesDir || filename === path.basename(appJsPath || '')) {
-          changedFiles.add(filename);
-          if (debounceTimer) clearTimeout(debounceTimer);
-          debounceTimer = setTimeout(() => {
-            console.log(`🔄 检测到路由文件变更: ${[...changedFiles].join(', ')}`);
-            console.log('   请重启服务以更新Swagger文档');
-            changedFiles.clear();
-          }, 1000);
+      fs.watch(appJsPath, (eventType) => {
+        if (eventType === 'change') {
+          onFileChange('app.js');
         }
       });
     } catch (e) {
-      // 静默处理 - 文件监听失败不影响主功能
+      console.warn('⚠️  无法监听app.js:', e.message);
     }
   }
 

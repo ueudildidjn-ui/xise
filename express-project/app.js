@@ -445,7 +445,7 @@ validatePrismaConnection().then(async (connected) => {
     // 启动时验证swagger文档完整性（自动检测app.js中的路由挂载和内联路由）
     const routesDir = path.join(__dirname, 'routes');
     const appJsPath = path.join(__dirname, 'app.js');
-    validateSwaggerCompleteness(swaggerSpec, routesDir, [], appJsPath);
+    validateSwaggerCompleteness(swaggerSpec, routesDir, { appJsPath });
     // 开发模式下监听路由文件变更
     if (config.server.env === 'development') {
       watchRouteChanges(routesDir, appJsPath);
