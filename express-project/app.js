@@ -110,47 +110,55 @@ app.get(swaggerDocsPath + '.json', (req, res) => {
 
 // JWT测试令牌生成API（用于Swagger调试）
 app.post(testTokenPath, async (req, res) => {
-  const { userId, user_id, type } = req.body || {};
-  const validType = type === 'admin' ? 'admin' : 'user';
-  const safeUserId = Number.isInteger(userId) && userId > 0 ? userId : 1;
-  const safeUserIdStr = typeof user_id === 'string' && user_id.trim() ? user_id.trim() : (validType === 'admin' ? 'admin' : 'test_user');
-  let payload;
-  if (validType === 'admin') {
-    payload = { adminId: safeUserId, username: safeUserIdStr, type: 'admin' };
-  } else {
-    payload = { userId: safeUserId, user_id: safeUserIdStr };
-  }
-  const accessToken = generateAccessToken(payload);
-  const refreshToken = generateRefreshToken(payload);
-
-  // 为用户令牌创建会话记录，使认证中间件的会话检查能通过
-  if (validType === 'user') {
-    try {
-      await prisma.userSession.create({
-        data: {
-          user_id: BigInt(safeUserId),
-          token: accessToken,
-          refresh_token: refreshToken,
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          user_agent: 'JWT测试令牌生成器',
-          is_active: true
-        }
-      });
-    } catch (err) {
-      console.warn('测试令牌会话创建失败（用户可能不存在）:', err.message);
+  try {
+    const { userId, user_id, type } = req.body || {};
+    const validType = type === 'admin' ? 'admin' : 'user';
+    const safeUserId = Number.isInteger(userId) && userId > 0 ? userId : 1;
+    const safeUserIdStr = typeof user_id === 'string' && user_id.trim() ? user_id.trim() : (validType === 'admin' ? 'admin' : 'test_user');
+    let payload;
+    if (validType === 'admin') {
+      payload = { adminId: safeUserId, username: safeUserIdStr, type: 'admin' };
+    } else {
+      payload = { userId: safeUserId, user_id: safeUserIdStr };
     }
-  }
+    const accessToken = generateAccessToken(payload);
+    const refreshToken = generateRefreshToken(payload);
 
-  res.json({
-    code: 200,
-    message: '测试令牌生成成功',
-    data: {
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      payload,
-      usage: '复制 access_token，点击 Swagger 页面的 Authorize 按钮粘贴即可调试'
+    // 为用户令牌创建会话记录，使认证中间件的会话检查能通过
+    if (validType === 'user') {
+      try {
+        await prisma.userSession.create({
+          data: {
+            user_id: BigInt(safeUserId),
+            token: accessToken,
+            refresh_token: refreshToken,
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            user_agent: 'JWT测试令牌生成器',
+            is_active: true
+          }
+        });
+      } catch (err) {
+        console.warn('测试令牌会话创建失败（用户可能不存在）:', err.message);
+      }
     }
-  });
+
+    res.json({
+      code: 200,
+      message: '测试令牌生成成功',
+      data: {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        payload,
+        usage: '复制 access_token，点击 Swagger 页面的 Authorize 按钮粘贴即可调试'
+      }
+    });
+  } catch (error) {
+    console.error('测试令牌生成失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      code: RESPONSE_CODES.ERROR,
+      message: '测试令牌生成失败'
+    });
+  }
 });
 
 // JWT测试令牌页面
