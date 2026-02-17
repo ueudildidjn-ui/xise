@@ -20,6 +20,16 @@
             </div>
           </div>
 
+          <div class="security-item" @click="handleApiKeys">
+            <div class="item-icon">
+              <SvgIcon name="setting" width="24" height="24" />
+            </div>
+            <div class="item-content">
+              <div class="item-title">API密钥管理</div>
+              <div class="item-desc">生成和管理API密钥，用于置换JWT访问令牌</div>
+            </div>
+          </div>
+
           <div class="security-item danger" @click="handleDeleteAccount">
             <div class="item-icon">
               <SvgIcon name="delete" width="24" height="24" />
@@ -38,6 +48,9 @@
   <ConfirmDialog v-model:visible="showDeleteModal" title="确认注销账号"
     message="注销账号将永久删除您的所有数据，包括发布的内容、评论、收藏等，此操作不可恢复。确定要继续吗？" type="error" confirm-text="确认注销" cancel-text="取消"
     @confirm="confirmDeleteAccount" @cancel="showDeleteModal = false" @update:visible="showDeleteModal = $event" />
+
+  <!-- API密钥管理弹窗 -->
+  <ApiKeyModal v-model:visible="showApiKeyModal" />
 </template>
 
 <script setup>
@@ -46,6 +59,7 @@ import { useChangePasswordStore } from '@/stores/changePassword'
 import { useUserStore } from '@/stores/user'
 import SvgIcon from '@/components/SvgIcon.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ApiKeyModal from '@/components/modals/ApiKeyModal.vue'
 import { watch, ref } from 'vue'
 
 const props = defineProps({
@@ -61,6 +75,7 @@ const { lock, unlock } = useScrollLock()
 const changePasswordStore = useChangePasswordStore()
 const userStore = useUserStore()
 const showDeleteModal = ref(false)
+const showApiKeyModal = ref(false)
 
 // 处理关闭
 const handleClose = () => {
@@ -72,6 +87,12 @@ const handleClose = () => {
 const handleChangePassword = () => {
   handleClose()
   changePasswordStore.openChangePasswordModal()
+}
+
+// 处理API密钥管理
+const handleApiKeys = () => {
+  handleClose()
+  showApiKeyModal.value = true
 }
 
 // 处理注销账号
