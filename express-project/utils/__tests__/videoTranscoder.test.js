@@ -1,9 +1,9 @@
 /**
  * Video Transcoder Unit Tests
- * Tests for aspect ratio preservation and resolution selection
+ * Tests for aspect ratio preservation, resolution selection, and rotation handling
  */
 
-const { calculateAspectRatioSize, selectResolutions, buildScaleFilter } = require('../videoTranscoder');
+const { calculateAspectRatioSize, selectResolutions, buildScaleFilter, extractRotation } = require('../videoTranscoder');
 const config = require('../../config/config');
 
 describe('Video Transcoder - Aspect Ratio Preservation', () => {
@@ -173,7 +173,7 @@ describe('Video Transcoder - Aspect Ratio Preservation', () => {
   });
 
   describe('buildScaleFilter', () => {
-    test('should use scale=-2:height format with lanczos flag', () => {
+    test('should use scale=-2:height format with lanczos flag (no rotation)', () => {
       const result = buildScaleFilter(0, { width: 1280, height: 720 });
       expect(result).toBe('-filter:v:0 scale=-2:720:flags=lanczos');
     });
@@ -204,6 +204,128 @@ describe('Video Transcoder - Aspect Ratio Preservation', () => {
     test('should handle portrait video resolution', () => {
       const result = buildScaleFilter(1, { width: 204, height: 360 });
       expect(result).toBe('-filter:v:1 scale=-2:360:flags=lanczos');
+    });
+
+    // Rotation handling tests (Android portrait video compatibility)
+    test('should prepend transpose=1 for 90° rotation (Android portrait video)', () => {
+      const result = buildScaleFilter(0, { width: 1080, height: 1920 }, 90);
+      expect(result).toBe('-filter:v:0 transpose=1,scale=-2:1920:flags=lanczos');
+    });
+
+    test('should prepend transpose=2 for 270° rotation', () => {
+      const result = buildScaleFilter(0, { width: 1080, height: 1920 }, 270);
+      expect(result).toBe('-filter:v:0 transpose=2,scale=-2:1920:flags=lanczos');
+    });
+
+    test('should prepend hflip,vflip for 180° rotation', () => {
+      const result = buildScaleFilter(0, { width: 1920, height: 1080 }, 180);
+      expect(result).toBe('-filter:v:0 hflip,vflip,scale=-2:1080:flags=lanczos');
+    });
+
+    test('should not add rotation filter for 0° rotation', () => {
+      const result = buildScaleFilter(0, { width: 1920, height: 1080 }, 0);
+      expect(result).toBe('-filter:v:0 scale=-2:1080:flags=lanczos');
+      expect(result).not.toContain('transpose');
+      expect(result).not.toContain('hflip');
+    });
+
+    test('should handle rotation with correct stream index', () => {
+      const result = buildScaleFilter(2, { width: 720, height: 1280 }, 90);
+      expect(result).toBe('-filter:v:2 transpose=1,scale=-2:1280:flags=lanczos');
+    });
+
+    test('should default to no rotation when rotation parameter is omitted', () => {
+      const result = buildScaleFilter(0, { width: 1920, height: 1080 });
+      expect(result).toBe('-filter:v:0 scale=-2:1080:flags=lanczos');
+      expect(result).not.toContain('transpose');
+    });
+  });
+
+  describe('extractRotation', () => {
+    test('should extract rotation from tags.rotate (Android common format)', () => {
+      const stream = { tags: { rotate: '90' } };
+      expect(extractRotation(stream)).toBe(90);
+    });
+
+    test('should extract 270° rotation from tags', () => {
+      const stream = { tags: { rotate: '270' } };
+      expect(extractRotation(stream)).toBe(270);
+    });
+
+    test('should extract 180° rotation from tags', () => {
+      const stream = { tags: { rotate: '180' } };
+      expect(extractRotation(stream)).toBe(180);
+    });
+
+    test('should return 0 for no rotation metadata', () => {
+      const stream = {};
+      expect(extractRotation(stream)).toBe(0);
+    });
+
+    test('should return 0 for stream with empty tags', () => {
+      const stream = { tags: {} };
+      expect(extractRotation(stream)).toBe(0);
+    });
+
+    test('should extract rotation from side_data Display Matrix (iOS/newer FFmpeg)', () => {
+      const stream = {
+        side_data_list: [
+          { side_data_type: 'Display Matrix', rotation: -90 }
+        ]
+      };
+      // side_data rotation=-90 → negated → 90
+      expect(extractRotation(stream)).toBe(90);
+    });
+
+    test('should extract 270° from side_data rotation=90', () => {
+      const stream = {
+        side_data_list: [
+          { side_data_type: 'Display Matrix', rotation: 90 }
+        ]
+      };
+      // side_data rotation=90 → negated → -90 → normalized → 270
+      expect(extractRotation(stream)).toBe(270);
+    });
+
+    test('should prefer tags.rotate over side_data', () => {
+      const stream = {
+        tags: { rotate: '90' },
+        side_data_list: [
+          { side_data_type: 'Display Matrix', rotation: -270 }
+        ]
+      };
+      expect(extractRotation(stream)).toBe(90);
+    });
+
+    test('should handle non-standard rotation values and normalize', () => {
+      const stream = { tags: { rotate: '450' } };
+      // 450 % 360 = 90
+      expect(extractRotation(stream)).toBe(90);
+    });
+
+    test('should handle negative rotation from tags', () => {
+      const stream = { tags: { rotate: '-90' } };
+      // -90 → normalize → 270
+      expect(extractRotation(stream)).toBe(270);
+    });
+
+    test('should handle side_data without Display Matrix', () => {
+      const stream = {
+        side_data_list: [
+          { side_data_type: 'Other Data' }
+        ]
+      };
+      expect(extractRotation(stream)).toBe(0);
+    });
+
+    test('should handle typical Redmi K80 Pro portrait video metadata', () => {
+      // Android devices like Redmi K80 Pro record portrait as landscape+rotation=90
+      const stream = {
+        width: 1920,
+        height: 1080,
+        tags: { rotate: '90' }
+      };
+      expect(extractRotation(stream)).toBe(90);
     });
   });
 });

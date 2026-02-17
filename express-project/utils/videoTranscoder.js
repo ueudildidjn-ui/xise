@@ -20,9 +20,40 @@ if (config.videoTranscoding.ffprobePath) {
 }
 
 /**
+ * 从视频流元数据中提取旋转角度
+ * Android设备（如Redmi K80 Pro）录制竖屏视频时，编码为横屏+rotation元数据
+ * iOS设备可能直接以竖屏编码或使用Display Matrix
+ * @param {Object} videoStream - ffprobe返回的视频流对象
+ * @returns {number} 标准化旋转角度 (0, 90, 180, 270)
+ */
+function extractRotation(videoStream) {
+  let rotation = 0;
+  
+  // 方式1: 从tags.rotate获取（Android设备最常用的方式）
+  if (videoStream.tags && videoStream.tags.rotate) {
+    rotation = parseInt(videoStream.tags.rotate, 10);
+  }
+  // 方式2: 从side_data Display Matrix获取（新版FFmpeg/部分iOS设备）
+  else if (videoStream.side_data_list) {
+    const displayMatrix = videoStream.side_data_list.find(
+      sd => sd.side_data_type === 'Display Matrix'
+    );
+    if (displayMatrix && typeof displayMatrix.rotation === 'number') {
+      // side_data中的rotation值通常为负数（如-90），取反以统一约定
+      rotation = Math.round(-displayMatrix.rotation);
+    }
+  }
+  
+  // 标准化为 0, 90, 180, 270
+  rotation = ((rotation % 360) + 360) % 360;
+  
+  return rotation;
+}
+
+/**
  * 使用 ffprobe 分析视频信息
  * @param {string} videoPath - 视频文件路径
- * @returns {Promise<Object>} 视频信息
+ * @returns {Promise<Object>} 视频信息（width/height为显示尺寸，已考虑旋转）
  */
 async function analyzeVideo(videoPath) {
   return new Promise((resolve, reject) => {
@@ -39,9 +70,21 @@ async function analyzeVideo(videoPath) {
         return reject(new Error('未找到视频流'));
       }
 
+      // 提取旋转元数据（Android设备常用rotation标签，iOS可能使用Display Matrix）
+      // 修复：Android竖屏视频(如Redmi K80 Pro)以横屏1920x1080编码+rotation=90元数据存储
+      // 不处理旋转会导致转码后视频拉伸变形
+      const rotation = extractRotation(videoStream);
+      
+      // 根据旋转角度确定实际显示尺寸
+      // 90°/270°旋转需要交换宽高，确保分辨率选择和缩放基于正确的显示方向
+      const isRotated = (rotation === 90 || rotation === 270);
+      const displayWidth = isRotated ? videoStream.height : videoStream.width;
+      const displayHeight = isRotated ? videoStream.width : videoStream.height;
+
       const info = {
-        width: videoStream.width,
-        height: videoStream.height,
+        width: displayWidth,
+        height: displayHeight,
+        rotation: rotation,
         duration: metadata.format.duration,
         bitrate: metadata.format.bit_rate,
         codec: videoStream.codec_name,
@@ -54,6 +97,9 @@ async function analyzeVideo(videoPath) {
       };
 
       console.log('📊 视频分析结果:', info);
+      if (rotation !== 0) {
+        console.log(`🔄 检测到视频旋转: ${rotation}°, 编码尺寸: ${videoStream.width}x${videoStream.height}, 显示尺寸: ${displayWidth}x${displayHeight}`);
+      }
       resolve(info);
     });
   });
@@ -84,18 +130,50 @@ function calculateAspectRatioSize(sourceWidth, sourceHeight, targetHeight) {
 }
 
 /**
- * 构建FFmpeg scale滤镜参数
+ * 构建FFmpeg视频滤镜参数（包含旋转校正和缩放）
  * 使用 scale=-2:height 保持宽高比（高度固定，宽度自动等比+偶数），
  * 避免固定两个维度导致拉伸变形，并使用lanczos高质量缩放算法
+ * 
+ * 旋转处理（修复Android竖屏视频拉伸问题）：
+ * - 90°: transpose=1（顺时针旋转90°）
+ * - 270°: transpose=2（逆时针旋转90°）
+ * - 180°: hflip,vflip（水平+垂直翻转）
+ * 
  * @param {number} streamIndex - 视频流索引
  * @param {Object} resolution - 分辨率对象 { width, height, isOriginal }
+ * @param {number} rotation - 视频旋转角度 (0, 90, 180, 270)，默认0
  * @returns {string} FFmpeg filter参数字符串
  */
-function buildScaleFilter(streamIndex, resolution) {
+function buildScaleFilter(streamIndex, resolution, rotation = 0) {
   // 使用 scale=-2:height，让FFmpeg自动计算宽度以保持宽高比
   // -2 保证宽度为偶数（H.264编码要求）
   // flags=lanczos 使用高质量的Lanczos缩放算法
-  return `-filter:v:${streamIndex} scale=-2:${resolution.height}:flags=lanczos`;
+  const scaleFilter = `scale=-2:${resolution.height}:flags=lanczos`;
+  
+  // 根据旋转角度添加旋转校正滤镜
+  // 修复Android设备（如Redmi K80 Pro）竖屏视频以横屏+rotation元数据存储的问题
+  const normalizedRotation = ((rotation % 360) + 360) % 360;
+  let filterChain;
+  
+  switch (normalizedRotation) {
+    case 90:
+      // 顺时针旋转90°（竖屏视频最常见的情况）
+      filterChain = `transpose=1,${scaleFilter}`;
+      break;
+    case 270:
+      // 逆时针旋转90°
+      filterChain = `transpose=2,${scaleFilter}`;
+      break;
+    case 180:
+      // 旋转180°
+      filterChain = `hflip,vflip,${scaleFilter}`;
+      break;
+    default:
+      // 无旋转
+      filterChain = scaleFilter;
+  }
+  
+  return `-filter:v:${streamIndex} ${filterChain}`;
 }
 
 /**
@@ -275,6 +353,11 @@ async function convertToDash(inputPath, userId, progressCallback) {
     return new Promise((resolve, reject) => {
       const command = ffmpeg(inputPath);
 
+      // 禁用FFmpeg自动旋转，由滤镜链手动处理旋转
+      // 防止自动旋转与手动transpose滤镜产生双重旋转
+      // 这是修复Android竖屏视频（如Redmi K80 Pro）拉伸变形的关键
+      command.inputOptions(['-noautorotate']);
+
       // 设置视频编码器
       command.videoCodec('libx264');
       
@@ -309,7 +392,7 @@ async function convertToDash(inputPath, userId, progressCallback) {
       selectedResolutions.forEach((resolution, index) => {
         const videoOptions = [
           `-map 0:v:0`,
-          buildScaleFilter(index, resolution),
+          buildScaleFilter(index, resolution, videoInfo.rotation),
           `-c:v:${index} libx264`,
           `-profile:v:${index} ${ffmpegOpts.profile}`,
           `-preset:v:${index} ${ffmpegOpts.preset}`,
@@ -659,6 +742,7 @@ async function generatePreviewVideo(inputPath, duration, userId) {
 
 module.exports = {
   analyzeVideo,
+  extractRotation,
   selectResolutions,
   calculateAspectRatioSize,
   buildScaleFilter,
