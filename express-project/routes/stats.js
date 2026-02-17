@@ -4,6 +4,18 @@ const { success, error } = require('../utils/responseHelper');
 const { getMultipleTableStats } = require('../utils/statsHelper');
 
 // 获取系统统计信息
+/**
+ * @swagger
+ * /api/stats:
+ *   get:
+ *     summary: 获取全局统计信息
+ *     tags: [统计]
+ *     responses:
+ *       200:
+ *         description: 成功
+ *       500:
+ *         description: 服务器错误
+ */
 router.get('/', async (req, res) => {
   try {
     // 定义需要统计的表
