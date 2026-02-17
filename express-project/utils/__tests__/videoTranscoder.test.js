@@ -1,9 +1,10 @@
 /**
  * Video Transcoder Unit Tests
- * Tests for aspect ratio preservation, resolution selection, and rotation handling
+ * Tests for aspect ratio preservation, resolution selection, rotation handling,
+ * and HEVC portrait video compatibility
  */
 
-const { calculateAspectRatioSize, selectResolutions, buildScaleFilter, extractRotation } = require('../videoTranscoder');
+const { calculateAspectRatioSize, selectResolutions, buildScaleFilter, extractRotation, isRotationAlreadyApplied } = require('../videoTranscoder');
 const config = require('../../config/config');
 
 describe('Video Transcoder - Aspect Ratio Preservation', () => {
@@ -326,6 +327,64 @@ describe('Video Transcoder - Aspect Ratio Preservation', () => {
         tags: { rotate: '90' }
       };
       expect(extractRotation(stream)).toBe(90);
+    });
+  });
+
+  describe('isRotationAlreadyApplied (HEVC portrait video fix)', () => {
+    // HEVC编码器已应用旋转的场景（应跳过旋转）
+    test('should detect HEVC portrait video with rotation=90 as already applied', () => {
+      // HEVC编码器直接以竖屏编码(1080x1920) + rotation=90元数据
+      expect(isRotationAlreadyApplied(1080, 1920, 90)).toBe(true);
+    });
+
+    test('should detect HEVC portrait video with rotation=270 as already applied', () => {
+      expect(isRotationAlreadyApplied(1080, 1920, 270)).toBe(true);
+    });
+
+    test('should detect non-standard portrait resolution as already applied', () => {
+      // 非标准竖屏分辨率（如某些新机型）
+      expect(isRotationAlreadyApplied(720, 1280, 90)).toBe(true);
+    });
+
+    // H.264标准行为（编码为横屏+rotation，不应跳过旋转）
+    test('should NOT skip rotation for H.264-style landscape encoding with rotation=90', () => {
+      // H.264标准行为：横屏编码(1920x1080) + rotation=90
+      expect(isRotationAlreadyApplied(1920, 1080, 90)).toBe(false);
+    });
+
+    test('should NOT skip rotation for H.264-style landscape encoding with rotation=270', () => {
+      expect(isRotationAlreadyApplied(1920, 1080, 270)).toBe(false);
+    });
+
+    // 无旋转或180°旋转（不受影响）
+    test('should NOT skip for rotation=0 (no rotation)', () => {
+      expect(isRotationAlreadyApplied(1080, 1920, 0)).toBe(false);
+    });
+
+    test('should NOT skip for rotation=180 (flip only, no orientation change)', () => {
+      // 180°旋转只是翻转，不改变宽高方向，始终需要应用
+      expect(isRotationAlreadyApplied(1080, 1920, 180)).toBe(false);
+    });
+
+    test('should NOT skip for landscape video with rotation=180', () => {
+      expect(isRotationAlreadyApplied(1920, 1080, 180)).toBe(false);
+    });
+
+    // 正方形视频（宽=高）
+    test('should NOT skip for square video with rotation=90', () => {
+      // 正方形视频无所谓方向，编码宽度不小于高度
+      expect(isRotationAlreadyApplied(1080, 1080, 90)).toBe(false);
+    });
+
+    // 模拟真实设备场景
+    test('should handle Redmi K80 Pro HEVC portrait video (1080x1920+rotation=90)', () => {
+      // Redmi K80 Pro HEVC编码：直接以竖屏1080x1920编码，但保留rotation=90
+      expect(isRotationAlreadyApplied(1080, 1920, 90)).toBe(true);
+    });
+
+    test('should handle H.264 portrait video from older Android (1920x1080+rotation=90)', () => {
+      // 旧版Android H.264编码：横屏1920x1080编码 + rotation=90
+      expect(isRotationAlreadyApplied(1920, 1080, 90)).toBe(false);
     });
   });
 });

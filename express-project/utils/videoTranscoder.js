@@ -53,6 +53,30 @@ function extractRotation(videoStream) {
 }
 
 /**
+ * 判断视频的旋转是否已由编码器应用（常见于HEVC编码的竖屏视频）
+ * 
+ * H.264编码器通常以横屏方向编码（如1920x1080）+ rotation元数据表示竖屏
+ * HEVC编码器（如新款Android设备Redmi K80 Pro）可能直接以竖屏编码（如1080x1920），
+ * 但仍保留rotation=90元数据（H.264遗留行为），导致若再次应用旋转会使竖屏变横屏
+ * 
+ * 检测逻辑：当rotation为90°/270°时，期望编码尺寸为横屏（宽>高）
+ * 如果编码尺寸已是竖屏（宽<高），说明编码器已处理旋转，应跳过
+ * 
+ * @param {number} encodedWidth - 编码宽度（videoStream.width）
+ * @param {number} encodedHeight - 编码高度（videoStream.height）
+ * @param {number} rotation - 从元数据提取的旋转角度
+ * @returns {boolean} true表示旋转已由编码器应用，应跳过
+ */
+function isRotationAlreadyApplied(encodedWidth, encodedHeight, rotation) {
+  if (rotation !== 90 && rotation !== 270) {
+    return false;
+  }
+  // 90°/270°旋转意味着编码应该是横屏（宽>高），旋转后才变成竖屏
+  // 如果编码已是竖屏（宽<高），说明HEVC等编码器已经在编码时应用了旋转
+  return encodedWidth < encodedHeight;
+}
+
+/**
  * 使用 ffprobe 分析视频信息
  * @param {string} videoPath - 视频文件路径
  * @returns {Promise<Object>} 视频信息（width/height为显示尺寸，已考虑旋转）
@@ -73,20 +97,24 @@ async function analyzeVideo(videoPath) {
       }
 
       // 提取旋转元数据（Android设备常用rotation标签，iOS可能使用Display Matrix）
-      // 修复：Android竖屏视频(如Redmi K80 Pro)以横屏1920x1080编码+rotation=90元数据存储
-      // 不处理旋转会导致转码后视频拉伸变形
-      const rotation = extractRotation(videoStream);
+      const rawRotation = extractRotation(videoStream);
       
-      // 根据旋转角度确定实际显示尺寸
-      // 90°/270°旋转需要交换宽高，确保分辨率选择和缩放基于正确的显示方向
-      const isRotated = (rotation === 90 || rotation === 270);
+      // 检测HEVC等编码器是否已在编码阶段应用旋转
+      // 修复：HEVC竖屏视频(如Redmi K80 Pro拍摄的1080x1920视频)仍携带rotation=90元数据
+      // 直接应用旋转会导致竖屏视频错误地变成横屏
+      const rotationApplied = isRotationAlreadyApplied(videoStream.width, videoStream.height, rawRotation);
+      const effectiveRotation = rotationApplied ? 0 : rawRotation;
+      
+      // 根据有效旋转角度确定实际显示尺寸
+      // 仅当旋转未被编码器应用时，才需要交换宽高
+      const isRotated = (effectiveRotation === 90 || effectiveRotation === 270);
       const displayWidth = isRotated ? videoStream.height : videoStream.width;
       const displayHeight = isRotated ? videoStream.width : videoStream.height;
 
       const info = {
         width: displayWidth,
         height: displayHeight,
-        rotation: rotation,
+        rotation: effectiveRotation,
         duration: metadata.format.duration,
         bitrate: metadata.format.bit_rate,
         codec: videoStream.codec_name,
@@ -99,8 +127,12 @@ async function analyzeVideo(videoPath) {
       };
 
       console.log('📊 视频分析结果:', info);
-      if (rotation !== 0) {
-        console.log(`🔄 检测到视频旋转: ${rotation}°, 编码尺寸: ${videoStream.width}x${videoStream.height}, 显示尺寸: ${displayWidth}x${displayHeight}`);
+      if (rawRotation !== 0) {
+        if (rotationApplied) {
+          console.log(`🔄 检测到旋转元数据: ${rawRotation}°, 但视频已以正确方向编码(${videoStream.codec_name}: ${videoStream.width}x${videoStream.height}), 跳过旋转避免竖屏变横屏`);
+        } else {
+          console.log(`🔄 应用视频旋转: ${rawRotation}°, 编码尺寸: ${videoStream.width}x${videoStream.height}, 显示尺寸: ${displayWidth}x${displayHeight}`);
+        }
       }
       resolve(info);
     });
@@ -747,6 +779,7 @@ async function generatePreviewVideo(inputPath, duration, userId) {
 module.exports = {
   analyzeVideo,
   extractRotation,
+  isRotationAlreadyApplied,
   selectResolutions,
   calculateAspectRatioSize,
   buildScaleFilter,
