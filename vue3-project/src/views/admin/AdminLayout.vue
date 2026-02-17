@@ -165,7 +165,7 @@ const isFilterOpen = ref(false)
 
 // 判断当前页面是否需要显示筛选按钮
 const shouldShowFilter = computed(() => {
-  const noFilterRoutes = ['/admin/api-docs', '/admin/monitor']
+  const noFilterRoutes = ['/admin/monitor']
   return !noFilterRoutes.includes(route.path)
 })
 
@@ -265,7 +265,6 @@ watch(isFilterOpen, (newValue) => {
 
 // 菜单项
 const menuItems = [
-  { path: '/admin/api-docs', title: 'API文档', icon: 'data' },
   { path: '/admin/monitor', title: '动态监控', icon: 'monitor' },
   { path: '/admin/system-settings', title: '系统设置', icon: 'setting' },
   { path: '/admin/notifications', title: '消息管理', icon: 'notification' },
@@ -297,7 +296,6 @@ const currentPageTitle = computed(() => {
 // 当前页面描述
 const currentPageDescription = computed(() => {
   const descriptions = {
-    '/admin/api-docs': '查看和测试API接口文档',
     '/admin/monitor': '查看系统最近动态和活动监控',
     '/admin/system-settings': '配置系统级设置，如访问控制、AI审核等',
     '/admin/notifications': '管理消息通知，支持已读未读统计和重新发送',

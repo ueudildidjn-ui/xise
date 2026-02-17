@@ -124,7 +124,7 @@ const handleSubmit = async () => {
 
       // 延迟跳转，让用户看到成功提示
       setTimeout(() => {
-        router.push('/admin/api-docs')
+        router.push('/admin/monitor')
       }, 1000)
     } else {
       unifiedMessage.value = result.message || '登录失败，请检查用户名和密码'

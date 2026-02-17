@@ -69,7 +69,7 @@ VIDEO_MAX_SIZE=100mb
 3. **config/api.js**
    - 添加注释说明 `maxFileSize` 是默认值，实际使用时从服务器获取
 
-4. **views/admin/ApiDocs.vue 和 doc/API_DOCS.md**
+4. **doc/API_DOCS.md**
    - 更新文档说明大小限制可通过环境变量配置
 
 ## 测试
