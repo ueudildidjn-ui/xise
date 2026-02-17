@@ -182,7 +182,9 @@ function parseRouteFile(filePath, basePath) {
       const bodyDestructRegex = /(?:const|let|var)\s*\{([^}]+)\}\s*=\s*req\.body/g;
       let bodyMatch;
       while ((bodyMatch = bodyDestructRegex.exec(afterContext)) !== null) {
-        const params = bodyMatch[1].split(',');
+        // 先移除内联注释，避免注释内容被误识别为参数名
+        const cleanedContent = bodyMatch[1].replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+        const params = cleanedContent.split(',');
         for (const param of params) {
           let cleanParam = param.trim();
           // 处理默认值 如 title = ''
@@ -474,10 +476,61 @@ function mergeWithAutoGen(existingSpec, routesDir) {
   return spec;
 }
 
+/**
+ * 验证swagger文档的完整性
+ * 对比路由文件中的实际路由与swagger文档中的路由，报告遗漏
+ * 建议在服务启动时调用，确保API变更后文档不会遗漏
+ * @param {Object} swaggerSpec - 最终的swagger spec对象
+ * @param {string} routesDir - 路由文件目录
+ * @param {Array<{method: string, path: string}>} extraRoutes - app.js中额外定义的路由
+ */
+function validateSwaggerCompleteness(swaggerSpec, routesDir, extraRoutes = []) {
+  const specPaths = swaggerSpec.paths || {};
+  const specEndpoints = new Set();
+  for (const [path, methods] of Object.entries(specPaths)) {
+    for (const method of Object.keys(methods)) {
+      if (['get', 'post', 'put', 'delete', 'patch'].includes(method)) {
+        specEndpoints.add(`${method.toUpperCase()} ${path}`);
+      }
+    }
+  }
+
+  const allRoutes = scanRoutes(routesDir);
+  const missing = [];
+
+  // 检查路由文件中的路由
+  for (const route of allRoutes) {
+    const key = `${route.method.toUpperCase()} ${route.path}`;
+    if (!specEndpoints.has(key)) {
+      missing.push(key);
+    }
+  }
+
+  // 检查app.js中额外定义的路由
+  for (const route of extraRoutes) {
+    const swaggerPath = route.path.replace(/:(\w+)/g, '{$1}');
+    const key = `${route.method.toUpperCase()} ${swaggerPath}`;
+    if (!specEndpoints.has(key)) {
+      missing.push(key);
+    }
+  }
+
+  if (missing.length > 0) {
+    console.warn(`⚠️  Swagger文档缺失 ${missing.length} 个API路由:`);
+    missing.forEach(m => console.warn(`   - ${m}`));
+    console.warn('   请为以上路由添加 @swagger JSDoc注解或在swagger配置中手动添加');
+  } else {
+    console.log('✅ Swagger文档完整: 所有API路由均已覆盖');
+  }
+
+  return missing;
+}
+
 module.exports = {
   scanRoutes,
   mergeWithAutoGen,
   parseRouteFile,
+  validateSwaggerCompleteness,
   ROUTE_FILE_MAP,
   ROUTE_TAG_MAP
 };

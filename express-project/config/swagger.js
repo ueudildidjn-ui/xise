@@ -185,6 +185,33 @@ const jsdocSpec = swaggerJsdoc(options);
 const routesDir = path.join(__dirname, '..', 'routes');
 const swaggerSpec = mergeWithAutoGen(jsdocSpec, routesDir);
 
+// 添加健康检查接口文档
+swaggerSpec.paths['/api/health'] = {
+  get: {
+    summary: '健康检查',
+    description: '服务器健康检查接口，返回服务状态和运行时间',
+    tags: ['调试工具'],
+    responses: {
+      '200': {
+        description: '服务正常',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                code: { type: 'integer', example: 200 },
+                message: { type: 'string', example: 'OK' },
+                timestamp: { type: 'string', format: 'date-time', description: '当前时间' },
+                uptime: { type: 'number', description: '服务运行时间（秒）' }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+};
+
 // 添加JWT测试令牌接口文档
 swaggerSpec.paths['/api/test-token'] = {
   get: {

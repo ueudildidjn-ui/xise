@@ -34,6 +34,7 @@ const { loadSettingsFromRedis } = require('./utils/settingsService');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const { generateAccessToken, generateRefreshToken } = require('./utils/jwt');
+const { validateSwaggerCompleteness } = require('./utils/swaggerAutoGen');
 
 // 加载环境变量
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
@@ -441,6 +442,13 @@ validatePrismaConnection().then(async (connected) => {
     if (!connected) {
       console.warn('● 警告: 数据库连接失败，部分功能可能不可用');
     }
+    // 启动时验证swagger文档完整性
+    const routesDir = path.join(__dirname, 'routes');
+    validateSwaggerCompleteness(swaggerSpec, routesDir, [
+      { method: 'GET', path: '/api/health' },
+      { method: 'POST', path: '/api/test-token' },
+      { method: 'GET', path: '/api/test-token' }
+    ]);
   });
 });
 

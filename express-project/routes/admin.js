@@ -804,6 +804,9 @@ router.post('/posts', adminAuth, async (req, res) => {
  *                 type: string
  *               cover_url:
  *                 type: string
+ *               video:
+ *                 type: object
+ *                 description: 视频信息对象
  *     responses:
  *       200:
  *         description: 成功
