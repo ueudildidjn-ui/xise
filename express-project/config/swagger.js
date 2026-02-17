@@ -11,8 +11,7 @@ const path = require('path');
 const swaggerJsdoc = require('swagger-jsdoc');
 const { mergeWithAutoGen } = require('../utils/swaggerAutoGen');
 
-const config = require('./config');
-const port = config.server.port;
+const port = require('./config').server.port;
 
 const options = {
   definition: {

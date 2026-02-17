@@ -77,7 +77,7 @@ function parseRouteFile(filePath, basePath) {
     const beforeContext = source.substring(Math.max(0, matchPos - 200), matchPos);
     const afterContext = source.substring(matchPos, Math.min(source.length, matchPos + 3000));
 
-    // 检测中间件
+    // 检测中间件 - 支持带中间件和不带中间件的路由
     const middlewareMatch = afterContext.match(/router\.\w+\([^,]+,\s*([\w,\s]+),\s*(?:async\s+)?\(/);
     let authRequired = false;
     let isAdmin = false;
@@ -85,6 +85,9 @@ function parseRouteFile(filePath, basePath) {
       const middlewares = middlewareMatch[1].split(',').map(m => m.trim());
       authRequired = middlewares.some(m => requiresAuth(m));
       isAdmin = middlewares.some(m => m === 'adminAuth');
+    } else {
+      // 无中间件的路由 - 检查是否直接跟 handler
+      authRequired = false;
     }
 
     // 检查是否已有 @swagger 注解
@@ -115,7 +118,7 @@ function parseRouteFile(filePath, basePath) {
           type = 'integer';
         }
         let isRequired = false;
-        if (surrounding.includes(`!${name}`) || surrounding.includes(`!req.query.${name}`)) {
+        if (surrounding.includes(`!req.query.${name}`)) {
           isRequired = true;
         }
         queryParams.set(name, { type, required: isRequired });
@@ -146,6 +149,7 @@ function parseRouteFile(filePath, basePath) {
           if (cleanParam && !cleanParam.startsWith('...')) {
             let type = 'string';
             if (defaultValue !== undefined) {
+              // 检测未引号包裹的布尔值字面量
               if (defaultValue === 'true' || defaultValue === 'false') type = 'boolean';
               else if (defaultValue === '[]') type = 'array';
               else if (defaultValue === '{}') type = 'object';
@@ -244,11 +248,14 @@ function generateSwaggerPath(route) {
     const properties = {};
     for (const [name, info] of Object.entries(route.bodyParams)) {
       const prop = { type: info.type || 'string' };
-      if (info.default !== undefined && info.default !== "''" && info.default !== '""') {
-        try {
-          prop.default = JSON.parse(info.default);
-        } catch (e) {
-          // 保持字符串默认值
+      if (info.default !== undefined) {
+        // 仅对有效的 JSON 字面量设置默认值（数字、布尔值、null、[]、{}）
+        if (/^(\d+|true|false|null|\[\]|\{\})$/.test(info.default)) {
+          try {
+            prop.default = JSON.parse(info.default);
+          } catch (e) {
+            // 忽略无法解析的值
+          }
         }
       }
       properties[name] = prop;
