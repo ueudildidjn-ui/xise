@@ -291,6 +291,16 @@ const claimExtendedEarnings = async (userId) => {
 };
 
 // 获取创作者中心配置
+/**
+ * @swagger
+ * /api/creator-center/config:
+ *   get:
+ *     summary: 获取创作者中心配置
+ *     tags: [创作中心]
+ *     responses:
+ *       200:
+ *         description: 成功
+ */
 router.get('/config', (req, res) => {
   const platformFeeRate = getPlatformFeeRate();
   const creatorShareRate = 1 - platformFeeRate;
@@ -325,6 +335,18 @@ router.get('/config', (req, res) => {
 });
 
 // 获取创作者收益概览
+/**
+ * @swagger
+ * /api/creator-center/overview:
+ *   get:
+ *     summary: 获取创作者收益概览
+ *     tags: [创作中心]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ */
 router.get('/overview', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -389,6 +411,26 @@ router.get('/overview', authenticateToken, async (req, res) => {
 });
 
 // 获取趋势数据（过去7天的每日统计）
+/**
+ * @swagger
+ * /api/creator-center/trends:
+ *   get:
+ *     summary: 获取趋势数据
+ *     tags: [创作中心]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 7
+ *         required: false
+ *         description: 天数
+ *     responses:
+ *       200:
+ *         description: 成功
+ */
 router.get('/trends', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -515,6 +557,39 @@ router.get('/trends', authenticateToken, async (req, res) => {
 });
 
 // 获取收益明细列表
+/**
+ * @swagger
+ * /api/creator-center/earnings-log:
+ *   get:
+ *     summary: 获取收益明细列表
+ *     tags: [创作中心]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         required: false
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         required: false
+ *         description: 每页数量
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: 收益类型
+ *     responses:
+ *       200:
+ *         description: 成功
+ */
 router.get('/earnings-log', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -599,6 +674,33 @@ router.get('/earnings-log', authenticateToken, async (req, res) => {
 });
 
 // 获取付费内容列表及销售统计
+/**
+ * @swagger
+ * /api/creator-center/paid-content:
+ *   get:
+ *     summary: 获取付费内容列表及销售统计
+ *     tags: [创作中心]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         required: false
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         required: false
+ *         description: 每页数量
+ *     responses:
+ *       200:
+ *         description: 成功
+ */
 router.get('/paid-content', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -685,6 +787,30 @@ router.get('/paid-content', authenticateToken, async (req, res) => {
 });
 
 // 收益提现到石榴点余额
+/**
+ * @swagger
+ * /api/creator-center/withdraw:
+ *   post:
+ *     summary: 收益提现到石榴点余额
+ *     tags: [创作中心]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: 提现金额
+ *     responses:
+ *       200:
+ *         description: 成功
+ */
 router.post('/withdraw', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -810,6 +936,18 @@ router.post('/withdraw', authenticateToken, async (req, res) => {
 });
 
 // 领取今日激励奖励（将扩展收益加入可提现余额）
+/**
+ * @swagger
+ * /api/creator-center/claim-incentive:
+ *   post:
+ *     summary: 领取今日激励奖励
+ *     tags: [创作中心]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ */
 router.post('/claim-incentive', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -846,6 +984,31 @@ router.post('/claim-incentive', authenticateToken, async (req, res) => {
 });
 
 // 获取质量奖励收益详情
+/**
+ * @swagger
+ * /api/creator-center/quality-rewards:
+ *   get:
+ *     summary: 获取质量奖励收益详情
+ *     tags: [创作中心]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         required: false
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         required: false
+ *         description: 每页数量
+ *     responses:
+ *       200:
+ *         description: 成功
+ */
 router.get('/quality-rewards', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
