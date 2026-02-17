@@ -111,7 +111,7 @@ app.get(`/api/${SWAGGER_DOCS_PATH}.json`, (req, res) => {
 });
 
 // JWT测试令牌生成API（用于Swagger调试，使用复杂路径防止未授权访问）
-app.post(`/api/${JWT_TEST_TOKEN_PATH}`, (req, res) => {
+app.post(`/api/${JWT_TEST_TOKEN_PATH}`, async (req, res) => {
   const { userId, user_id, type } = req.body || {};
   const validType = type === 'admin' ? 'admin' : 'user';
   const safeUserId = Number.isInteger(userId) && userId > 0 ? userId : 1;
@@ -124,6 +124,26 @@ app.post(`/api/${JWT_TEST_TOKEN_PATH}`, (req, res) => {
   }
   const accessToken = generateAccessToken(payload);
   const refreshToken = generateRefreshToken(payload);
+
+  // 为普通用户测试令牌创建会话记录，否则认证中间件会拒绝该令牌
+  if (validType === 'user') {
+    try {
+      await prisma.userSession.create({
+        data: {
+          user_id: BigInt(safeUserId),
+          token: accessToken,
+          refresh_token: refreshToken,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          user_agent: 'swagger-test',
+          is_active: true
+        }
+      });
+    } catch (e) {
+      // 会话创建失败不阻止令牌返回（例如用户不存在时外键约束失败）
+      console.warn('测试令牌会话创建失败:', e.message);
+    }
+  }
+
   res.json({
     code: 200,
     message: '测试令牌生成成功',
