@@ -16,6 +16,23 @@ const { email: emailConfig, notificationChannels: notifChannelsConfig } = requir
 // 使用 Redis 持久化的设置服务
 
 // 兼容旧接口：获取整体AI审核状态
+/**
+ * @swagger
+ * /api/admin/ai-review-status:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取AI审核状态
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/ai-review-status', adminAuth, (req, res) => {
   const usernameEnabled = settingsService.isAiUsernameReviewEnabled()
   const contentEnabled = settingsService.isAiContentReviewEnabled()
@@ -31,6 +48,34 @@ router.get('/ai-review-status', adminAuth, (req, res) => {
 })
 
 // 兼容旧接口：切换整体AI审核（同时切换用户名和内容审核）
+/**
+ * @swagger
+ * /api/admin/ai-review-toggle:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 切换AI审核开关
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - enabled
+ *             properties:
+ *               enabled:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/ai-review-toggle', adminAuth, async (req, res) => {
   const { enabled } = req.body
   const newValue = Boolean(enabled)
@@ -48,6 +93,23 @@ const isAiAutoReviewEnabled = () => settingsService.isAiAutoReviewEnabled()
 // ===================== 游客访问限制设置 =====================
 
 // 获取游客访问限制状态
+/**
+ * @swagger
+ * /api/admin/guest-access-status:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取游客访问限制状态
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/guest-access-status', adminAuth, (req, res) => {
   const restricted = settingsService.isGuestAccessRestricted()
   res.json({ 
@@ -58,6 +120,34 @@ router.get('/guest-access-status', adminAuth, (req, res) => {
 })
 
 // 切换游客访问限制
+/**
+ * @swagger
+ * /api/admin/guest-access-toggle:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 切换游客访问限制
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - restricted
+ *             properties:
+ *               restricted:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/guest-access-toggle', adminAuth, async (req, res) => {
   const { restricted } = req.body
   const newValue = Boolean(restricted)
@@ -68,6 +158,23 @@ router.post('/guest-access-toggle', adminAuth, async (req, res) => {
 // ===================== 系统设置 (System Settings) =====================
 
 // 获取所有系统设置（用于管理后台显示）
+/**
+ * @swagger
+ * /api/admin/settings:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取所有系统设置
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/settings', adminAuth, async (req, res) => {
   try {
     const allSettings = await settingsService.getAllSettings()
@@ -83,6 +190,23 @@ router.get('/settings', adminAuth, async (req, res) => {
 })
 
 // 获取系统设置（分类展示）
+/**
+ * @swagger
+ * /api/admin/system-settings:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取系统设置(分类展示)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/system-settings', adminAuth, async (req, res) => {
   try {
     const settings = {
@@ -154,6 +278,34 @@ router.get('/system-settings', adminAuth, async (req, res) => {
 })
 
 // 更新系统设置（批量更新）
+/**
+ * @swagger
+ * /api/admin/system-settings:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量更新系统设置
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - settings
+ *             properties:
+ *               settings:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/system-settings', adminAuth, async (req, res) => {
   try {
     const { settings } = req.body
@@ -220,6 +372,23 @@ router.put('/system-settings', adminAuth, async (req, res) => {
 })
 
 // 重置全部用户初始设置（将所有用户的profile_completed标记为false）
+/**
+ * @swagger
+ * /api/admin/reset-all-onboarding:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 重置全部用户初始设置
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/reset-all-onboarding', adminAuth, async (req, res) => {
   try {
     const result = await prisma.user.updateMany({
@@ -239,6 +408,69 @@ router.post('/reset-all-onboarding', adminAuth, async (req, res) => {
 })
 
 // ===================== 笔记管理 =====================
+/**
+ * @swagger
+ * /api/admin/posts:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取笔记列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: title
+ *         schema:
+ *           type: string
+ *         description: 标题搜索
+ *       - in: query
+ *         name: user_display_id
+ *         schema:
+ *           type: string
+ *         description: 用户ID搜索
+ *       - in: query
+ *         name: category_id
+ *         schema:
+ *           type: integer
+ *         description: 分类ID
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: integer
+ *         description: 类型
+ *       - in: query
+ *         name: is_draft
+ *         schema:
+ *           type: integer
+ *         description: 是否草稿
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/posts', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -306,6 +538,30 @@ router.get('/posts', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/posts/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取笔记详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 笔记ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/posts/:id', adminAuth, async (req, res) => {
   try {
     const postId = BigInt(req.params.id)
@@ -356,6 +612,60 @@ router.get('/posts/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/posts:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建笔记
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *               category_id:
+ *                 type: integer
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               image_urls:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               type:
+ *                 type: integer
+ *               is_draft:
+ *                 type: boolean
+ *               video_url:
+ *                 type: string
+ *               cover_url:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/posts', adminAuth, async (req, res) => {
   try {
     const { user_id, title, content, category_id, images, image_urls, tags, type, is_draft, video_url, cover_url } = req.body
@@ -445,6 +755,63 @@ router.post('/posts', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/posts/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新笔记
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 笔记ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *               category_id:
+ *                 type: integer
+ *               view_count:
+ *                 type: integer
+ *               is_draft:
+ *                 type: boolean
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               image_urls:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               video_url:
+ *                 type: string
+ *               cover_url:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/posts/:id', adminAuth, async (req, res) => {
   try {
     const postId = BigInt(req.params.id)
@@ -563,6 +930,30 @@ router.put('/posts/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/posts/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除笔记
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 笔记ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/posts/:id', adminAuth, async (req, res) => {
   try {
     const postId = BigInt(req.params.id)
@@ -592,6 +983,36 @@ router.delete('/posts/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/posts:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除笔记
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/posts', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -616,6 +1037,64 @@ router.delete('/posts', adminAuth, async (req, res) => {
 })
 
 // ===================== 评论管理 =====================
+/**
+ * @swagger
+ * /api/admin/comments:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取评论列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: user_display_id
+ *         schema:
+ *           type: string
+ *         description: 用户ID搜索
+ *       - in: query
+ *         name: post_id
+ *         schema:
+ *           type: integer
+ *         description: 笔记ID
+ *       - in: query
+ *         name: content
+ *         schema:
+ *           type: string
+ *         description: 内容搜索
+ *       - in: query
+ *         name: audit_status
+ *         schema:
+ *           type: integer
+ *         description: 审核状态
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/comments', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -669,6 +1148,30 @@ router.get('/comments', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/comments/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取评论详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 评论ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/comments/:id', adminAuth, async (req, res) => {
   try {
     const commentId = BigInt(req.params.id)
@@ -691,6 +1194,42 @@ router.get('/comments/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/comments:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建评论
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - post_id
+ *               - content
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *               post_id:
+ *                 type: integer
+ *               content:
+ *                 type: string
+ *               parent_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/comments', adminAuth, async (req, res) => {
   try {
     const { user_id, post_id, content, parent_id } = req.body
@@ -734,6 +1273,39 @@ router.post('/comments', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/comments/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新评论
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 评论ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               content:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/comments/:id', adminAuth, async (req, res) => {
   try {
     const commentId = BigInt(req.params.id)
@@ -752,6 +1324,30 @@ router.put('/comments/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/comments/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除评论
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 评论ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/comments/:id', adminAuth, async (req, res) => {
   try {
     const commentId = BigInt(req.params.id)
@@ -770,6 +1366,36 @@ router.delete('/comments/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/comments:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除评论
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/comments', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -788,6 +1414,49 @@ router.delete('/comments', adminAuth, async (req, res) => {
 })
 
 // ===================== 标签管理 =====================
+/**
+ * @swagger
+ * /api/admin/tags:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取标签列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: 标签名搜索
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/tags', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -818,6 +1487,30 @@ router.get('/tags', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/tags/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取标签详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 标签ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/tags/:id', adminAuth, async (req, res) => {
   try {
     const tagId = parseInt(req.params.id)
@@ -834,6 +1527,34 @@ router.get('/tags/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/tags:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建标签
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/tags', adminAuth, async (req, res) => {
   try {
     const { name } = req.body
@@ -854,6 +1575,39 @@ router.post('/tags', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/tags/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新标签
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 标签ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/tags/:id', adminAuth, async (req, res) => {
   try {
     const tagId = parseInt(req.params.id)
@@ -875,6 +1629,30 @@ router.put('/tags/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/tags/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除标签
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 标签ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/tags/:id', adminAuth, async (req, res) => {
   try {
     const tagId = parseInt(req.params.id)
@@ -887,6 +1665,36 @@ router.delete('/tags/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/tags:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除标签
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/tags', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -905,6 +1713,59 @@ router.delete('/tags', adminAuth, async (req, res) => {
 })
 
 // ===================== 点赞管理 =====================
+/**
+ * @swagger
+ * /api/admin/likes:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取点赞列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: user_display_id
+ *         schema:
+ *           type: string
+ *         description: 用户ID搜索
+ *       - in: query
+ *         name: target_type
+ *         schema:
+ *           type: integer
+ *         description: 目标类型
+ *       - in: query
+ *         name: target_id
+ *         schema:
+ *           type: string
+ *         description: 目标ID
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/likes', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -951,6 +1812,30 @@ router.get('/likes', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/likes/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取点赞详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 点赞ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/likes/:id', adminAuth, async (req, res) => {
   try {
     const likeId = BigInt(req.params.id)
@@ -970,6 +1855,40 @@ router.get('/likes/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/likes:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建点赞
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - target_type
+ *               - target_id
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *               target_type:
+ *                 type: integer
+ *               target_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/likes', adminAuth, async (req, res) => {
   try {
     const { user_id, target_type, target_id } = req.body
@@ -1011,6 +1930,41 @@ router.post('/likes', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/likes/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新点赞
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 点赞ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               target_type:
+ *                 type: integer
+ *               target_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/likes/:id', adminAuth, async (req, res) => {
   try {
     const likeId = BigInt(req.params.id)
@@ -1033,6 +1987,30 @@ router.put('/likes/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/likes/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除点赞
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 点赞ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/likes/:id', adminAuth, async (req, res) => {
   try {
     const likeId = BigInt(req.params.id)
@@ -1044,6 +2022,36 @@ router.delete('/likes/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/likes:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除点赞
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/likes', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -1062,6 +2070,54 @@ router.delete('/likes', adminAuth, async (req, res) => {
 })
 
 // ===================== 收藏管理 =====================
+/**
+ * @swagger
+ * /api/admin/collections:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取收藏列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: user_display_id
+ *         schema:
+ *           type: string
+ *         description: 用户ID搜索
+ *       - in: query
+ *         name: post_id
+ *         schema:
+ *           type: integer
+ *         description: 笔记ID
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/collections', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -1108,6 +2164,30 @@ router.get('/collections', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/collections/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取收藏详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 收藏ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/collections/:id', adminAuth, async (req, res) => {
   try {
     const collectionId = BigInt(req.params.id)
@@ -1130,6 +2210,37 @@ router.get('/collections/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/collections:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建收藏
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - post_id
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *               post_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/collections', adminAuth, async (req, res) => {
   try {
     const { user_id, post_id } = req.body
@@ -1166,6 +2277,39 @@ router.post('/collections', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/collections/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新收藏
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 收藏ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               post_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/collections/:id', adminAuth, async (req, res) => {
   try {
     const collectionId = BigInt(req.params.id)
@@ -1191,6 +2335,30 @@ router.put('/collections/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/collections/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除收藏
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 收藏ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/collections/:id', adminAuth, async (req, res) => {
   try {
     const collectionId = BigInt(req.params.id)
@@ -1202,6 +2370,36 @@ router.delete('/collections/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/collections:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除收藏
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/collections', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -1220,6 +2418,54 @@ router.delete('/collections', adminAuth, async (req, res) => {
 })
 
 // ===================== 关注管理 =====================
+/**
+ * @swagger
+ * /api/admin/follows:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取关注列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: follower_display_id
+ *         schema:
+ *           type: string
+ *         description: 关注者ID
+ *       - in: query
+ *         name: following_display_id
+ *         schema:
+ *           type: string
+ *         description: 被关注者ID
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/follows', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -1267,6 +2513,30 @@ router.get('/follows', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/follows/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取关注详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 关注ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/follows/:id', adminAuth, async (req, res) => {
   try {
     const followId = BigInt(req.params.id)
@@ -1289,6 +2559,37 @@ router.get('/follows/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/follows:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建关注
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - follower_id
+ *               - following_id
+ *             properties:
+ *               follower_id:
+ *                 type: integer
+ *               following_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/follows', adminAuth, async (req, res) => {
   try {
     const { follower_id, following_id } = req.body
@@ -1329,6 +2630,39 @@ router.post('/follows', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/follows/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新关注
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 关注ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               following_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/follows/:id', adminAuth, async (req, res) => {
   try {
     const followId = BigInt(req.params.id)
@@ -1353,6 +2687,30 @@ router.put('/follows/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/follows/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除关注
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 关注ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/follows/:id', adminAuth, async (req, res) => {
   try {
     const followId = BigInt(req.params.id)
@@ -1364,6 +2722,36 @@ router.delete('/follows/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/follows:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除关注
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/follows', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -1382,6 +2770,54 @@ router.delete('/follows', adminAuth, async (req, res) => {
 })
 
 // ===================== 会话管理 =====================
+/**
+ * @swagger
+ * /api/admin/sessions:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取会话列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: user_display_id
+ *         schema:
+ *           type: string
+ *         description: 用户ID搜索
+ *       - in: query
+ *         name: is_active
+ *         schema:
+ *           type: string
+ *         description: 是否活跃
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/sessions', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -1429,6 +2865,30 @@ router.get('/sessions', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/sessions/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取会话详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 会话ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/sessions/:id', adminAuth, async (req, res) => {
   try {
     const sessionId = BigInt(req.params.id)
@@ -1450,6 +2910,38 @@ router.get('/sessions/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/sessions:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建会话
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *               user_agent:
+ *                 type: string
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/sessions', adminAuth, async (req, res) => {
   try {
     const { user_id, user_agent, is_active } = req.body
@@ -1481,6 +2973,41 @@ router.post('/sessions', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/sessions/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新会话
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 会话ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               user_agent:
+ *                 type: string
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/sessions/:id', adminAuth, async (req, res) => {
   try {
     const sessionId = BigInt(req.params.id)
@@ -1503,6 +3030,30 @@ router.put('/sessions/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/sessions/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除会话
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 会话ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/sessions/:id', adminAuth, async (req, res) => {
   try {
     const sessionId = BigInt(req.params.id)
@@ -1514,6 +3065,36 @@ router.delete('/sessions/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/sessions:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除会话
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/sessions', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -1532,6 +3113,64 @@ router.delete('/sessions', adminAuth, async (req, res) => {
 })
 
 // ===================== 用户管理 =====================
+/**
+ * @swagger
+ * /api/admin/users:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取用户列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: user_id
+ *         schema:
+ *           type: string
+ *         description: 用户ID搜索
+ *       - in: query
+ *         name: nickname
+ *         schema:
+ *           type: string
+ *         description: 昵称搜索
+ *       - in: query
+ *         name: location
+ *         schema:
+ *           type: string
+ *         description: 地区搜索
+ *       - in: query
+ *         name: is_active
+ *         schema:
+ *           type: integer
+ *         description: 是否激活
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/users', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -1573,6 +3212,30 @@ router.get('/users', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/users/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取用户详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 用户ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/users/:id', adminAuth, async (req, res) => {
   try {
     const userId = BigInt(req.params.id)
@@ -1597,6 +3260,61 @@ router.get('/users/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/users:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建用户
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - nickname
+ *             properties:
+ *               user_id:
+ *                 type: string
+ *               nickname:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               avatar:
+ *                 type: string
+ *               bio:
+ *                 type: string
+ *               location:
+ *                 type: string
+ *               is_active:
+ *                 type: boolean
+ *               gender:
+ *                 type: string
+ *               zodiac_sign:
+ *                 type: string
+ *               mbti:
+ *                 type: string
+ *               education:
+ *                 type: string
+ *               major:
+ *                 type: string
+ *               interests:
+ *                 type: string
+ *               verified:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/users', adminAuth, async (req, res) => {
   try {
     const { user_id, nickname, avatar, bio, location, is_active, password, gender, zodiac_sign, mbti, education, major, interests, verified } = req.body
@@ -1641,6 +3359,63 @@ router.post('/users', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/users/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新用户
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 用户ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               user_id:
+ *                 type: string
+ *               nickname:
+ *                 type: string
+ *               avatar:
+ *                 type: string
+ *               bio:
+ *                 type: string
+ *               location:
+ *                 type: string
+ *               is_active:
+ *                 type: boolean
+ *               gender:
+ *                 type: string
+ *               zodiac_sign:
+ *                 type: string
+ *               mbti:
+ *                 type: string
+ *               education:
+ *                 type: string
+ *               major:
+ *                 type: string
+ *               interests:
+ *                 type: string
+ *               verified:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/users/:id', adminAuth, async (req, res) => {
   try {
     const userId = BigInt(req.params.id)
@@ -1674,6 +3449,30 @@ router.put('/users/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/users/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除用户
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 用户ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/users/:id', adminAuth, async (req, res) => {
   try {
     const userId = BigInt(req.params.id)
@@ -1690,6 +3489,36 @@ router.delete('/users/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/users:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除用户
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/users', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -1708,6 +3537,49 @@ router.delete('/users', adminAuth, async (req, res) => {
 })
 
 // ===================== 管理员管理 =====================
+/**
+ * @swagger
+ * /api/admin/admins:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取管理员列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: username
+ *         schema:
+ *           type: string
+ *         description: 用户名搜索
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/admins', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -1741,6 +3613,30 @@ router.get('/admins', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/admins/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取管理员详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 管理员ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/admins/:id', adminAuth, async (req, res) => {
   try {
     const adminId = BigInt(req.params.id)
@@ -1760,6 +3656,37 @@ router.get('/admins/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/admins:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建管理员
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/admins', adminAuth, async (req, res) => {
   try {
     const { username, password } = req.body
@@ -1786,6 +3713,39 @@ router.post('/admins', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/admins/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新管理员
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 管理员ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/admins/:id', adminAuth, async (req, res) => {
   try {
     const adminId = BigInt(req.params.id)
@@ -1808,6 +3768,30 @@ router.put('/admins/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/admins/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除管理员
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 管理员ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/admins/:id', adminAuth, async (req, res) => {
   try {
     const adminId = BigInt(req.params.id)
@@ -1819,6 +3803,36 @@ router.delete('/admins/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/admins:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除管理员
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/admins', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -1837,6 +3851,34 @@ router.delete('/admins', adminAuth, async (req, res) => {
 })
 
 // ===================== 监控动态 =====================
+/**
+ * @swagger
+ * /api/admin/monitor/activities:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取监控动态列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/monitor/activities', adminAuth, async (req, res) => {
   try {
     const activities = []
@@ -1917,6 +3959,23 @@ router.get('/monitor/activities', adminAuth, async (req, res) => {
 })
 
 // ===================== 测试用户接口 =====================
+/**
+ * @swagger
+ * /api/admin/test-users:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取测试用户列表
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/test-users', adminAuth, async (req, res) => {
   try {
     const likes = await prisma.like.findMany({ select: { user_id: true }, distinct: ['user_id'], take: 10 })
@@ -1933,6 +3992,54 @@ router.get('/test-users', adminAuth, async (req, res) => {
 })
 
 // ===================== 分类管理 =====================
+/**
+ * @swagger
+ * /api/admin/categories:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取分类列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: 分类名搜索
+ *       - in: query
+ *         name: category_title
+ *         schema:
+ *           type: string
+ *         description: 分类英文标题搜索
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/categories', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -1975,6 +4082,30 @@ router.get('/categories', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/categories/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取分类详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 分类ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/categories/:id', adminAuth, async (req, res) => {
   try {
     const categoryId = parseInt(req.params.id)
@@ -1994,6 +4125,37 @@ router.get('/categories/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/categories:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建分类
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - category_title
+ *             properties:
+ *               name:
+ *                 type: string
+ *               category_title:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/categories', adminAuth, async (req, res) => {
   try {
     const { name, category_title } = req.body
@@ -2027,6 +4189,41 @@ router.post('/categories', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/categories/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新分类
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 分类ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               category_title:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/categories/:id', adminAuth, async (req, res) => {
   try {
     const categoryId = parseInt(req.params.id)
@@ -2069,6 +4266,30 @@ router.put('/categories/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/categories/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除分类
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 分类ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/categories/:id', adminAuth, async (req, res) => {
   try {
     const categoryId = parseInt(req.params.id)
@@ -2086,6 +4307,36 @@ router.delete('/categories/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/categories:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除分类
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/categories', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -2114,6 +4365,64 @@ router.delete('/categories', adminAuth, async (req, res) => {
 })
 
 // ===================== 内容审核管理 (type 3,4) =====================
+/**
+ * @swagger
+ * /api/admin/content-review:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取内容审核列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: user_id
+ *         schema:
+ *           type: integer
+ *         description: 用户ID
+ *       - in: query
+ *         name: user_display_id
+ *         schema:
+ *           type: string
+ *         description: 用户展示ID
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: integer
+ *         description: 类型
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: integer
+ *         description: 状态
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/content-review', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -2167,6 +4476,23 @@ router.get('/content-review', adminAuth, async (req, res) => {
 })
 
 // 获取AI审核设置 - 必须在 /:id 路由之前定义，避免被匹配
+/**
+ * @swagger
+ * /api/admin/content-review/settings:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取AI审核设置
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/content-review/settings', adminAuth, async (req, res) => {
   const usernameEnabled = settingsService.isAiUsernameReviewEnabled()
   const contentEnabled = settingsService.isAiContentReviewEnabled()
@@ -2182,6 +4508,36 @@ router.get('/content-review/settings', adminAuth, async (req, res) => {
 })
 
 // 更新AI审核设置 - 必须在 /:id 路由之前定义，避免被匹配
+/**
+ * @swagger
+ * /api/admin/content-review/settings:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新AI审核设置
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ai_auto_review:
+ *                 type: boolean
+ *               ai_username_review:
+ *                 type: boolean
+ *               ai_content_review:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/content-review/settings', adminAuth, async (req, res) => {
   try {
     const { ai_auto_review, ai_username_review, ai_content_review } = req.body
@@ -2230,6 +4586,30 @@ router.put('/content-review/settings', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/content-review/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取内容审核详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 审核记录ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/content-review/:id', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -2249,6 +4629,42 @@ router.get('/content-review/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/content-review:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建内容审核
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - type
+ *               - content
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *               type:
+ *                 type: integer
+ *               content:
+ *                 type: string
+ *               target_id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/content-review', adminAuth, async (req, res) => {
   try {
     const { user_id, type, content, target_id } = req.body
@@ -2274,6 +4690,45 @@ router.post('/content-review', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/content-review/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新内容审核
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 审核记录ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               type:
+ *                 type: integer
+ *               content:
+ *                 type: string
+ *               status:
+ *                 type: integer
+ *               audit_time:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/content-review/:id', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -2298,6 +4753,30 @@ router.put('/content-review/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/content-review/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除内容审核记录
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 审核记录ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/content-review/:id', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -2322,6 +4801,36 @@ router.delete('/content-review/:id', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/content-review:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除内容审核
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/content-review', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -2339,6 +4848,30 @@ router.delete('/content-review', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/content-review/{id}/approve:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 内容审核通过
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 审核记录ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/content-review/:id/approve', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -2363,6 +4896,30 @@ router.put('/content-review/:id/approve', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/content-review/{id}/reject:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 内容审核拒绝
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 审核记录ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/content-review/:id/reject', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -2387,6 +4944,30 @@ router.put('/content-review/:id/reject', adminAuth, async (req, res) => {
   }
 })
 
+/**
+ * @swagger
+ * /api/admin/content-review/{id}/retry:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 重试AI审核
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 审核记录ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/content-review/:id/retry', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -2470,6 +5051,23 @@ router.put('/content-review/:id/retry', adminAuth, async (req, res) => {
 })
 
 // ===================== 统计信息 =====================
+/**
+ * @swagger
+ * /api/admin/stats/overview:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取统计概览
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/stats/overview', adminAuth, async (req, res) => {
   try {
     const [usersCount, postsCount, commentsCount, likesCount] = await Promise.all([
@@ -2493,6 +5091,23 @@ router.get('/stats/overview', adminAuth, async (req, res) => {
 // ===================== 队列管理 =====================
 
 // 获取队列统计信息
+/**
+ * @swagger
+ * /api/admin/queues:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取队列统计信息
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/queues', adminAuth, async (req, res) => {
   try {
     const stats = await getQueueStats()
@@ -2508,6 +5123,45 @@ router.get('/queues', adminAuth, async (req, res) => {
 })
 
 // 获取队列任务列表
+/**
+ * @swagger
+ * /api/admin/queues/{name}/jobs:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取队列任务列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: name
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 队列名称
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: 任务状态
+ *       - in: query
+ *         name: start
+ *         schema:
+ *           type: integer
+ *         description: 起始位置
+ *       - in: query
+ *         name: end
+ *         schema:
+ *           type: integer
+ *         description: 结束位置
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/queues/:name/jobs', adminAuth, async (req, res) => {
   try {
     const { name } = req.params
@@ -2526,6 +5180,36 @@ router.get('/queues/:name/jobs', adminAuth, async (req, res) => {
 })
 
 // 获取单个任务详情（包含完整的返回结果数据）
+/**
+ * @swagger
+ * /api/admin/queues/{name}/jobs/{jobId}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取队列任务详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: name
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 队列名称
+ *       - in: path
+ *         name: jobId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 任务ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/queues/:name/jobs/:jobId', adminAuth, async (req, res) => {
   try {
     const { name, jobId } = req.params
@@ -2547,6 +5231,36 @@ router.get('/queues/:name/jobs/:jobId', adminAuth, async (req, res) => {
 })
 
 // 重试失败的任务
+/**
+ * @swagger
+ * /api/admin/queues/{name}/jobs/{jobId}/retry:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 重试队列任务
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: name
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 队列名称
+ *       - in: path
+ *         name: jobId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 任务ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/queues/:name/jobs/:jobId/retry', adminAuth, async (req, res) => {
   try {
     const { name, jobId } = req.params
@@ -2564,6 +5278,30 @@ router.post('/queues/:name/jobs/:jobId/retry', adminAuth, async (req, res) => {
 })
 
 // 清空队列
+/**
+ * @swagger
+ * /api/admin/queues/{name}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 清空队列
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: name
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 队列名称
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/queues/:name', adminAuth, async (req, res) => {
   try {
     const { name } = req.params
@@ -2581,6 +5319,23 @@ router.delete('/queues/:name', adminAuth, async (req, res) => {
 })
 
 // 获取队列名称列表
+/**
+ * @swagger
+ * /api/admin/queue-names:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取队列名称列表
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/queue-names', adminAuth, (req, res) => {
   res.json({
     code: RESPONSE_CODES.SUCCESS,
@@ -2596,6 +5351,59 @@ router.get('/queue-names', adminAuth, (req, res) => {
 const { forceRefreshCache } = require('../utils/bannedWordsChecker')
 
 // 获取违禁词列表
+/**
+ * @swagger
+ * /api/admin/banned-words:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取违禁词列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: word
+ *         schema:
+ *           type: string
+ *         description: 违禁词搜索
+ *       - in: query
+ *         name: category_id
+ *         schema:
+ *           type: string
+ *         description: 分类ID
+ *       - in: query
+ *         name: enabled
+ *         schema:
+ *           type: string
+ *         description: 是否启用
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/banned-words', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -2637,6 +5445,30 @@ router.get('/banned-words', adminAuth, async (req, res) => {
 })
 
 // 获取单个违禁词
+/**
+ * @swagger
+ * /api/admin/banned-words/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取违禁词详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 违禁词ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/banned-words/:id', adminAuth, async (req, res) => {
   try {
     const wordId = parseInt(req.params.id)
@@ -2661,6 +5493,40 @@ router.get('/banned-words/:id', adminAuth, async (req, res) => {
 })
 
 // 创建违禁词
+/**
+ * @swagger
+ * /api/admin/banned-words:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建违禁词
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - word
+ *             properties:
+ *               word:
+ *                 type: string
+ *               category_id:
+ *                 type: integer
+ *               is_regex:
+ *                 type: boolean
+ *               enabled:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/banned-words', adminAuth, async (req, res) => {
   try {
     const { word, category_id, is_regex, enabled } = req.body
@@ -2689,6 +5555,45 @@ router.post('/banned-words', adminAuth, async (req, res) => {
 })
 
 // 更新违禁词
+/**
+ * @swagger
+ * /api/admin/banned-words/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新违禁词
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 违禁词ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               word:
+ *                 type: string
+ *               category_id:
+ *                 type: integer
+ *               is_regex:
+ *                 type: boolean
+ *               enabled:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/banned-words/:id', adminAuth, async (req, res) => {
   try {
     const wordId = parseInt(req.params.id)
@@ -2718,6 +5623,30 @@ router.put('/banned-words/:id', adminAuth, async (req, res) => {
 })
 
 // 删除违禁词
+/**
+ * @swagger
+ * /api/admin/banned-words/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除违禁词
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 违禁词ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/banned-words/:id', adminAuth, async (req, res) => {
   try {
     const wordId = parseInt(req.params.id)
@@ -2734,6 +5663,36 @@ router.delete('/banned-words/:id', adminAuth, async (req, res) => {
 })
 
 // 批量删除违禁词
+/**
+ * @swagger
+ * /api/admin/banned-words:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除违禁词
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/banned-words', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
@@ -2754,6 +5713,40 @@ router.delete('/banned-words', adminAuth, async (req, res) => {
 })
 
 // 批量导入违禁词
+/**
+ * @swagger
+ * /api/admin/banned-words/import:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量导入违禁词
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - words
+ *             properties:
+ *               words:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               category_id:
+ *                 type: integer
+ *               isRegex:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/banned-words/import', adminAuth, async (req, res) => {
   try {
     const { words, category_id, isRegex } = req.body
@@ -2787,6 +5780,29 @@ router.post('/banned-words/import', adminAuth, async (req, res) => {
 })
 
 // 导出违禁词
+/**
+ * @swagger
+ * /api/admin/banned-words/export:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 导出违禁词
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: category_id
+ *         schema:
+ *           type: string
+ *         description: 分类ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/banned-words/export', adminAuth, async (req, res) => {
   try {
     const { category_id } = req.query
@@ -2820,6 +5836,23 @@ router.get('/banned-words/export', adminAuth, async (req, res) => {
 // ===================== 违禁词分类管理 =====================
 
 // 获取违禁词分类列表
+/**
+ * @swagger
+ * /api/admin/banned-word-categories:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取违禁词分类列表
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/banned-word-categories', adminAuth, async (req, res) => {
   try {
     const categories = await prisma.bannedWordCategory.findMany({
@@ -2850,6 +5883,36 @@ router.get('/banned-word-categories', adminAuth, async (req, res) => {
 })
 
 // 创建违禁词分类
+/**
+ * @swagger
+ * /api/admin/banned-word-categories:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建违禁词分类
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/banned-word-categories', adminAuth, async (req, res) => {
   try {
     const { name, description } = req.body
@@ -2879,6 +5942,41 @@ router.post('/banned-word-categories', adminAuth, async (req, res) => {
 })
 
 // 更新违禁词分类
+/**
+ * @swagger
+ * /api/admin/banned-word-categories/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新违禁词分类
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 分类ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/banned-word-categories/:id', adminAuth, async (req, res) => {
   try {
     const categoryId = parseInt(req.params.id)
@@ -2915,6 +6013,30 @@ router.put('/banned-word-categories/:id', adminAuth, async (req, res) => {
 })
 
 // 删除违禁词分类
+/**
+ * @swagger
+ * /api/admin/banned-word-categories/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除违禁词分类
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 分类ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/banned-word-categories/:id', adminAuth, async (req, res) => {
   try {
     const categoryId = parseInt(req.params.id)
@@ -2946,6 +6068,34 @@ const SUPPORTED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.
 const SUPPORTED_VIDEO_EXTENSIONS = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv']
 
 // 获取 /uploads/plsc 目录下的所有图片和视频文件
+/**
+ * @swagger
+ * /api/admin/batch-upload/files:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取批量上传文件列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/batch-upload/files', adminAuth, async (req, res) => {
   try {
     const plscDir = pathModule.join(process.cwd(), 'uploads', 'plsc')
@@ -3002,6 +6152,53 @@ router.get('/batch-upload/files', adminAuth, async (req, res) => {
 })
 
 // 批量创建笔记（从plsc目录）
+/**
+ * @swagger
+ * /api/admin/batch-upload/create:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量创建笔记
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - files
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *               type:
+ *                 type: integer
+ *               images_per_note:
+ *                 type: integer
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               is_draft:
+ *                 type: boolean
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/batch-upload/create', adminAuth, async (req, res) => {
   try {
     const { user_id, type, images_per_note, title, content, tags, is_draft, files } = req.body
@@ -3130,6 +6327,36 @@ router.post('/batch-upload/create', adminAuth, async (req, res) => {
 })
 
 // 删除plsc目录中的文件
+/**
+ * @swagger
+ * /api/admin/batch-upload/files:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除批量上传文件
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - files
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/batch-upload/files', adminAuth, async (req, res) => {
   try {
     const { files } = req.body
@@ -3163,6 +6390,49 @@ router.delete('/batch-upload/files', adminAuth, async (req, res) => {
 })
 
 // 异步批量创建笔记（使用队列，点击后自动上传无需等待）
+/**
+ * @swagger
+ * /api/admin/batch-upload/async-create:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 异步批量创建笔记
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - notes
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *               type:
+ *                 type: integer
+ *               images_per_note:
+ *                 type: integer
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               is_draft:
+ *                 type: boolean
+ *               notes:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/batch-upload/async-create', adminAuth, async (req, res) => {
   try {
     const { user_id, type, images_per_note, tags, is_draft, notes } = req.body
@@ -3323,6 +6593,30 @@ router.post('/batch-upload/async-create', adminAuth, async (req, res) => {
 })
 
 // 查询批量创建任务状态
+/**
+ * @swagger
+ * /api/admin/batch-upload/status/{batchId}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 查询批量创建任务状态
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: batchId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 批次ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/batch-upload/status/:batchId', adminAuth, async (req, res) => {
   try {
     const { batchId } = req.params
@@ -3362,6 +6656,54 @@ const isUserToolbarAvailable = () => {
 }
 
 // 获取工具栏列表
+/**
+ * @swagger
+ * /api/admin/user-toolbar:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取工具栏列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: 工具名搜索
+ *       - in: query
+ *         name: is_active
+ *         schema:
+ *           type: string
+ *         description: 是否启用
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/user-toolbar', adminAuth, async (req, res) => {
   try {
     if (!isUserToolbarAvailable()) {
@@ -3402,6 +6744,30 @@ router.get('/user-toolbar', adminAuth, async (req, res) => {
 })
 
 // 获取单个工具栏项
+/**
+ * @swagger
+ * /api/admin/user-toolbar/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取工具栏项详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 工具栏项ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/user-toolbar/:id', adminAuth, async (req, res) => {
   try {
     if (!isUserToolbarAvailable()) {
@@ -3426,6 +6792,44 @@ router.get('/user-toolbar/:id', adminAuth, async (req, res) => {
 })
 
 // 创建工具栏项
+/**
+ * @swagger
+ * /api/admin/user-toolbar:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建工具栏项
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - icon
+ *               - url
+ *             properties:
+ *               name:
+ *                 type: string
+ *               icon:
+ *                 type: string
+ *               url:
+ *                 type: string
+ *               sort_order:
+ *                 type: integer
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/user-toolbar', adminAuth, async (req, res) => {
   try {
     if (!isUserToolbarAvailable()) {
@@ -3467,6 +6871,47 @@ router.post('/user-toolbar', adminAuth, async (req, res) => {
 })
 
 // 更新工具栏项
+/**
+ * @swagger
+ * /api/admin/user-toolbar/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新工具栏项
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 工具栏项ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               icon:
+ *                 type: string
+ *               url:
+ *                 type: string
+ *               sort_order:
+ *                 type: integer
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/user-toolbar/:id', adminAuth, async (req, res) => {
   try {
     if (!isUserToolbarAvailable()) {
@@ -3515,6 +6960,30 @@ router.put('/user-toolbar/:id', adminAuth, async (req, res) => {
 })
 
 // 删除工具栏项
+/**
+ * @swagger
+ * /api/admin/user-toolbar/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除工具栏项
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 工具栏项ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/user-toolbar/:id', adminAuth, async (req, res) => {
   try {
     if (!isUserToolbarAvailable()) {
@@ -3540,6 +7009,36 @@ router.delete('/user-toolbar/:id', adminAuth, async (req, res) => {
 })
 
 // 批量删除工具栏项
+/**
+ * @swagger
+ * /api/admin/user-toolbar:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除工具栏项
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/user-toolbar', adminAuth, async (req, res) => {
   try {
     if (!isUserToolbarAvailable()) {
@@ -3564,6 +7063,30 @@ router.delete('/user-toolbar', adminAuth, async (req, res) => {
 })
 
 // 切换工具栏项启用状态
+/**
+ * @swagger
+ * /api/admin/user-toolbar/{id}/toggle-active:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 切换工具栏项启用状态
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 工具栏项ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/user-toolbar/:id/toggle-active', adminAuth, async (req, res) => {
   try {
     if (!isUserToolbarAvailable()) {
@@ -3612,6 +7135,23 @@ const checkQualityRewardAvailable = async () => {
 }
 
 // 获取质量奖励设置列表
+/**
+ * @swagger
+ * /api/admin/quality-reward-settings:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取质量奖励设置列表
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/quality-reward-settings', adminAuth, async (req, res) => {
   try {
     const available = await checkQualityRewardAvailable()
@@ -3665,6 +7205,43 @@ router.get('/quality-reward-settings', adminAuth, async (req, res) => {
 })
 
 // 更新质量奖励设置
+/**
+ * @swagger
+ * /api/admin/quality-reward-settings/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新质量奖励设置
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 设置ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reward_amount:
+ *                 type: number
+ *               description:
+ *                 type: string
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/quality-reward-settings/:id', adminAuth, async (req, res) => {
   try {
     const available = await checkQualityRewardAvailable()
@@ -3697,6 +7274,69 @@ router.put('/quality-reward-settings/:id', adminAuth, async (req, res) => {
 })
 
 // 获取笔记质量等级（带筛选）
+/**
+ * @swagger
+ * /api/admin/posts-quality:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取笔记质量列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: title
+ *         schema:
+ *           type: string
+ *         description: 标题搜索
+ *       - in: query
+ *         name: user_display_id
+ *         schema:
+ *           type: string
+ *         description: 用户ID搜索
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: integer
+ *         description: 类型
+ *       - in: query
+ *         name: quality_level
+ *         schema:
+ *           type: string
+ *         description: 质量等级
+ *       - in: query
+ *         name: is_draft
+ *         schema:
+ *           type: integer
+ *         description: 是否草稿
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/posts-quality', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -3761,6 +7401,41 @@ router.get('/posts-quality', adminAuth, async (req, res) => {
 })
 
 // 设置笔记质量等级并发放奖励
+/**
+ * @swagger
+ * /api/admin/posts/{id}/quality:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 设置笔记质量等级
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 笔记ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - quality_level
+ *             properties:
+ *               quality_level:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/posts/:id/quality', adminAuth, async (req, res) => {
   try {
     const postId = BigInt(req.params.id)
@@ -3898,6 +7573,39 @@ router.put('/posts/:id/quality', adminAuth, async (req, res) => {
 })
 
 // 批量设置笔记质量等级
+/**
+ * @swagger
+ * /api/admin/posts-quality/batch:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量设置笔记质量等级
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *               - quality_level
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *               quality_level:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/posts-quality/batch', adminAuth, async (req, res) => {
   try {
     const { ids, quality_level } = req.body
@@ -4041,6 +7749,59 @@ const isSystemNotificationAvailable = () => {
 }
 
 // 获取系统通知列表
+/**
+ * @swagger
+ * /api/admin/system-notifications:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取系统通知列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: 通知类型
+ *       - in: query
+ *         name: is_active
+ *         schema:
+ *           type: string
+ *         description: 是否启用
+ *       - in: query
+ *         name: title
+ *         schema:
+ *           type: string
+ *         description: 标题搜索
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/system-notifications', adminAuth, async (req, res) => {
   try {
     if (!isSystemNotificationAvailable()) {
@@ -4096,6 +7857,30 @@ router.get('/system-notifications', adminAuth, async (req, res) => {
 })
 
 // 获取单个系统通知
+/**
+ * @swagger
+ * /api/admin/system-notifications/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取系统通知详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 通知ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/system-notifications/:id', adminAuth, async (req, res) => {
   try {
     if (!isSystemNotificationAvailable()) {
@@ -4120,6 +7905,49 @@ router.get('/system-notifications/:id', adminAuth, async (req, res) => {
 })
 
 // 创建系统通知
+/**
+ * @swagger
+ * /api/admin/system-notifications:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建系统通知
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - content
+ *             properties:
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *               content_format:
+ *                 type: string
+ *               image_url:
+ *                 type: string
+ *               link_url:
+ *                 type: string
+ *               show_popup:
+ *                 type: boolean
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/system-notifications', adminAuth, async (req, res) => {
   try {
     if (!isSystemNotificationAvailable()) {
@@ -4173,6 +8001,51 @@ router.post('/system-notifications', adminAuth, async (req, res) => {
 })
 
 // 更新系统通知
+/**
+ * @swagger
+ * /api/admin/system-notifications/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新系统通知
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 通知ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *               type:
+ *                 type: string
+ *               content_format:
+ *                 type: string
+ *               image_url:
+ *                 type: string
+ *               link_url:
+ *                 type: string
+ *               show_popup:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/system-notifications/:id', adminAuth, async (req, res) => {
   try {
     if (!isSystemNotificationAvailable()) {
@@ -4205,6 +8078,30 @@ router.put('/system-notifications/:id', adminAuth, async (req, res) => {
 })
 
 // 删除单个系统通知
+/**
+ * @swagger
+ * /api/admin/system-notifications/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除系统通知
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 通知ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/system-notifications/:id', adminAuth, async (req, res) => {
   try {
     if (!isSystemNotificationAvailable()) {
@@ -4226,6 +8123,36 @@ router.delete('/system-notifications/:id', adminAuth, async (req, res) => {
 })
 
 // 批量删除系统通知
+/**
+ * @swagger
+ * /api/admin/system-notifications:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除系统通知
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/system-notifications', adminAuth, async (req, res) => {
   try {
     if (!isSystemNotificationAvailable()) {
@@ -4249,6 +8176,30 @@ router.delete('/system-notifications', adminAuth, async (req, res) => {
 })
 
 // 重新发送通知给未读用户（清除所有确认记录）
+/**
+ * @swagger
+ * /api/admin/system-notifications/{id}/resend:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 重新发送系统通知
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 通知ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/system-notifications/:id/resend', adminAuth, async (req, res) => {
   try {
     if (!isSystemNotificationAvailable()) {
@@ -4281,6 +8232,44 @@ const isNotificationTemplateAvailable = () => {
 }
 
 // 获取通知模板列表
+/**
+ * @swagger
+ * /api/admin/notification-templates:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取通知模板列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: template_key
+ *         schema:
+ *           type: string
+ *         description: 模板键名
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: 模板名称搜索
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/notification-templates', adminAuth, async (req, res) => {
   try {
     if (!isNotificationTemplateAvailable()) {
@@ -4318,6 +8307,23 @@ router.get('/notification-templates', adminAuth, async (req, res) => {
 })
 
 // 获取默认模板列表（供参考）
+/**
+ * @swagger
+ * /api/admin/notification-templates/defaults:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取默认通知模板列表
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/notification-templates/defaults', adminAuth, async (req, res) => {
   try {
     const defaults = Object.entries(DEFAULT_TEMPLATES).map(([key, tpl]) => ({
@@ -4333,6 +8339,30 @@ router.get('/notification-templates/defaults', adminAuth, async (req, res) => {
 })
 
 // 获取单个通知模板
+/**
+ * @swagger
+ * /api/admin/notification-templates/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取通知模板详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 模板ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/notification-templates/:id', adminAuth, async (req, res) => {
   try {
     if (!isNotificationTemplateAvailable()) {
@@ -4354,6 +8384,47 @@ router.get('/notification-templates/:id', adminAuth, async (req, res) => {
 })
 
 // 创建/保存通知模板
+/**
+ * @swagger
+ * /api/admin/notification-templates:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建通知模板
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - template_key
+ *               - name
+ *             properties:
+ *               template_key:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               system_template:
+ *                 type: string
+ *               email_subject:
+ *                 type: string
+ *               email_body:
+ *                 type: string
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/notification-templates', adminAuth, async (req, res) => {
   try {
     if (!isNotificationTemplateAvailable()) {
@@ -4412,6 +8483,49 @@ router.post('/notification-templates', adminAuth, async (req, res) => {
 })
 
 // 更新通知模板
+/**
+ * @swagger
+ * /api/admin/notification-templates/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新通知模板
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 模板ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               system_template:
+ *                 type: string
+ *               email_subject:
+ *                 type: string
+ *               email_body:
+ *                 type: string
+ *               is_active:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/notification-templates/:id', adminAuth, async (req, res) => {
   try {
     if (!isNotificationTemplateAvailable()) {
@@ -4456,6 +8570,30 @@ router.put('/notification-templates/:id', adminAuth, async (req, res) => {
 })
 
 // 删除通知模板
+/**
+ * @swagger
+ * /api/admin/notification-templates/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除通知模板
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 模板ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/notification-templates/:id', adminAuth, async (req, res) => {
   try {
     if (!isNotificationTemplateAvailable()) {
@@ -4478,6 +8616,36 @@ router.delete('/notification-templates/:id', adminAuth, async (req, res) => {
 })
 
 // 批量删除通知模板
+/**
+ * @swagger
+ * /api/admin/notification-templates:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除通知模板
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/notification-templates', adminAuth, async (req, res) => {
   try {
     if (!isNotificationTemplateAvailable()) {
@@ -4514,6 +8682,38 @@ function getTestSampleVariables() {
 }
 
 // 预览通知模板（渲染HTML返回）
+/**
+ * @swagger
+ * /api/admin/notification-templates/preview:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 预览通知模板
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               template_key:
+ *                 type: string
+ *               email_subject:
+ *                 type: string
+ *               email_body:
+ *                 type: string
+ *               system_template:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/notification-templates/preview', adminAuth, async (req, res) => {
   try {
     const { template_key, email_subject, email_body, system_template } = req.body
@@ -4541,6 +8741,41 @@ router.post('/notification-templates/preview', adminAuth, async (req, res) => {
 })
 
 // 测试发送邮件
+/**
+ * @swagger
+ * /api/admin/notification-templates/{id}/test-email:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 测试发送邮件
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 模板ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/notification-templates/:id/test-email', adminAuth, async (req, res) => {
   try {
     if (!isNotificationTemplateAvailable()) {
@@ -4585,6 +8820,30 @@ router.post('/notification-templates/:id/test-email', adminAuth, async (req, res
 })
 
 // 测试发送Discord通知
+/**
+ * @swagger
+ * /api/admin/notification-templates/{id}/test-discord:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 测试发送Discord通知
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 模板ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/notification-templates/:id/test-discord', adminAuth, async (req, res) => {
   try {
     if (!isNotificationTemplateAvailable()) {
@@ -4642,6 +8901,59 @@ initNotificationTemplates()
 // ===================== 认证管理 (审核 type 1,2) =====================
 
 // 获取认证申请列表
+/**
+ * @swagger
+ * /api/admin/audit:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取认证申请列表
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: 每页数量
+ *       - in: query
+ *         name: user_display_id
+ *         schema:
+ *           type: string
+ *         description: 用户展示ID
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: integer
+ *         description: 类型
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: integer
+ *         description: 状态
+ *       - in: query
+ *         name: sortField
+ *         schema:
+ *           type: string
+ *         description: 排序字段
+ *       - in: query
+ *         name: sortOrder
+ *         schema:
+ *           type: string
+ *         description: 排序方向
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PaginationResponse'
+ */
 router.get('/audit', adminAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -4708,6 +9020,30 @@ router.get('/audit', adminAuth, async (req, res) => {
 })
 
 // 获取认证申请详情
+/**
+ * @swagger
+ * /api/admin/audit/{id}:
+ *   get:
+ *     tags:
+ *       - 管理后台
+ *     summary: 获取认证申请详情
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 认证记录ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.get('/audit/:id', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -4746,6 +9082,42 @@ router.get('/audit/:id', adminAuth, async (req, res) => {
 })
 
 // 创建认证申请（管理员手动创建）
+/**
+ * @swagger
+ * /api/admin/audit:
+ *   post:
+ *     tags:
+ *       - 管理后台
+ *     summary: 创建认证申请
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *               - type
+ *               - content
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *               type:
+ *                 type: integer
+ *               content:
+ *                 type: string
+ *               status:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/audit', adminAuth, async (req, res) => {
   try {
     const { user_id, type, content, status } = req.body
@@ -4771,6 +9143,43 @@ router.post('/audit', adminAuth, async (req, res) => {
 })
 
 // 更新认证申请
+/**
+ * @swagger
+ * /api/admin/audit/{id}:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 更新认证申请
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 认证记录ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               type:
+ *                 type: integer
+ *               content:
+ *                 type: string
+ *               status:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/audit/:id', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -4798,6 +9207,30 @@ router.put('/audit/:id', adminAuth, async (req, res) => {
 })
 
 // 认证审核通过
+/**
+ * @swagger
+ * /api/admin/audit/{id}/approve:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 认证审核通过
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 认证记录ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/audit/:id/approve', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -4834,6 +9267,39 @@ router.put('/audit/:id/approve', adminAuth, async (req, res) => {
 })
 
 // 认证审核拒绝
+/**
+ * @swagger
+ * /api/admin/audit/{id}/reject:
+ *   put:
+ *     tags:
+ *       - 管理后台
+ *     summary: 认证审核拒绝
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 认证记录ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/audit/:id/reject', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -4857,6 +9323,30 @@ router.put('/audit/:id/reject', adminAuth, async (req, res) => {
 })
 
 // 删除认证申请
+/**
+ * @swagger
+ * /api/admin/audit/{id}:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 删除认证申请
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 认证记录ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/audit/:id', adminAuth, async (req, res) => {
   try {
     const auditId = BigInt(req.params.id)
@@ -4882,6 +9372,36 @@ router.delete('/audit/:id', adminAuth, async (req, res) => {
 })
 
 // 批量删除认证申请
+/**
+ * @swagger
+ * /api/admin/audit:
+ *   delete:
+ *     tags:
+ *       - 管理后台
+ *     summary: 批量删除认证申请
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - ids
+ *             properties:
+ *               ids:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.delete('/audit', adminAuth, async (req, res) => {
   try {
     const { ids } = req.body
