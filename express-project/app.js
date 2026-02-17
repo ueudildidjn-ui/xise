@@ -66,6 +66,7 @@ const adminRoutes = require('./routes/admin');
 const balanceRoutes = require('./routes/balance');
 const creatorCenterRoutes = require('./routes/creatorCenter');
 const notificationsRoutes = require('./routes/notifications');
+const checkinRoutes = require('./routes/checkin');
 
 const app = express();
 
@@ -298,6 +299,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/balance', balanceRoutes);
 app.use('/api/creator-center', creatorCenterRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/checkin', checkinRoutes);
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
