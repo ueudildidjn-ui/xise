@@ -83,6 +83,18 @@ async function analyzeVideo(videoPath, label = '源视频') {
 }
 
 /**
+ * 构建自适应缩放滤镜链
+ * 使用 scale + pad + format 实现自动适配不同宽高比的视频
+ * @param {number} width - 目标宽度
+ * @param {number} height - 目标高度
+ * @param {string} pixelFormat - 像素格式（默认 yuv420p）
+ * @returns {string} FFmpeg 滤镜链字符串
+ */
+function buildAdaptiveFilter(width, height, pixelFormat) {
+  return `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=${pixelFormat}`;
+}
+
+/**
  * 计算保持宽高比的缩放尺寸
  * @param {number} sourceWidth - 原视频宽度
  * @param {number} sourceHeight - 原视频高度
@@ -125,7 +137,8 @@ function selectResolutions(videoWidth, videoHeight, configResolutions, options =
   const sourceAspectRatio = videoWidth / videoHeight;
   console.log(`📐 原视频尺寸: ${videoWidth}x${videoHeight}, 宽高比: ${sourceAspectRatio.toFixed(3)}`);
 
-  // 标准分辨率映射（高度 -> 标准宽度），用于自适应缩放
+  // 标准分辨率映射（高度 -> 标准宽度），基于 16:9 宽高比的业界标准分辨率
+  // 854x480 是 16:9 标准 SD 分辨率（与配置 DASH_RESOLUTIONS 一致）
   const STANDARD_WIDTHS = { 2160: 3840, 1080: 1920, 720: 1280, 480: 854, 360: 640 };
   const standardHeights = [2160, 1080, 720, 480, 360];
   
@@ -141,7 +154,7 @@ function selectResolutions(videoWidth, videoHeight, configResolutions, options =
     
     // 使用标准宽度：优先从配置中查找，否则使用标准映射
     const matchedConfig = configResolutions.find(r => r.height === targetHeight);
-    const targetWidth = matchedConfig ? matchedConfig.width : (STANDARD_WIDTHS[targetHeight] || Math.round(targetHeight * 16 / 9));
+    const targetWidth = matchedConfig ? matchedConfig.width : (STANDARD_WIDTHS[targetHeight] || Math.round(targetHeight * 16 / 9)); // 默认使用 16:9 宽高比作为兜底
     
     // 确保宽高是偶数（H.264编码要求）
     const evenWidth = targetWidth % 2 === 0 ? targetWidth : targetWidth + 1;
@@ -357,7 +370,7 @@ async function convertToDash(inputPath, userId, progressCallback) {
         // scale: 缩放到目标尺寸，force_original_aspect_ratio=decrease 保持宽高比不超过目标
         // pad: 居中填充到精确目标尺寸（添加黑边）
         // format: 转换像素格式为 yuv420p
-        const adaptiveFilter = `scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=decrease,pad=${resolution.width}:${resolution.height}:(ow-iw)/2:(oh-ih)/2,format=${ffmpegOpts.pixelFormat}`;
+        const adaptiveFilter = buildAdaptiveFilter(resolution.width, resolution.height, ffmpegOpts.pixelFormat);
 
         const videoOptions = [
           `-map 0:v:0`,
@@ -719,6 +732,7 @@ module.exports = {
   analyzeVideo,
   selectResolutions,
   calculateAspectRatioSize,
+  buildAdaptiveFilter,
   generateOutputPath,
   analyzeTranscodedOutput,
   convertToDash,
