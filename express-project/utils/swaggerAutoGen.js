@@ -244,7 +244,7 @@ function generateSwaggerPath(route) {
   }
 
   // Request Body
-  if (Object.keys(route.bodyParams).length > 0 && ['post', 'put', 'patch'].includes(route.method)) {
+  if (Object.keys(route.bodyParams).length > 0 && ['post', 'put', 'patch', 'delete'].includes(route.method)) {
     const properties = {};
     for (const [name, info] of Object.entries(route.bodyParams)) {
       const prop = { type: info.type || 'string' };
@@ -389,7 +389,7 @@ function mergeWithAutoGen(existingSpec, routesDir) {
 
       // 补充缺失的 requestBody
       if (!existing.requestBody && Object.keys(route.bodyParams).length > 0 &&
-          ['post', 'put', 'patch'].includes(method)) {
+          ['post', 'put', 'patch', 'delete'].includes(method)) {
         const properties = {};
         for (const [name, info] of Object.entries(route.bodyParams)) {
           properties[name] = { type: info.type || 'string' };

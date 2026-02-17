@@ -33,6 +33,7 @@ const { initQueueService, closeQueueService, cleanupExpiredBrowsingHistory } = r
 const { loadSettingsFromRedis } = require('./utils/settingsService');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
+const { generateAccessToken, generateRefreshToken } = require('./utils/jwt');
 
 // 加载环境变量
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
@@ -102,6 +103,171 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 app.get('/api-docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
+});
+
+// JWT测试令牌生成API（用于Swagger调试）
+app.post('/api/test-token', (req, res) => {
+  const { userId, user_id, type } = req.body || {};
+  let payload;
+  if (type === 'admin') {
+    payload = { adminId: userId || 1, username: user_id || 'admin', type: 'admin' };
+  } else {
+    payload = { userId: userId || 1, user_id: user_id || 'test_user' };
+  }
+  const accessToken = generateAccessToken(payload);
+  const refreshToken = generateRefreshToken(payload);
+  res.json({
+    code: 200,
+    message: '测试令牌生成成功',
+    data: {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      payload,
+      usage: '复制 access_token，点击 Swagger 页面的 Authorize 按钮粘贴即可调试'
+    }
+  });
+});
+
+// JWT测试令牌页面
+app.get('/api/test-token', (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JWT测试令牌生成器</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #333; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
+  h1 { font-size: 24px; margin-bottom: 8px; color: #1a1a2e; }
+  .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
+  .subtitle a { color: #4361ee; text-decoration: none; }
+  .card { background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); padding: 28px; width: 100%; max-width: 520px; margin-bottom: 20px; }
+  .card h2 { font-size: 16px; margin-bottom: 16px; color: #1a1a2e; display: flex; align-items: center; gap: 8px; }
+  .form-group { margin-bottom: 14px; }
+  label { display: block; font-size: 13px; color: #555; margin-bottom: 4px; font-weight: 500; }
+  input, select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; transition: border-color 0.2s; }
+  input:focus, select:focus { outline: none; border-color: #4361ee; }
+  .btn { display: inline-block; padding: 10px 24px; background: #4361ee; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 500; transition: background 0.2s; width: 100%; }
+  .btn:hover { background: #3651d4; }
+  .btn:active { transform: scale(0.98); }
+  .result { display: none; margin-top: 20px; }
+  .token-box { background: #f0f4ff; border: 1px solid #d0d9ff; border-radius: 8px; padding: 12px; margin: 8px 0; position: relative; }
+  .token-box code { display: block; word-break: break-all; font-size: 12px; color: #333; line-height: 1.5; max-height: 80px; overflow-y: auto; }
+  .token-box .label { font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 500; }
+  .copy-btn { position: absolute; top: 8px; right: 8px; padding: 4px 10px; background: #4361ee; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; }
+  .copy-btn:hover { background: #3651d4; }
+  .payload-box { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 12px; margin-top: 8px; }
+  .payload-box pre { font-size: 12px; color: #555; white-space: pre-wrap; }
+  .tip { background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px; font-size: 13px; color: #856404; margin-top: 12px; line-height: 1.6; }
+  .tip strong { color: #664d03; }
+  .authorize-btn { display: inline-block; margin-top: 12px; padding: 8px 20px; background: #49cc90; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; text-decoration: none; font-weight: 500; }
+  .authorize-btn:hover { background: #3bb37a; }
+</style>
+</head>
+<body>
+  <h1>🔑 JWT测试令牌生成器</h1>
+  <p class="subtitle">生成测试JWT令牌，用于 <a href="/api-docs" target="_blank">Swagger API文档</a> 调试接口</p>
+  
+  <div class="card">
+    <h2>⚙️ 令牌配置</h2>
+    <div class="form-group">
+      <label for="type">令牌类型</label>
+      <select id="type" onchange="toggleFields()">
+        <option value="user">👤 普通用户令牌</option>
+        <option value="admin">🔧 管理员令牌</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="userId">用户ID (数字)</label>
+      <input type="number" id="userId" value="1" min="1">
+    </div>
+    <div class="form-group">
+      <label for="userIdStr" id="userIdStrLabel">用户标识 (user_id)</label>
+      <input type="text" id="userIdStr" value="test_user" placeholder="输入用户标识">
+    </div>
+    <button class="btn" onclick="generateToken()">🚀 生成测试令牌</button>
+    
+    <div class="result" id="result">
+      <div class="token-box">
+        <div class="label">🎫 Access Token</div>
+        <button class="copy-btn" onclick="copyToken('accessToken')">复制</button>
+        <code id="accessToken"></code>
+      </div>
+      <div class="token-box">
+        <div class="label">🔄 Refresh Token</div>
+        <button class="copy-btn" onclick="copyToken('refreshToken')">复制</button>
+        <code id="refreshToken"></code>
+      </div>
+      <div class="payload-box">
+        <div class="label">📋 Payload</div>
+        <pre id="payload"></pre>
+      </div>
+      <div class="tip">
+        <strong>使用方法：</strong><br>
+        1. 复制上方的 Access Token<br>
+        2. 打开 <a href="/api-docs" target="_blank">API文档页面</a><br>
+        3. 点击页面右上角的 <strong>Authorize</strong> 🔒 按钮<br>
+        4. 粘贴令牌后点击 <strong>Authorize</strong> 确认<br>
+        5. 即可调试所有需要认证的接口
+      </div>
+      <a class="authorize-btn" href="/api-docs" target="_blank">📝 前往API文档调试</a>
+    </div>
+  </div>
+
+<script>
+function toggleFields() {
+  const type = document.getElementById('type').value;
+  const label = document.getElementById('userIdStrLabel');
+  const input = document.getElementById('userIdStr');
+  if (type === 'admin') {
+    label.textContent = '管理员用户名';
+    input.value = 'admin';
+    input.placeholder = '输入管理员用户名';
+  } else {
+    label.textContent = '用户标识 (user_id)';
+    input.value = 'test_user';
+    input.placeholder = '输入用户标识';
+  }
+}
+
+async function generateToken() {
+  const type = document.getElementById('type').value;
+  const userId = parseInt(document.getElementById('userId').value) || 1;
+  const userIdStr = document.getElementById('userIdStr').value || (type === 'admin' ? 'admin' : 'test_user');
+  
+  try {
+    const resp = await fetch('/api/test-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, user_id: userIdStr, type })
+    });
+    const data = await resp.json();
+    if (data.code === 200) {
+      document.getElementById('accessToken').textContent = data.data.access_token;
+      document.getElementById('refreshToken').textContent = data.data.refresh_token;
+      document.getElementById('payload').textContent = JSON.stringify(data.data.payload, null, 2);
+      document.getElementById('result').style.display = 'block';
+    } else {
+      alert('生成失败: ' + data.message);
+    }
+  } catch(e) {
+    alert('请求失败: ' + e.message);
+  }
+}
+
+function copyToken(id) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(function() {
+    const btn = document.querySelector('#' + id).parentElement.querySelector('.copy-btn');
+    btn.textContent = '已复制!';
+    setTimeout(function() { btn.textContent = '复制'; }, 1500);
+  });
+}
+</script>
+</body>
+</html>`);
 });
 
 // 健康检查路由

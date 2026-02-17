@@ -26,6 +26,7 @@ const options = {
         '- 管理员接口需要使用管理员token\n' +
         '- 分页接口支持 `page` 和 `limit` 参数\n\n' +
         '## 调试说明\n' +
+        '- 🔑 打开 [JWT测试令牌页面](/api/test-token) 生成测试令牌\n' +
         '- 点击右侧 **Authorize** 按钮输入JWT令牌\n' +
         '- 展开接口后点击 **Try it out** 进行在线调试\n' +
         '- 带 🔒 标记的接口需要先登录获取token',
@@ -158,6 +159,7 @@ const options = {
       }
     },
     tags: [
+      { name: '调试工具', description: 'JWT测试令牌生成，用于API调试' },
       { name: '认证', description: '用户注册、登录、令牌管理' },
       { name: '用户', description: '用户信息、关注、收藏等' },
       { name: '帖子', description: '帖子的增删改查' },
@@ -182,5 +184,92 @@ const jsdocSpec = swaggerJsdoc(options);
 // 自动扫描路由文件，补充缺失的路由和参数
 const routesDir = path.join(__dirname, '..', 'routes');
 const swaggerSpec = mergeWithAutoGen(jsdocSpec, routesDir);
+
+// 添加JWT测试令牌接口文档
+swaggerSpec.paths['/api/test-token'] = {
+  get: {
+    summary: '🔑 JWT测试令牌页面',
+    description: '打开JWT测试令牌生成页面，可生成用户或管理员测试令牌用于API调试',
+    tags: ['调试工具'],
+    responses: {
+      '200': {
+        description: 'JWT测试令牌生成页面（HTML）'
+      }
+    }
+  },
+  post: {
+    summary: '🔑 生成JWT测试令牌',
+    description: '生成测试用JWT令牌，可用于Swagger Authorize认证后调试需要登录的接口。\\n\\n' +
+      '**使用步骤：**\\n' +
+      '1. 选择令牌类型（普通用户/管理员）\\n' +
+      '2. 点击 Execute 生成令牌\\n' +
+      '3. 复制返回的 access_token\\n' +
+      '4. 点击页面上方 Authorize 按钮粘贴令牌',
+    tags: ['调试工具'],
+    requestBody: {
+      required: false,
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: {
+              userId: {
+                type: 'integer',
+                description: '用户数字ID',
+                example: 1
+              },
+              user_id: {
+                type: 'string',
+                description: '用户标识（普通用户为user_id，管理员为username）',
+                example: 'test_user'
+              },
+              type: {
+                type: 'string',
+                enum: ['user', 'admin'],
+                description: '令牌类型：user=普通用户，admin=管理员',
+                example: 'user'
+              }
+            }
+          },
+          examples: {
+            '普通用户令牌': {
+              summary: '生成普通用户测试令牌',
+              value: { userId: 1, user_id: 'test_user', type: 'user' }
+            },
+            '管理员令牌': {
+              summary: '生成管理员测试令牌',
+              value: { userId: 1, user_id: 'admin', type: 'admin' }
+            }
+          }
+        }
+      }
+    },
+    responses: {
+      '200': {
+        description: '令牌生成成功',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                code: { type: 'integer', example: 200 },
+                message: { type: 'string', example: '测试令牌生成成功' },
+                data: {
+                  type: 'object',
+                  properties: {
+                    access_token: { type: 'string', description: '访问令牌，复制到Authorize使用' },
+                    refresh_token: { type: 'string', description: '刷新令牌' },
+                    payload: { type: 'object', description: '令牌载荷内容' },
+                    usage: { type: 'string', description: '使用说明' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+};
 
 module.exports = swaggerSpec;
