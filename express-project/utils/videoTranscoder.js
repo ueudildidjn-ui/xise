@@ -39,7 +39,9 @@ function extractRotation(videoStream) {
       sd => sd.side_data_type === 'Display Matrix'
     );
     if (displayMatrix && typeof displayMatrix.rotation === 'number') {
-      // side_data中的rotation值通常为负数（如-90），取反以统一约定
+      // Display Matrix的rotation约定：负值表示需要顺时针旋转（如-90→需旋转90°CW）
+      // 正值表示需要逆时针旋转（如90→需旋转90°CCW=270°CW）
+      // 取反后统一为：正90=顺时针90°, 正270=顺时针270°，与tags.rotate一致
       rotation = Math.round(-displayMatrix.rotation);
     }
   }
@@ -152,6 +154,8 @@ function buildScaleFilter(streamIndex, resolution, rotation = 0) {
   
   // 根据旋转角度添加旋转校正滤镜
   // 修复Android设备（如Redmi K80 Pro）竖屏视频以横屏+rotation元数据存储的问题
+  // 注意：extractRotation()已做标准化，此处再次标准化是为了防御性编程
+  // 确保直接传入任意rotation值也能正确处理
   const normalizedRotation = ((rotation % 360) + 360) % 360;
   let filterChain;
   
