@@ -63,6 +63,16 @@ const updateUserPoints = async (userId, amount, type, reason) => {
 };
 
 // 获取余额中心配置（前端需要）
+/**
+ * @swagger
+ * /api/balance/config:
+ *   get:
+ *     summary: 获取余额中心配置
+ *     tags: [余额]
+ *     responses:
+ *       200:
+ *         description: 成功获取余额中心配置
+ */
 router.get('/config', (req, res) => {
   res.json({
     code: RESPONSE_CODES.SUCCESS,
@@ -76,6 +86,18 @@ router.get('/config', (req, res) => {
 });
 
 // 获取用户石榴点余额
+/**
+ * @swagger
+ * /api/balance/local-points:
+ *   get:
+ *     summary: 获取用户石榴点余额
+ *     tags: [余额]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取用户石榴点余额
+ */
 router.get('/local-points', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -98,6 +120,18 @@ router.get('/local-points', authenticateToken, async (req, res) => {
 });
 
 // 获取用户外部余额信息
+/**
+ * @swagger
+ * /api/balance/user-balance:
+ *   get:
+ *     summary: 获取用户外部余额信息
+ *     tags: [余额]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取用户余额信息
+ */
 router.get('/user-balance', authenticateToken, async (req, res) => {
   try {
     // 检查余额中心是否启用
@@ -171,6 +205,30 @@ router.get('/user-balance', authenticateToken, async (req, res) => {
 });
 
 // 兑入石榴点（从用户中心转入本站）
+/**
+ * @swagger
+ * /api/balance/exchange-in:
+ *   post:
+ *     summary: 兑入石榴点（从用户中心转入本站）
+ *     tags: [余额]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: 兑入金额
+ *     responses:
+ *       200:
+ *         description: 兑入成功
+ */
 router.post('/exchange-in', authenticateToken, async (req, res) => {
   try {
     // 检查余额中心是否启用
@@ -274,6 +332,30 @@ router.post('/exchange-in', authenticateToken, async (req, res) => {
 });
 
 // 兑出石榴点（从本站转出到用户中心）
+/**
+ * @swagger
+ * /api/balance/exchange-out:
+ *   post:
+ *     summary: 兑出石榴点（从本站转出到用户中心）
+ *     tags: [余额]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: 兑出金额
+ *     responses:
+ *       200:
+ *         description: 兑出成功
+ */
 router.post('/exchange-out', authenticateToken, async (req, res) => {
   try {
     // 检查余额中心是否启用
@@ -383,6 +465,30 @@ router.post('/exchange-out', authenticateToken, async (req, res) => {
 });
 
 // 购买付费内容
+/**
+ * @swagger
+ * /api/balance/purchase-content:
+ *   post:
+ *     summary: 购买付费内容
+ *     tags: [余额]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - postId
+ *             properties:
+ *               postId:
+ *                 type: integer
+ *                 description: 帖子ID
+ *     responses:
+ *       200:
+ *         description: 购买成功
+ */
 router.post('/purchase-content', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id);
@@ -529,6 +635,25 @@ router.post('/purchase-content', authenticateToken, async (req, res) => {
 });
 
 // 检查用户是否已购买某个帖子
+/**
+ * @swagger
+ * /api/balance/check-purchase/{postId}:
+ *   get:
+ *     summary: 检查用户是否已购买某个帖子
+ *     tags: [余额]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: postId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 帖子ID
+ *     responses:
+ *       200:
+ *         description: 成功获取购买状态
+ */
 router.get('/check-purchase/:postId', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id);
