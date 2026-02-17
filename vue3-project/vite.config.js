@@ -42,6 +42,14 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/api')
       },
+      '/swagger-': {
+        target: 'http://localhost:3001',
+        changeOrigin: true
+      },
+      '/jwt-generator-': {
+        target: 'http://localhost:3001',
+        changeOrigin: true
+      },
       '/qhimgs1': {
         target: 'https://p3.ssl.qhimgs1.com',
         changeOrigin: true,
