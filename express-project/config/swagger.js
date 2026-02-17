@@ -182,8 +182,10 @@ const options = {
 const jsdocSpec = swaggerJsdoc(options);
 
 // 自动扫描路由文件，补充缺失的路由和参数
+// 传入 app.js 路径以自动检测路由文件挂载关系，新增路由文件无需手动更新映射
 const routesDir = path.join(__dirname, '..', 'routes');
-const swaggerSpec = mergeWithAutoGen(jsdocSpec, routesDir);
+const appJsPath = path.join(__dirname, '..', 'app.js');
+const swaggerSpec = mergeWithAutoGen(jsdocSpec, routesDir, appJsPath);
 
 // 添加健康检查接口文档
 swaggerSpec.paths['/api/health'] = {

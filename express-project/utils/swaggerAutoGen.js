@@ -7,12 +7,14 @@
  * 3. 解析路由源码提取请求参数（query/body/path）
  * 4. 为缺少JSDoc注解的路由生成完整的Swagger文档
  * 5. 将自动生成的文档与现有JSDoc文档合并
+ * 6. 自动检测app.js中的路由文件挂载和内联路由，无需手动维护映射表
+ * 7. 开发模式下监听路由文件变更，自动重新生成文档
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// 路由前缀与tag的映射关系
+// 路由前缀与tag的映射关系（用于已知路由的标签分配）
 const ROUTE_TAG_MAP = {
   '/api/auth': '认证',
   '/api/users': '用户',
@@ -29,7 +31,7 @@ const ROUTE_TAG_MAP = {
   '/api/notifications': '通知'
 };
 
-// 路由文件与前缀的映射
+// 静态路由文件映射（作为自动检测的回退方案）
 const ROUTE_FILE_MAP = {
   'auth.js': '/api/auth',
   'users.js': '/api/users',
@@ -45,6 +47,79 @@ const ROUTE_FILE_MAP = {
   'creatorCenter.js': '/api/creator-center',
   'notifications.js': '/api/notifications'
 };
+
+/**
+ * 从app.js源码中自动检测路由文件挂载关系
+ * 解析 app.use('/api/xxx', xxxRoutes) 和对应的 require('./routes/xxx') 
+ * 无需手动维护 ROUTE_FILE_MAP，新增路由文件时自动识别
+ * @param {string} appJsPath - app.js文件的绝对路径
+ * @returns {{ fileMap: Object, appRoutes: Array }} fileMap: 文件名→前缀映射, appRoutes: app.js内联路由
+ */
+function detectRouteMounts(appJsPath) {
+  const fileMap = {};
+  const appRoutes = [];
+
+  if (!fs.existsSync(appJsPath)) {
+    return { fileMap: { ...ROUTE_FILE_MAP }, appRoutes };
+  }
+
+  const source = fs.readFileSync(appJsPath, 'utf8');
+
+  // 步骤1: 提取所有 require('./routes/xxx') 的变量名与文件名映射
+  // 匹配: const xxxRoutes = require('./routes/xxx')
+  const requireMap = {};
+  const requireRegex = /(?:const|let|var)\s+(\w+)\s*=\s*require\(\s*['"`]\.\/routes\/([^'"`]+)['"`]\s*\)/g;
+  let reqMatch;
+  while ((reqMatch = requireRegex.exec(source)) !== null) {
+    const varName = reqMatch[1];
+    let fileName = reqMatch[2];
+    if (!fileName.endsWith('.js')) fileName += '.js';
+    requireMap[varName] = fileName;
+  }
+
+  // 步骤2: 提取 app.use('/prefix', xxxRoutes) 的前缀与变量名映射
+  const useRegex = /app\.use\(\s*['"`]([^'"`]+)['"`]\s*,\s*(\w+)\s*\)/g;
+  let useMatch;
+  while ((useMatch = useRegex.exec(source)) !== null) {
+    const prefix = useMatch[1];
+    const varName = useMatch[2];
+    if (requireMap[varName]) {
+      fileMap[requireMap[varName]] = prefix;
+    }
+  }
+
+  // 步骤3: 检测app.js中的内联路由 app.get/post/put/delete('/api/xxx', ...)
+  const inlineRegex = /app\.(get|post|put|delete|patch)\(\s*['"`]([^'"`]+)['"`]/g;
+  let inlineMatch;
+  while ((inlineMatch = inlineRegex.exec(source)) !== null) {
+    const method = inlineMatch[1].toUpperCase();
+    const routePath = inlineMatch[2];
+    // 只检测 /api/ 开头的业务路由，跳过 /api-docs 等文档元数据路由
+    if (routePath.startsWith('/api/')) {
+      appRoutes.push({ method, path: routePath });
+    }
+  }
+
+  // 步骤4: 如果自动检测结果为空，回退到静态映射
+  if (Object.keys(fileMap).length === 0) {
+    console.warn('⚠️  无法从app.js自动检测路由挂载，使用静态映射');
+    return { fileMap: { ...ROUTE_FILE_MAP }, appRoutes };
+  }
+
+  // 步骤5: 检查是否有新的路由文件未在静态映射中
+  for (const [fileName, prefix] of Object.entries(fileMap)) {
+    if (!ROUTE_FILE_MAP[fileName]) {
+      console.log(`● 自动检测到新路由文件: ${fileName} → ${prefix}`);
+      // 自动为新前缀生成tag名称
+      if (!ROUTE_TAG_MAP[prefix]) {
+        const tagName = prefix.replace('/api/', '').replace(/-/g, ' ');
+        ROUTE_TAG_MAP[prefix] = tagName.charAt(0).toUpperCase() + tagName.slice(1);
+      }
+    }
+  }
+
+  return { fileMap, appRoutes };
+}
 
 /**
  * 检测中间件是否需要认证
@@ -349,12 +424,14 @@ function generateSwaggerPath(route) {
 /**
  * 扫描所有路由文件并生成自动文档
  * @param {string} routesDir - 路由目录路径
- * @returns {Object} 自动生成的 swagger paths 对象
+ * @param {Object} [fileMap] - 路由文件→前缀映射（可选，默认使用ROUTE_FILE_MAP）
+ * @returns {Array} 所有解析出的路由列表
  */
-function scanRoutes(routesDir) {
+function scanRoutes(routesDir, fileMap) {
   const allRoutes = [];
+  const map = fileMap || ROUTE_FILE_MAP;
 
-  for (const [fileName, basePath] of Object.entries(ROUTE_FILE_MAP)) {
+  for (const [fileName, basePath] of Object.entries(map)) {
     const filePath = path.join(routesDir, fileName);
     if (fs.existsSync(filePath)) {
       const routes = parseRouteFile(filePath, basePath);
@@ -368,12 +445,21 @@ function scanRoutes(routesDir) {
 /**
  * 将自动扫描的路由与现有 swagger spec 合并
  * JSDoc 生成的文档优先，自动扫描补充缺失的路由和参数
+ * 支持自动检测app.js中的路由挂载，无需手动维护映射表
  * @param {Object} existingSpec - 现有的 swagger spec（来自 swagger-jsdoc）
  * @param {string} routesDir - 路由目录路径
+ * @param {string} [appJsPath] - app.js路径（可选，用于自动检测路由挂载）
  * @returns {Object} 合并后的 swagger spec
  */
-function mergeWithAutoGen(existingSpec, routesDir) {
-  const routes = scanRoutes(routesDir);
+function mergeWithAutoGen(existingSpec, routesDir, appJsPath) {
+  // 如果提供了app.js路径，自动检测路由挂载关系
+  let fileMap = ROUTE_FILE_MAP;
+  if (appJsPath) {
+    const detected = detectRouteMounts(appJsPath);
+    fileMap = detected.fileMap;
+  }
+
+  const routes = scanRoutes(routesDir, fileMap);
   const spec = JSON.parse(JSON.stringify(existingSpec)); // 深拷贝
 
   let addedCount = 0;
@@ -479,12 +565,13 @@ function mergeWithAutoGen(existingSpec, routesDir) {
 /**
  * 验证swagger文档的完整性
  * 对比路由文件中的实际路由与swagger文档中的路由，报告遗漏
- * 建议在服务启动时调用，确保API变更后文档不会遗漏
+ * 支持自动从app.js检测路由挂载和内联路由，无需手动传入extraRoutes
  * @param {Object} swaggerSpec - 最终的swagger spec对象
  * @param {string} routesDir - 路由文件目录
- * @param {Array<{method: string, path: string}>} extraRoutes - app.js中额外定义的路由
+ * @param {Array<{method: string, path: string}>} [extraRoutes] - 额外路由（兼容旧调用方式）
+ * @param {string} [appJsPath] - app.js路径（可选，用于自动检测内联路由）
  */
-function validateSwaggerCompleteness(swaggerSpec, routesDir, extraRoutes = []) {
+function validateSwaggerCompleteness(swaggerSpec, routesDir, extraRoutes = [], appJsPath) {
   const specPaths = swaggerSpec.paths || {};
   const specEndpoints = new Set();
   for (const [path, methods] of Object.entries(specPaths)) {
@@ -495,7 +582,16 @@ function validateSwaggerCompleteness(swaggerSpec, routesDir, extraRoutes = []) {
     }
   }
 
-  const allRoutes = scanRoutes(routesDir);
+  // 自动检测路由文件映射
+  let fileMap = ROUTE_FILE_MAP;
+  let detectedAppRoutes = [];
+  if (appJsPath) {
+    const detected = detectRouteMounts(appJsPath);
+    fileMap = detected.fileMap;
+    detectedAppRoutes = detected.appRoutes;
+  }
+
+  const allRoutes = scanRoutes(routesDir, fileMap);
   const missing = [];
 
   // 检查路由文件中的路由
@@ -506,12 +602,15 @@ function validateSwaggerCompleteness(swaggerSpec, routesDir, extraRoutes = []) {
     }
   }
 
-  // 检查app.js中额外定义的路由
-  for (const route of extraRoutes) {
+  // 合并手动传入和自动检测的app.js内联路由
+  const allExtraRoutes = [...extraRoutes, ...detectedAppRoutes];
+  const seen = new Set();
+  for (const route of allExtraRoutes) {
     const swaggerPath = route.path.replace(/:(\w+)/g, '{$1}');
     const key = `${route.method.toUpperCase()} ${swaggerPath}`;
-    if (!specEndpoints.has(key)) {
+    if (!specEndpoints.has(key) && !seen.has(key)) {
       missing.push(key);
+      seen.add(key);
     }
   }
 
@@ -526,11 +625,51 @@ function validateSwaggerCompleteness(swaggerSpec, routesDir, extraRoutes = []) {
   return missing;
 }
 
+/**
+ * 监听路由文件变更，在开发模式下自动重新生成文档
+ * 当路由文件被修改时记录变更并提示重启以更新文档
+ * @param {string} routesDir - 路由目录路径
+ * @param {string} [appJsPath] - app.js路径
+ */
+function watchRouteChanges(routesDir, appJsPath) {
+  const watchPaths = [routesDir];
+  if (appJsPath) watchPaths.push(path.dirname(appJsPath));
+
+  // 使用防抖避免频繁触发
+  let debounceTimer = null;
+  const changedFiles = new Set();
+
+  for (const watchPath of watchPaths) {
+    try {
+      fs.watch(watchPath, { recursive: false }, (eventType, filename) => {
+        if (!filename) return;
+        // 只关注.js路由文件和app.js
+        if (!filename.endsWith('.js')) return;
+        if (watchPath === routesDir || filename === path.basename(appJsPath || '')) {
+          changedFiles.add(filename);
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            console.log(`🔄 检测到路由文件变更: ${[...changedFiles].join(', ')}`);
+            console.log('   请重启服务以更新Swagger文档');
+            changedFiles.clear();
+          }, 1000);
+        }
+      });
+    } catch (e) {
+      // 静默处理 - 文件监听失败不影响主功能
+    }
+  }
+
+  console.log('👀 开发模式: 正在监听路由文件变更');
+}
+
 module.exports = {
   scanRoutes,
   mergeWithAutoGen,
   parseRouteFile,
+  detectRouteMounts,
   validateSwaggerCompleteness,
+  watchRouteChanges,
   ROUTE_FILE_MAP,
   ROUTE_TAG_MAP
 };
