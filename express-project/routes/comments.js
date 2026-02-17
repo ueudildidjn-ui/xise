@@ -44,6 +44,37 @@ async function deleteCommentRecursive(commentId) {
 }
 
 // 获取评论列表
+/**
+ * @swagger
+ * /api/comments:
+ *   get:
+ *     summary: 获取评论列表
+ *     tags: [评论]
+ *     parameters:
+ *       - in: query
+ *         name: post_id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 帖子ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: 每页数量
+ *     responses:
+ *       200:
+ *         description: 成功
+ *       500:
+ *         description: 服务器错误
+ */
 router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const postId = req.query.post_id;
@@ -179,6 +210,39 @@ router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
 });
 
 // 创建评论
+/**
+ * @swagger
+ * /api/comments:
+ *   post:
+ *     summary: 创建评论
+ *     tags: [评论]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - post_id
+ *               - content
+ *             properties:
+ *               post_id:
+ *                 type: integer
+ *                 description: 帖子ID
+ *               content:
+ *                 type: string
+ *                 description: 评论内容
+ *               parent_id:
+ *                 type: integer
+ *                 description: 父评论ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *       500:
+ *         description: 服务器错误
+ */
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { post_id, content, parent_id } = req.body;
@@ -509,6 +573,37 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // 获取子评论列表
+/**
+ * @swagger
+ * /api/comments/{id}/replies:
+ *   get:
+ *     summary: 获取子评论列表
+ *     tags: [评论]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 评论ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: 每页数量
+ *     responses:
+ *       200:
+ *         description: 成功
+ *       500:
+ *         description: 服务器错误
+ */
 router.get('/:id/replies', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const parentId = BigInt(req.params.id);
@@ -606,6 +701,27 @@ router.get('/:id/replies', optionalAuthWithGuestRestriction, async (req, res) =>
 });
 
 // 删除评论
+/**
+ * @swagger
+ * /api/comments/{id}:
+ *   delete:
+ *     summary: 删除评论
+ *     tags: [评论]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 评论ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *       500:
+ *         description: 服务器错误
+ */
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const commentId = BigInt(req.params.id);
