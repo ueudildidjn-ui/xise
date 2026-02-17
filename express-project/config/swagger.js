@@ -1,9 +1,18 @@
 /**
  * Swagger/OpenAPI 配置
  * 自动生成API文档，支持在线调试
+ * 
+ * 采用 swagger-jsdoc + 自动路由扫描 双重机制：
+ * - swagger-jsdoc: 解析路由文件中的 @swagger JSDoc注解
+ * - swaggerAutoGen: 自动扫描路由源码，补充缺失的路由和参数
  */
 
+const path = require('path');
 const swaggerJsdoc = require('swagger-jsdoc');
+const { mergeWithAutoGen } = require('../utils/swaggerAutoGen');
+
+const config = require('./config');
+const port = config.server.port;
 
 const options = {
   definition: {
@@ -16,7 +25,11 @@ const options = {
         '- 所有接口统一返回 JSON 格式\n' +
         '- 需要认证的接口请在请求头中携带 `Authorization: Bearer <token>`\n' +
         '- 管理员接口需要使用管理员token\n' +
-        '- 分页接口支持 `page` 和 `limit` 参数',
+        '- 分页接口支持 `page` 和 `limit` 参数\n\n' +
+        '## 调试说明\n' +
+        '- 点击右侧 **Authorize** 按钮输入JWT令牌\n' +
+        '- 展开接口后点击 **Try it out** 进行在线调试\n' +
+        '- 带 🔒 标记的接口需要先登录获取token',
       contact: {
         name: 'ZTMYO',
         url: 'https://github.com/ZTMYO'
@@ -28,7 +41,11 @@ const options = {
     },
     servers: [
       {
-        url: 'http://localhost:3001',
+        url: '/',
+        description: '当前服务器（相对路径，自动适配）'
+      },
+      {
+        url: `http://localhost:${port}`,
         description: '本地开发服务器'
       }
     ],
@@ -157,9 +174,14 @@ const options = {
       { name: '管理后台', description: '管理员专用接口' }
     ]
   },
-  apis: ['./routes/*.js']
+  apis: [path.join(__dirname, '..', 'routes', '*.js')]
 };
 
-const swaggerSpec = swaggerJsdoc(options);
+// 生成 JSDoc 注解的 swagger spec
+const jsdocSpec = swaggerJsdoc(options);
+
+// 自动扫描路由文件，补充缺失的路由和参数
+const routesDir = path.join(__dirname, '..', 'routes');
+const swaggerSpec = mergeWithAutoGen(jsdocSpec, routesDir);
 
 module.exports = swaggerSpec;
