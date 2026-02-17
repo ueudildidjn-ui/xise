@@ -7,6 +7,41 @@ const { authenticateToken } = require('../middleware/auth')
 // ===================== 用户通知 =====================
 
 // 获取当前用户的通知列表
+/**
+ * @swagger
+ * /api/notifications:
+ *   get:
+ *     summary: 获取当前用户的通知列表
+ *     tags: [通知]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: 每页数量
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: 通知类型（支持逗号分隔的多类型筛选，如 1,2,6）
+ *       - in: query
+ *         name: is_read
+ *         schema:
+ *           type: string
+ *         description: 已读状态筛选
+ *     responses:
+ *       200:
+ *         description: 成功获取通知列表
+ */
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id)
@@ -108,6 +143,18 @@ router.get('/', authenticateToken, async (req, res) => {
 })
 
 // 获取未读通知数量
+/**
+ * @swagger
+ * /api/notifications/unread-count:
+ *   get:
+ *     summary: 获取未读通知数量
+ *     tags: [通知]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取未读通知数量
+ */
 router.get('/unread-count', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id)
@@ -143,6 +190,18 @@ router.get('/unread-count', authenticateToken, async (req, res) => {
 })
 
 // 标记所有通知为已读
+/**
+ * @swagger
+ * /api/notifications/read-all:
+ *   put:
+ *     summary: 标记所有通知为已读
+ *     tags: [通知]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 全部标记已读成功
+ */
 router.put('/read-all', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id)
@@ -160,6 +219,25 @@ router.put('/read-all', authenticateToken, async (req, res) => {
 })
 
 // 标记通知为已读
+/**
+ * @swagger
+ * /api/notifications/{id}/read:
+ *   put:
+ *     summary: 标记单个通知为已读
+ *     tags: [通知]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 通知ID
+ *     responses:
+ *       200:
+ *         description: 标记已读成功
+ */
 router.put('/:id/read', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id)
@@ -186,6 +264,25 @@ router.put('/:id/read', authenticateToken, async (req, res) => {
 })
 
 // 删除通知
+/**
+ * @swagger
+ * /api/notifications/{id}:
+ *   delete:
+ *     summary: 删除通知
+ *     tags: [通知]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 通知ID
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id)
@@ -211,6 +308,37 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // ===================== 系统通知 =====================
 
 // 获取当前用户的系统通知列表
+/**
+ * @swagger
+ * /api/notifications/system:
+ *   get:
+ *     summary: 获取当前用户的系统通知列表
+ *     tags: [通知]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: 每页数量
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [system, activity]
+ *         description: 通知类型
+ *     responses:
+ *       200:
+ *         description: 成功获取系统通知列表
+ */
 router.get('/system', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id)
@@ -272,6 +400,18 @@ router.get('/system', authenticateToken, async (req, res) => {
 })
 
 // 获取需要弹窗显示的系统通知
+/**
+ * @swagger
+ * /api/notifications/system/popup:
+ *   get:
+ *     summary: 获取需要弹窗显示的系统通知
+ *     tags: [通知]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功获取弹窗通知
+ */
 router.get('/system/popup', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id)
@@ -299,6 +439,25 @@ router.get('/system/popup', authenticateToken, async (req, res) => {
 })
 
 // 确认系统通知（标记已读）
+/**
+ * @swagger
+ * /api/notifications/system/{id}/confirm:
+ *   post:
+ *     summary: 确认系统通知（标记已读）
+ *     tags: [通知]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 系统通知ID
+ *     responses:
+ *       200:
+ *         description: 确认成功
+ */
 router.post('/system/:id/confirm', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id)
@@ -335,6 +494,25 @@ router.post('/system/:id/confirm', authenticateToken, async (req, res) => {
 })
 
 // 删除（dismiss）系统通知（对当前用户隐藏）
+/**
+ * @swagger
+ * /api/notifications/system/{id}/dismiss:
+ *   delete:
+ *     summary: 删除（dismiss）系统通知（对当前用户隐藏）
+ *     tags: [通知]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 系统通知ID
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
 router.delete('/system/:id/dismiss', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id)
