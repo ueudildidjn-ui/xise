@@ -6,36 +6,6 @@ const { authenticateToken } = require('../middleware/auth');
 const NotificationHelper = require('../utils/notificationHelper');
 
 // 点赞/取消点赞
-/**
- * @swagger
- * /api/likes:
- *   post:
- *     summary: 点赞/取消点赞
- *     tags: [点赞]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - target_type
- *               - target_id
- *             properties:
- *               target_type:
- *                 type: integer
- *                 description: 目标类型 (1=帖子, 2=评论)
- *               target_id:
- *                 type: integer
- *                 description: 目标ID
- *     responses:
- *       200:
- *         description: 成功
- *       500:
- *         description: 服务器错误
- */
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { target_type, target_id } = req.body;
@@ -167,38 +137,6 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // 取消点赞（兼容旧接口）
-/**
- * @swagger
- * /api/likes:
- *   delete:
- *     summary: 取消点赞（兼容旧接口）
- *     tags: [点赞]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - target_type
- *               - target_id
- *             properties:
- *               target_type:
- *                 type: integer
- *                 description: 目标类型 (1=帖子, 2=评论)
- *               target_id:
- *                 type: integer
- *                 description: 目标ID
- *     responses:
- *       200:
- *         description: 成功
- *       404:
- *         description: 点赞记录不存在
- *       500:
- *         description: 服务器错误
- */
 router.delete('/', authenticateToken, async (req, res) => {
   try {
     const { target_type, target_id } = req.body;

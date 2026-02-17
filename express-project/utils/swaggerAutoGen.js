@@ -226,14 +226,44 @@ function parseRouteFile(filePath, basePath) {
       pathParams.push(paramMatch[1]);
     }
 
-    // 解析 query 参数 - 从 req.query.xxx 中提取
+    // 解析 query 参数 - 支持两种模式
     const queryParams = new Map();
+
+    // 模式1: 解构赋值 const { page, limit, type } = req.query
+    const queryDestructRegex = /(?:const|let|var)\s*\{([^}]+)\}\s*=\s*req\.query/g;
+    let queryDestructMatch;
+    while ((queryDestructMatch = queryDestructRegex.exec(afterContext)) !== null) {
+      const cleanedContent = queryDestructMatch[1].replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      const params = cleanedContent.split(',');
+      for (const param of params) {
+        let cleanParam = param.trim();
+        let defaultValue = undefined;
+        if (cleanParam.includes('=')) {
+          const parts = cleanParam.split('=');
+          cleanParam = parts[0].trim();
+          defaultValue = parts.slice(1).join('=').trim();
+        }
+        // 处理重命名 如 error: oauthError
+        if (cleanParam.includes(':')) {
+          cleanParam = cleanParam.split(':')[0].trim();
+        }
+        if (cleanParam && !cleanParam.startsWith('...')) {
+          let type = 'string';
+          if (defaultValue !== undefined) {
+            if (/^\d+$/.test(defaultValue)) type = 'integer';
+            else if (defaultValue === 'true' || defaultValue === 'false') type = 'boolean';
+          }
+          queryParams.set(cleanParam, { type, required: false });
+        }
+      }
+    }
+
+    // 模式2: 点访问 req.query.xxx
     const queryRegex = /req\.query\.(\w+)/g;
     let queryMatch;
     while ((queryMatch = queryRegex.exec(afterContext)) !== null) {
       const name = queryMatch[1];
       if (!queryParams.has(name)) {
-        // 尝试检测类型
         const surrounding = afterContext.substring(
           Math.max(0, queryMatch.index - 100),
           Math.min(afterContext.length, queryMatch.index + 200)
@@ -687,6 +717,7 @@ function watchRouteChanges(routesDir, appJsPath) {
 module.exports = {
   scanRoutes,
   mergeWithAutoGen,
+  generateSwaggerPath,
   parseRouteFile,
   detectRouteMounts,
   validateSwaggerCompleteness,

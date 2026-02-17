@@ -6,51 +6,6 @@ const { optionalAuthWithGuestRestriction } = require('../middleware/auth');
 const { protectPostListItem } = require('../utils/paidContentHelper');
 
 // 搜索（通用搜索接口）
-/**
- * @swagger
- * /api/search:
- *   get:
- *     summary: 搜索帖子/用户
- *     tags: [搜索]
- *     security:
- *       - bearerAuth: []
- *       - {}
- *     parameters:
- *       - in: query
- *         name: keyword
- *         schema:
- *           type: string
- *         description: 搜索关键词
- *       - in: query
- *         name: tag
- *         schema:
- *           type: string
- *         description: 标签筛选
- *       - in: query
- *         name: type
- *         schema:
- *           type: string
- *           enum: [all, posts, videos, users]
- *           default: all
- *         description: 搜索类型
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: 页码
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 每页数量
- *     responses:
- *       200:
- *         description: 成功
- *       500:
- *         description: 服务器错误
- */
 router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const keyword = req.query.keyword || '';

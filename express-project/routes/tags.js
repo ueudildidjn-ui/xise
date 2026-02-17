@@ -6,21 +6,6 @@ const { getOrSet, CACHE_TTL } = require('../utils/cache');
 const { optionalAuthWithGuestRestriction } = require('../middleware/auth');
 
 // 获取所有标签
-/**
- * @swagger
- * /api/tags:
- *   get:
- *     summary: 获取所有标签
- *     tags: [标签]
- *     security:
- *       - bearerAuth: []
- *       - {}
- *     responses:
- *       200:
- *         description: 成功
- *       500:
- *         description: 服务器错误
- */
 router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const rows = await getOrSet('tags:all', async () => {
@@ -41,28 +26,6 @@ router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
 });
 
 // 获取热门标签
-/**
- * @swagger
- * /api/tags/hot:
- *   get:
- *     summary: 获取热门标签
- *     tags: [标签]
- *     security:
- *       - bearerAuth: []
- *       - {}
- *     parameters:
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
- *         description: 返回数量限制
- *     responses:
- *       200:
- *         description: 成功
- *       500:
- *         description: 服务器错误
- */
 router.get('/hot', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;

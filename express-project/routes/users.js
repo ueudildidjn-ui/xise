@@ -15,41 +15,6 @@ const redis = require('../utils/redis');
 // 内容最大长度限制
 const MAX_CONTENT_LENGTH = 1000;
 
-/**
- * @swagger
- * /api/users/search:
- *   get:
- *     summary: 搜索用户
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: keyword
- *         required: true
- *         schema:
- *           type: string
- *         description: 搜索关键词（昵称或汐社号）
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: 页码
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 每页数量
- *     responses:
- *       200:
- *         description: 搜索成功
- *       400:
- *         description: 缺少搜索关键词
- *       500:
- *         description: 服务器内部错误
- */
 // 搜索用户（必须放在 /:id 之前）
 router.get('/search', authenticateToken, async (req, res) => {
   try {
@@ -150,38 +115,6 @@ router.get('/search', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/history:
- *   post:
- *     summary: 记录浏览历史
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - post_id
- *             properties:
- *               post_id:
- *                 type: integer
- *                 description: 笔记ID
- *     responses:
- *       200:
- *         description: 浏览记录已保存
- *       400:
- *         description: 笔记ID不能为空
- *       404:
- *         description: 笔记不存在
- *       429:
- *         description: 浏览历史记录频率过高
- *       500:
- *         description: 服务器内部错误
- */
 // 记录浏览历史（使用异步队列，限制每用户每分钟20条）
 router.post('/history', authenticateToken, async (req, res) => {
   try {
@@ -232,34 +165,6 @@ router.post('/history', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/history:
- *   get:
- *     summary: 获取浏览历史列表
- *     description: 只返回48小时内的记录
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: 页码
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 每页数量
- *     responses:
- *       200:
- *         description: 获取成功
- *       500:
- *         description: 服务器内部错误
- */
 // 获取浏览历史列表（只返回48小时内的记录）
 router.get('/history', authenticateToken, async (req, res) => {
   try {
@@ -378,29 +283,6 @@ router.get('/history', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/history/{postId}:
- *   delete:
- *     summary: 删除单条浏览历史
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: postId
- *         required: true
- *         schema:
- *           type: integer
- *         description: 笔记ID
- *     responses:
- *       200:
- *         description: 浏览记录已删除
- *       404:
- *         description: 浏览记录不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 删除单条浏览历史
 router.delete('/history/:postId', authenticateToken, async (req, res) => {
   try {
@@ -441,20 +323,6 @@ router.delete('/history/:postId', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/history:
- *   delete:
- *     summary: 清空所有浏览历史
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 浏览历史已清空
- *       500:
- *         description: 服务器内部错误
- */
 // 清空所有浏览历史
 router.delete('/history', authenticateToken, async (req, res) => {
   try {
@@ -478,19 +346,6 @@ router.delete('/history', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/onboarding-config:
- *   get:
- *     summary: 获取初始设置页面配置
- *     description: 公开接口，不需要登录
- *     tags: [用户]
- *     responses:
- *       200:
- *         description: 获取成功
- *       500:
- *         description: 服务器内部错误
- */
 // 获取初始设置页面配置（公开接口，不需要登录）
 router.get('/onboarding-config', async (req, res) => {
   try {
@@ -513,21 +368,6 @@ router.get('/onboarding-config', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/onboarding-draft:
- *   get:
- *     summary: 获取引导页草稿
- *     description: 从 Redis 中获取引导页草稿
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 获取成功
- *       500:
- *         description: 服务器内部错误
- */
 // 获取引导页草稿（从 Redis）
 router.get('/onboarding-draft', authenticateToken, async (req, res) => {
   try {
@@ -544,43 +384,6 @@ router.get('/onboarding-draft', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/onboarding-draft:
- *   put:
- *     summary: 保存引导页草稿
- *     description: 保存到 Redis，7天过期
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               currentStep:
- *                 type: integer
- *                 description: 当前步骤
- *               gender:
- *                 type: string
- *                 description: 性别
- *               birthday:
- *                 type: string
- *                 description: 生日
- *               interests:
- *                 type: string
- *                 description: 兴趣爱好
- *               customFields:
- *                 type: object
- *                 description: 自定义字段
- *     responses:
- *       200:
- *         description: 保存成功
- *       500:
- *         description: 服务器内部错误
- */
 // 保存引导页草稿（到 Redis，7天过期）
 router.put('/onboarding-draft', authenticateToken, async (req, res) => {
   try {
@@ -598,44 +401,6 @@ router.put('/onboarding-draft', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/onboarding:
- *   post:
- *     summary: 完成开始页面引导
- *     description: 填写性别、生日、兴趣爱好等信息
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               gender:
- *                 type: string
- *                 enum: ['男', '女', '']
- *                 description: 性别
- *               birthday:
- *                 type: string
- *                 format: date
- *                 description: 生日
- *               interests:
- *                 type: string
- *                 description: 兴趣爱好
- *               custom_fields:
- *                 type: object
- *                 description: 自定义字段（key最长20字符，value最长50字符）
- *     responses:
- *       200:
- *         description: 引导信息保存成功
- *       400:
- *         description: 参数无效
- *       500:
- *         description: 服务器内部错误
- */
 // 完成开始页面引导（填写性别、生日、兴趣爱好）
 router.post('/onboarding', authenticateToken, async (req, res) => {
   try {
@@ -732,22 +497,6 @@ router.post('/onboarding', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/privacy-settings:
- *   get:
- *     summary: 获取隐私设置
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取隐私设置
 router.get('/privacy-settings', authenticateToken, async (req, res) => {
   try {
@@ -780,44 +529,6 @@ router.get('/privacy-settings', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/privacy-settings:
- *   put:
- *     summary: 更新隐私设置
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               privacy_birthday:
- *                 type: boolean
- *                 description: 是否公开生日
- *               privacy_age:
- *                 type: boolean
- *                 description: 是否公开年龄
- *               privacy_zodiac:
- *                 type: boolean
- *                 description: 是否公开星座
- *               privacy_mbti:
- *                 type: boolean
- *                 description: 是否公开MBTI
- *               privacy_custom_fields:
- *                 type: object
- *                 description: 自定义字段隐私设置
- *     responses:
- *       200:
- *         description: 隐私设置更新成功
- *       400:
- *         description: 没有需要更新的设置
- *       500:
- *         description: 服务器内部错误
- */
 // 更新隐私设置
 router.put('/privacy-settings', authenticateToken, async (req, res) => {
   try {
@@ -862,29 +573,6 @@ router.put('/privacy-settings', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/personality-tags:
- *   get:
- *     summary: 获取用户个性标签
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取用户个性标签
 router.get('/:id/personality-tags', authenticateToken, async (req, res) => {
   try {
@@ -939,29 +627,6 @@ router.get('/:id/personality-tags', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}:
- *   get:
- *     summary: 获取用户信息
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取用户信息
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
@@ -1061,33 +726,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users:
- *   get:
- *     summary: 获取用户列表
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: 页码
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 每页数量
- *     responses:
- *       200:
- *         description: 获取成功
- *       500:
- *         description: 服务器内部错误
- */
 // 获取用户列表
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -1126,83 +764,6 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}:
- *   put:
- *     summary: 更新用户资料
- *     description: 只能修改自己的资料
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - nickname
- *             properties:
- *               nickname:
- *                 type: string
- *                 description: 昵称
- *               avatar:
- *                 type: string
- *                 description: 头像URL
- *               background:
- *                 type: string
- *                 description: 背景图URL
- *               bio:
- *                 type: string
- *                 description: 个人简介
- *               location:
- *                 type: string
- *                 description: 所在地
- *               gender:
- *                 type: string
- *                 description: 性别
- *               zodiac_sign:
- *                 type: string
- *                 description: 星座
- *               mbti:
- *                 type: string
- *                 description: MBTI类型
- *               education:
- *                 type: string
- *                 description: 学历
- *               major:
- *                 type: string
- *                 description: 专业
- *               interests:
- *                 type: string
- *                 description: 兴趣爱好
- *               birthday:
- *                 type: string
- *                 format: date
- *                 description: 生日
- *               custom_fields:
- *                 type: object
- *                 description: 自定义字段
- *     responses:
- *       200:
- *         description: 资料更新成功
- *       400:
- *         description: 昵称不能为空
- *       403:
- *         description: 只能修改自己的资料
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 更新用户资料（用户自己）
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
@@ -1391,51 +952,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/password:
- *   put:
- *     summary: 修改密码
- *     description: 只能修改自己的密码
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - currentPassword
- *               - newPassword
- *             properties:
- *               currentPassword:
- *                 type: string
- *                 description: 当前密码
- *               newPassword:
- *                 type: string
- *                 minLength: 6
- *                 description: 新密码（不少于6位）
- *     responses:
- *       200:
- *         description: 密码修改成功
- *       400:
- *         description: 当前密码错误或参数无效
- *       403:
- *         description: 只能修改自己的密码
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 修改密码
 router.put('/:id/password', authenticateToken, async (req, res) => {
   try {
@@ -1492,32 +1008,6 @@ router.put('/:id/password', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}:
- *   delete:
- *     summary: 删除账号
- *     description: 只能删除自己的账号，同时删除所有关联数据
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *     responses:
- *       200:
- *         description: 账号删除成功
- *       403:
- *         description: 只能删除自己的账号
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 删除账号
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
@@ -1563,31 +1053,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/follow:
- *   post:
- *     summary: 关注用户
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 目标用户汐社号
- *     responses:
- *       200:
- *         description: 关注成功
- *       400:
- *         description: 不能关注自己/已经关注/黑名单限制
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 关注用户
 router.post('/:id/follow', authenticateToken, async (req, res) => {
   try {
@@ -1657,29 +1122,6 @@ router.post('/:id/follow', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/follow:
- *   delete:
- *     summary: 取消关注用户
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 目标用户汐社号
- *     responses:
- *       200:
- *         description: 取消关注成功
- *       404:
- *         description: 用户不存在或关注记录不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 取消关注用户
 router.delete('/:id/follow', authenticateToken, async (req, res) => {
   try {
@@ -1726,29 +1168,6 @@ router.delete('/:id/follow', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/follow-status:
- *   get:
- *     summary: 获取关注状态
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 目标用户汐社号
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取关注状态
 router.get('/:id/follow-status', authenticateToken, async (req, res) => {
   try {
@@ -1812,41 +1231,6 @@ router.get('/:id/follow-status', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/following:
- *   get:
- *     summary: 获取用户关注列表
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: 页码
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 每页数量
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取用户关注列表
 router.get('/:id/following', authenticateToken, async (req, res) => {
   try {
@@ -1948,41 +1332,6 @@ router.get('/:id/following', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/followers:
- *   get:
- *     summary: 获取用户粉丝列表
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: 页码
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 每页数量
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取用户粉丝列表
 router.get('/:id/followers', authenticateToken, async (req, res) => {
   try {
@@ -2084,41 +1433,6 @@ router.get('/:id/followers', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/mutual-follows:
- *   get:
- *     summary: 获取互相关注列表
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: 页码
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 每页数量
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取互相关注列表
 router.get('/:id/mutual-follows', authenticateToken, async (req, res) => {
   try {
@@ -2233,64 +1547,6 @@ router.get('/:id/mutual-follows', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/posts:
- *   get:
- *     summary: 获取用户发布的笔记列表
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: 页码
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 每页数量
- *       - in: query
- *         name: category
- *         schema:
- *           type: integer
- *         description: 分类ID
- *       - in: query
- *         name: keyword
- *         schema:
- *           type: string
- *         description: 搜索关键词（标题或内容）
- *       - in: query
- *         name: sort
- *         schema:
- *           type: string
- *           default: created_at
- *           enum: [created_at, view_count, like_count, collect_count, comment_count]
- *         description: 排序字段
- *       - in: query
- *         name: visibility
- *         schema:
- *           type: string
- *           enum: [public, private, friends_only]
- *         description: 可见性过滤（仅本人可用）
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取用户发布的笔记列表
 router.get('/:id/posts', authenticateToken, async (req, res) => {
   try {
@@ -2464,41 +1720,6 @@ router.get('/:id/posts', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/collections:
- *   get:
- *     summary: 获取用户收藏列表
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: 页码
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 每页数量
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取用户收藏列表
 router.get('/:id/collections', authenticateToken, async (req, res) => {
   try {
@@ -2636,41 +1857,6 @@ router.get('/:id/collections', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/likes:
- *   get:
- *     summary: 获取用户点赞列表
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *         description: 页码
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *         description: 每页数量
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取用户点赞列表
 router.get('/:id/likes', authenticateToken, async (req, res) => {
   try {
@@ -2786,29 +1972,6 @@ router.get('/:id/likes', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/stats:
- *   get:
- *     summary: 获取用户统计信息
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 用户汐社号
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取用户统计信息
 router.get('/:id/stats', authenticateToken, async (req, res) => {
   try {
@@ -2857,18 +2020,6 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/toolbar/items:
- *   get:
- *     summary: 获取用户页面工具栏配置
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 获取成功
- */
 // 获取用户页面工具栏配置
 router.get('/toolbar/items', authenticateToken, async (req, res) => {
   try {
@@ -2912,32 +2063,6 @@ router.get('/toolbar/items', authenticateToken, async (req, res) => {
 
 // ===================== 黑名单功能 =====================
 
-/**
- * @swagger
- * /api/users/{id}/block:
- *   post:
- *     summary: 加入黑名单
- *     description: 拉黑用户，同时移除双方关注关系
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 目标用户汐社号
- *     responses:
- *       200:
- *         description: 拉黑成功
- *       400:
- *         description: 不能拉黑自己/已经拉黑
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 加入黑名单
 router.post('/:id/block', authenticateToken, async (req, res) => {
   try {
@@ -3004,29 +2129,6 @@ router.post('/:id/block', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/block:
- *   delete:
- *     summary: 取消拉黑
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 目标用户汐社号
- *     responses:
- *       200:
- *         description: 取消拉黑成功
- *       404:
- *         description: 用户不存在或黑名单记录不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 取消拉黑
 router.delete('/:id/block', authenticateToken, async (req, res) => {
   try {
@@ -3062,29 +2164,6 @@ router.delete('/:id/block', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/{id}/block-status:
- *   get:
- *     summary: 获取黑名单状态
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: 目标用户汐社号
- *     responses:
- *       200:
- *         description: 获取成功
- *       404:
- *         description: 用户不存在
- *       500:
- *         description: 服务器内部错误
- */
 // 获取黑名单状态
 router.get('/:id/block-status', authenticateToken, async (req, res) => {
   try {
@@ -3131,20 +2210,6 @@ router.get('/:id/block-status', authenticateToken, async (req, res) => {
 
 // ===================== 认证相关路由 =====================
 
-/**
- * @swagger
- * /api/users/verification/status:
- *   get:
- *     summary: 获取认证状态
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 获取成功
- *       500:
- *         description: 服务器内部错误
- */
 // 获取认证状态
 router.get('/verification/status', authenticateToken, async (req, res) => {
   try {
@@ -3177,43 +2242,6 @@ router.get('/verification/status', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/verification:
- *   post:
- *     summary: 提交认证申请
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - type
- *               - content
- *             properties:
- *               type:
- *                 type: string
- *                 description: 认证类型（个人认证或企业认证）
- *               content:
- *                 type: string
- *                 description: 认证内容
- *               verifiedName:
- *                 type: string
- *                 description: 认证名称
- *     responses:
- *       200:
- *         description: 认证申请提交成功
- *       400:
- *         description: 缺少必填字段或无效的认证类型
- *       409:
- *         description: 已有待审核或已通过的认证申请
- *       500:
- *         description: 服务器内部错误
- */
 // 提交认证申请
 router.post('/verification', authenticateToken, async (req, res) => {
   try {
@@ -3259,23 +2287,6 @@ router.post('/verification', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/verification/revoke:
- *   delete:
- *     summary: 撤回认证申请
- *     description: 撤回认证申请，如果已通过则重置认证状态
- *     tags: [用户]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: 认证申请已撤回
- *       404:
- *         description: 没有找到认证申请
- *       500:
- *         description: 服务器内部错误
- */
 // 撤回认证申请
 router.delete('/verification/revoke', authenticateToken, async (req, res) => {
   try {
