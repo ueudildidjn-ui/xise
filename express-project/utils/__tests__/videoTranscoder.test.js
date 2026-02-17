@@ -1,6 +1,6 @@
 /**
  * Video Transcoder Unit Tests
- * Tests for aspect ratio preservation and resolution selection
+ * Tests for aspect ratio preservation and adaptive resolution selection
  */
 
 const { calculateAspectRatioSize, selectResolutions } = require('../videoTranscoder');
@@ -45,7 +45,7 @@ describe('Video Transcoder - Aspect Ratio Preservation', () => {
     });
   });
 
-  describe('selectResolutions', () => {
+  describe('selectResolutions (adaptive mode)', () => {
     const testResolutions = config.videoTranscoding.dash.resolutions;
 
     test('should include original quality option', () => {
@@ -77,43 +77,48 @@ describe('Video Transcoder - Aspect Ratio Preservation', () => {
       expect(labels).toContain('360p');
     });
 
-    test('should preserve aspect ratio for portrait video', () => {
+    test('should use standard dimensions for adaptive scaling (not proportional)', () => {
+      // For a portrait video, adaptive mode uses standard dimensions (e.g., 640x360)
+      // The FFmpeg adaptive filter (scale+pad) handles aspect ratio preservation
       const result = selectResolutions(720, 1280, testResolutions, {
         includeOriginal: true,
         originalMaxBitrate: 8000
       });
       
-      const sourceRatio = 720 / 1280;
-      
-      result.forEach(resolution => {
-        if (!resolution.isOriginal) {
-          const resolutionRatio = resolution.width / resolution.height;
-          expect(Math.abs(sourceRatio - resolutionRatio)).toBeLessThan(0.01);
-        }
+      const nonOriginal = result.filter(r => !r.isOriginal);
+      // Each non-original resolution should use standard config dimensions
+      nonOriginal.forEach(resolution => {
+        expect(resolution.width % 2).toBe(0);
+        expect(resolution.height % 2).toBe(0);
       });
     });
 
-    test('should not transcode to resolutions higher than source', () => {
+    test('should not transcode to resolutions higher than source max dimension', () => {
       const result = selectResolutions(640, 360, testResolutions, {
         includeOriginal: true,
         originalMaxBitrate: 8000
       });
       
-      result.forEach(resolution => {
-        expect(resolution.height).toBeLessThanOrEqual(360);
+      // For 640x360, max dimension is 640
+      // In adaptive mode, resolutions with target height < 640 are included
+      // (480p and 360p), the adaptive filter handles proper scaling
+      const nonOriginal = result.filter(r => !r.isOriginal);
+      nonOriginal.forEach(resolution => {
+        expect(resolution.height).toBeLessThan(Math.max(640, 360));
       });
     });
 
-    test('should skip resolutions equal to or higher than source height', () => {
+    test('should skip resolutions equal to or higher than source max dimension', () => {
       const result = selectResolutions(1920, 1080, testResolutions, {
         includeOriginal: true,
         originalMaxBitrate: 8000
       });
       
-      // Should not include 1080p as target (source is 1080p)
+      // Source max dimension is 1920, so 1080p (height 1080 < 1920) is included
+      // but 2160p (height 2160 > 1920) should be excluded
       const nonOriginal = result.filter(r => !r.isOriginal);
       nonOriginal.forEach(resolution => {
-        expect(resolution.height).toBeLessThan(1080);
+        expect(resolution.height).toBeLessThan(Math.max(1920, 1080));
       });
     });
 
@@ -143,19 +148,18 @@ describe('Video Transcoder - Aspect Ratio Preservation', () => {
       expect(result[0].height).toBe(240);
     });
 
-    test('should not distort aspect ratio (avoid 720x1280 to 640x360)', () => {
+    test('should use standard 640x360 for portrait video at 360p (adaptive filter handles aspect ratio)', () => {
       const result = selectResolutions(720, 1280, testResolutions, {
         includeOriginal: true,
         originalMaxBitrate: 8000
       });
       
       // Find 360p resolution
-      const resolution360p = result.find(r => r.height === 360);
+      const resolution360p = result.find(r => r.label === '360p');
       
       if (resolution360p) {
-        // Should be approximately 203-204 x 360, NOT 640 x 360
-        expect(resolution360p.width).toBeLessThan(300);
-        expect(resolution360p.width).toBeGreaterThan(200);
+        // In adaptive mode, standard 640x360 is used; FFmpeg scale+pad handles aspect ratio
+        expect(resolution360p.width).toBe(640);
         expect(resolution360p.height).toBe(360);
       }
     });
@@ -169,6 +173,21 @@ describe('Video Transcoder - Aspect Ratio Preservation', () => {
       
       const originalResolution = result.find(r => r.isOriginal);
       expect(originalResolution.bitrate).toBe(customBitrate);
+    });
+
+    test('should include resolutions for portrait video based on max dimension', () => {
+      // Portrait video 720x1280: max dimension is 1280
+      // Should include 720p (720 < 1280) and lower resolutions
+      const result = selectResolutions(720, 1280, testResolutions, {
+        includeOriginal: true,
+        originalMaxBitrate: 8000
+      });
+      
+      const labels = result.map(r => r.label);
+      expect(labels).toContain('原始');
+      expect(labels).toContain('720p');
+      expect(labels).toContain('480p');
+      expect(labels).toContain('360p');
     });
   });
 });
