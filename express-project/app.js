@@ -108,11 +108,14 @@ app.get('/api-docs.json', (req, res) => {
 // JWT测试令牌生成API（用于Swagger调试）
 app.post('/api/test-token', (req, res) => {
   const { userId, user_id, type } = req.body || {};
+  const validType = type === 'admin' ? 'admin' : 'user';
+  const safeUserId = Number.isInteger(userId) && userId > 0 ? userId : 1;
+  const safeUserIdStr = typeof user_id === 'string' && user_id.trim() ? user_id.trim() : (validType === 'admin' ? 'admin' : 'test_user');
   let payload;
-  if (type === 'admin') {
-    payload = { adminId: userId || 1, username: user_id || 'admin', type: 'admin' };
+  if (validType === 'admin') {
+    payload = { adminId: safeUserId, username: safeUserIdStr, type: 'admin' };
   } else {
-    payload = { userId: userId || 1, user_id: user_id || 'test_user' };
+    payload = { userId: safeUserId, user_id: safeUserIdStr };
   }
   const accessToken = generateAccessToken(payload);
   const refreshToken = generateRefreshToken(payload);
