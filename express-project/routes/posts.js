@@ -138,6 +138,44 @@ async function formatPost(post, currentUserId, prisma, options = {}) {
   return formatted;
 }
 
+/**
+ * @swagger
+ * /api/posts/recommended:
+ *   get:
+ *     summary: 获取推荐笔记列表
+ *     tags: [帖子]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: 每页数量
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: integer
+ *         description: 笔记类型
+ *       - in: query
+ *         name: debug
+ *         schema:
+ *           type: string
+ *           enum: ['true', 'false']
+ *         description: 是否开启调试模式
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 获取推荐笔记列表 - 精准推送算法
 router.get('/recommended', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
@@ -250,6 +288,49 @@ router.get('/recommended', optionalAuthWithGuestRestriction, async (req, res) =>
   }
 });
 
+/**
+ * @swagger
+ * /api/posts/hot:
+ *   get:
+ *     summary: 获取热门笔记列表
+ *     tags: [帖子]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: 每页数量
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *         description: 分类
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: integer
+ *         description: 笔记类型
+ *       - in: query
+ *         name: timeRange
+ *         schema:
+ *           type: integer
+ *           default: 7
+ *         description: 时间范围（天）
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 获取热门笔记列表
 router.get('/hot', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
@@ -349,6 +430,47 @@ router.get('/hot', optionalAuthWithGuestRestriction, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/posts/friends:
+ *   get:
+ *     summary: 获取朋友（互相关注）的笔记列表
+ *     tags: [帖子]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: 每页数量
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [time, hot]
+ *           default: time
+ *         description: 排序方式
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: integer
+ *         description: 笔记类型
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 获取朋友（互相关注）的笔记列表
 router.get('/friends', authenticateToken, async (req, res) => {
   try {
@@ -543,6 +665,47 @@ router.get('/friends', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/posts/following:
+ *   get:
+ *     summary: 获取关注用户的笔记列表
+ *     tags: [帖子]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: 每页数量
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [time, hot]
+ *           default: time
+ *         description: 排序方式
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: integer
+ *         description: 笔记类型
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 获取关注用户的笔记列表
 router.get('/following', authenticateToken, async (req, res) => {
   try {
@@ -735,6 +898,54 @@ router.get('/following', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/posts:
+ *   get:
+ *     summary: 获取笔记列表
+ *     tags: [帖子]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: 每页数量
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: integer
+ *         description: 分类ID
+ *       - in: query
+ *         name: is_draft
+ *         schema:
+ *           type: integer
+ *           enum: [0, 1]
+ *         description: 是否草稿
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: integer
+ *         description: 笔记类型
+ *       - in: query
+ *         name: user_id
+ *         schema:
+ *           type: string
+ *         description: 用户ID或用户名
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 获取笔记列表
 router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
@@ -931,6 +1142,39 @@ router.get('/', optionalAuthWithGuestRestriction, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/posts/{id}/comments:
+ *   get:
+ *     summary: 获取笔记评论列表
+ *     tags: [帖子]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 笔记ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: 页码
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: 每页数量
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 获取笔记评论列表 (兼容路由 /posts/:id/comments)
 // 注意：此路由必须在 /:id 之前定义，否则会被 /:id 捕获
 router.get('/:id/comments', optionalAuthWithGuestRestriction, async (req, res) => {
@@ -1043,6 +1287,27 @@ router.get('/:id/comments', optionalAuthWithGuestRestriction, async (req, res) =
   }
 });
 
+/**
+ * @swagger
+ * /api/posts/{id}:
+ *   get:
+ *     summary: 获取笔记详情
+ *     tags: [帖子]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 笔记ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 获取笔记详情
 router.get('/:id', optionalAuthWithGuestRestriction, async (req, res) => {
   try {
@@ -1171,6 +1436,68 @@ router.get('/:id', optionalAuthWithGuestRestriction, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/posts:
+ *   post:
+ *     summary: 创建笔记
+ *     tags: [帖子]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 description: 标题
+ *               content:
+ *                 type: string
+ *                 description: 内容
+ *               category_id:
+ *                 type: integer
+ *                 description: 分类ID
+ *               type:
+ *                 type: integer
+ *                 default: 1
+ *                 description: 笔记类型
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: 图片列表
+ *               video:
+ *                 type: object
+ *                 description: 视频信息
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: 标签列表
+ *               is_draft:
+ *                 type: boolean
+ *                 default: false
+ *                 description: 是否为草稿
+ *               visibility:
+ *                 type: integer
+ *                 description: 可见性
+ *               paymentSettings:
+ *                 type: object
+ *                 description: 付费设置
+ *               attachment:
+ *                 type: object
+ *                 description: 附件信息
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 创建笔记
 router.post('/', authenticateToken, async (req, res) => {
   try {
@@ -1373,6 +1700,73 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/posts/{id}:
+ *   put:
+ *     summary: 更新笔记
+ *     tags: [帖子]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 笔记ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 description: 标题
+ *               content:
+ *                 type: string
+ *                 description: 内容
+ *               category_id:
+ *                 type: integer
+ *                 description: 分类ID
+ *               type:
+ *                 type: integer
+ *                 description: 笔记类型
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: 图片列表
+ *               video:
+ *                 type: object
+ *                 description: 视频信息
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: 标签列表
+ *               is_draft:
+ *                 type: boolean
+ *                 description: 是否为草稿
+ *               visibility:
+ *                 type: integer
+ *                 description: 可见性
+ *               paymentSettings:
+ *                 type: object
+ *                 description: 付费设置
+ *               attachment:
+ *                 type: object
+ *                 description: 附件信息
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 更新笔记
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
@@ -1512,6 +1906,29 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/posts/{id}:
+ *   delete:
+ *     summary: 删除笔记
+ *     tags: [帖子]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 笔记ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 删除笔记
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
@@ -1563,6 +1980,29 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/posts/{id}/collect:
+ *   post:
+ *     summary: 收藏/取消收藏笔记
+ *     tags: [帖子]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 笔记ID
+ *     responses:
+ *       200:
+ *         description: 成功
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 // 收藏/取消收藏笔记
 router.post('/:id/collect', authenticateToken, async (req, res) => {
   try {

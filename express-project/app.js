@@ -31,6 +31,8 @@ const { HTTP_STATUS, RESPONSE_CODES } = require('./constants');
 const prisma = require('./utils/prisma');
 const { initQueueService, closeQueueService, cleanupExpiredBrowsingHistory } = require('./utils/queueService');
 const { loadSettingsFromRedis } = require('./utils/settingsService');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
 
 // 加载环境变量
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
@@ -84,6 +86,23 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // 静态文件服务 - 提供uploads目录的文件访问
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Swagger API 文档路由
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: '汐社API文档',
+  swaggerOptions: {
+    persistAuthorization: true,
+    docExpansion: 'list',
+    filter: true,
+    showRequestDuration: true
+  }
+}));
+// Swagger JSON 规范
+app.get('/api-docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
 
 // 健康检查路由
 app.get('/api/health', (req, res) => {
