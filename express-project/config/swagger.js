@@ -11,7 +11,9 @@
 const path = require('path');
 const { scanRoutes, generateSwaggerPath, detectRouteMounts, ROUTE_TAG_MAP } = require('../utils/swaggerAutoGen');
 
-const port = require('./config').server.port;
+const appConfig = require('./config');
+const port = appConfig.server.port;
+const testTokenPath = appConfig.swagger.testTokenPath;
 
 // OpenAPI 3.0 基础规范定义（无需手动维护路由文档）
 const baseSpec = {
@@ -26,7 +28,7 @@ const baseSpec = {
       '- 管理员接口需要使用管理员token\n' +
       '- 分页接口支持 `page` 和 `limit` 参数\n\n' +
       '## 调试说明\n' +
-      '- 🔑 打开 [JWT测试令牌页面](/api/test-token) 生成测试令牌\n' +
+      '- 🔑 打开 [JWT测试令牌页面](' + testTokenPath + ') 生成测试令牌\n' +
       '- 点击右侧 **Authorize** 按钮输入JWT令牌\n' +
       '- 展开接口后点击 **Try it out** 进行在线调试\n' +
       '- 带 🔒 标记的接口需要先登录获取token\n\n' +
@@ -222,7 +224,7 @@ baseSpec.paths['/api/health'] = {
   }
 };
 
-baseSpec.paths['/api/test-token'] = {
+baseSpec.paths[testTokenPath] = {
   get: {
     summary: '🔑 JWT测试令牌页面',
     description: '打开JWT测试令牌生成页面，可生成用户或管理员测试令牌用于API调试',

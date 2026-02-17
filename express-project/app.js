@@ -89,8 +89,10 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // 静态文件服务 - 提供uploads目录的文件访问
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Swagger API 文档路由
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+// 使用复杂路径的Swagger API 文档路由
+const swaggerDocsPath = config.swagger.docsPath;
+const testTokenPath = config.swagger.testTokenPath;
+app.use(swaggerDocsPath, swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customCss: '.swagger-ui .topbar { display: none }',
   customSiteTitle: '汐社API文档',
   swaggerOptions: {
@@ -101,13 +103,13 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   }
 }));
 // Swagger JSON 规范
-app.get('/api-docs.json', (req, res) => {
+app.get(swaggerDocsPath + '.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
 });
 
 // JWT测试令牌生成API（用于Swagger调试）
-app.post('/api/test-token', (req, res) => {
+app.post(testTokenPath, async (req, res) => {
   const { userId, user_id, type } = req.body || {};
   const validType = type === 'admin' ? 'admin' : 'user';
   const safeUserId = Number.isInteger(userId) && userId > 0 ? userId : 1;
@@ -120,6 +122,25 @@ app.post('/api/test-token', (req, res) => {
   }
   const accessToken = generateAccessToken(payload);
   const refreshToken = generateRefreshToken(payload);
+
+  // 为用户令牌创建会话记录，使认证中间件的会话检查能通过
+  if (validType === 'user') {
+    try {
+      await prisma.userSession.create({
+        data: {
+          user_id: BigInt(safeUserId),
+          token: accessToken,
+          refresh_token: refreshToken,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          user_agent: 'JWT测试令牌生成器',
+          is_active: true
+        }
+      });
+    } catch (err) {
+      console.warn('测试令牌会话创建失败（用户可能不存在）:', err.message);
+    }
+  }
+
   res.json({
     code: 200,
     message: '测试令牌生成成功',
@@ -133,7 +154,7 @@ app.post('/api/test-token', (req, res) => {
 });
 
 // JWT测试令牌页面
-app.get('/api/test-token', (req, res) => {
+app.get(testTokenPath, (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(`<!DOCTYPE html>
 <html lang="zh-CN">
@@ -172,7 +193,7 @@ app.get('/api/test-token', (req, res) => {
 </head>
 <body>
   <h1>🔑 JWT测试令牌生成器</h1>
-  <p class="subtitle">生成测试JWT令牌，用于 <a href="/api-docs" target="_blank">Swagger API文档</a> 调试接口</p>
+  <p class="subtitle">生成测试JWT令牌，用于 <a href="${swaggerDocsPath}" target="_blank">Swagger API文档</a> 调试接口</p>
   
   <div class="card">
     <h2>⚙️ 令牌配置</h2>
@@ -211,12 +232,12 @@ app.get('/api/test-token', (req, res) => {
       <div class="tip">
         <strong>使用方法：</strong><br>
         1. 复制上方的 Access Token<br>
-        2. 打开 <a href="/api-docs" target="_blank">API文档页面</a><br>
+        2. 打开 <a href="${swaggerDocsPath}" target="_blank">API文档页面</a><br>
         3. 点击页面右上角的 <strong>Authorize</strong> 🔒 按钮<br>
         4. 粘贴令牌后点击 <strong>Authorize</strong> 确认<br>
         5. 即可调试所有需要认证的接口
       </div>
-      <a class="authorize-btn" href="/api-docs" target="_blank">📝 前往API文档调试</a>
+      <a class="authorize-btn" href="${swaggerDocsPath}" target="_blank">📝 前往API文档调试</a>
     </div>
   </div>
 
@@ -242,7 +263,7 @@ async function generateToken() {
   const userIdStr = document.getElementById('userIdStr').value || (type === 'admin' ? 'admin' : 'test_user');
   
   try {
-    const resp = await fetch('/api/test-token', {
+    const resp = await fetch('${testTokenPath}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, user_id: userIdStr, type })
