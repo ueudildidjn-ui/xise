@@ -23,7 +23,6 @@ import { getValidChannelPaths } from '@/config/channels'
 // 后台管理系统组件
 import AdminLogin from '@/views/admin/AdminLogin.vue'
 import AdminLayout from '@/views/admin/AdminLayout.vue'
-import ApiDocs from '@/views/admin/ApiDocs.vue'
 import AdminMonitor from '@/views/admin/AdminMonitor.vue'
 import UserManagement from '@/views/admin/UserManagement.vue'
 import PostManagement from '@/views/admin/PostManagement.vue'
@@ -238,19 +237,14 @@ const router = createRouter({
       path: '/admin',
       component: AdminLayout,
       beforeEnter: (to, from, next) => {
-        // 如果访问的是/admin根路径，重定向到api-docs
+        // 如果访问的是/admin根路径，重定向到monitor
         if (to.path === '/admin') {
-          next('/admin/api-docs')
+          next('/admin/monitor')
         } else {
           next()
         }
       },
       children: [
-        {
-          path: 'api-docs',
-          name: 'admin_api_docs',
-          component: ApiDocs
-        },
         {
           path: 'monitor',
           name: 'admin_monitor',
