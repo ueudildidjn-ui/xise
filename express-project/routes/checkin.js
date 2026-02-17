@@ -18,25 +18,42 @@ const CHECKIN_REWARDS = {
 };
 
 /**
- * 获取当天日期字符串（YYYY-MM-DD），基于服务器本地时区
+ * 获取当天日期字符串（YYYY-MM-DD），基于UTC时区
  */
 function getTodayDate() {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
 /**
- * 获取昨天日期字符串（YYYY-MM-DD），基于服务器本地时区
+ * 获取昨天日期字符串（YYYY-MM-DD），基于UTC时区
  */
 function getYesterdayDate() {
   const now = new Date();
-  now.setDate(now.getDate() - 1);
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+  now.setUTCDate(now.getUTCDate() - 1);
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * 将日期字符串转为UTC午夜的Date对象
+ */
+function toUTCDate(dateStr) {
+  return new Date(dateStr + 'T00:00:00.000Z');
+}
+
+/**
+ * 将Date对象格式化为YYYY-MM-DD字符串
+ */
+function formatDate(date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
@@ -64,7 +81,7 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id);
     const todayStr = getTodayDate();
-    const todayDate = new Date(todayStr);
+    const todayDate = toUTCDate(todayStr);
 
     // 检查今天是否已签到
     const existingCheckin = await prisma.dailyCheckin.findUnique({
@@ -90,7 +107,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // 查询昨天的签到记录，计算连续天数
     const yesterdayStr = getYesterdayDate();
-    const yesterdayDate = new Date(yesterdayStr);
+    const yesterdayDate = toUTCDate(yesterdayStr);
     const yesterdayCheckin = await prisma.dailyCheckin.findUnique({
       where: {
         uk_user_checkin_date: {
@@ -180,7 +197,7 @@ router.get('/status', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id);
     const todayStr = getTodayDate();
-    const todayDate = new Date(todayStr);
+    const todayDate = toUTCDate(todayStr);
 
     // 查询今天的签到记录
     const todayCheckin = await prisma.dailyCheckin.findUnique({
@@ -208,7 +225,7 @@ router.get('/status', authenticateToken, async (req, res) => {
 
     // 未签到，查询昨天的记录计算预期连续天数
     const yesterdayStr = getYesterdayDate();
-    const yesterdayDate = new Date(yesterdayStr);
+    const yesterdayDate = toUTCDate(yesterdayStr);
     const yesterdayCheckin = await prisma.dailyCheckin.findUnique({
       where: {
         uk_user_checkin_date: {
@@ -248,8 +265,8 @@ router.get('/status', authenticateToken, async (req, res) => {
 router.get('/history', authenticateToken, async (req, res) => {
   try {
     const userId = BigInt(req.user.id);
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
 
     const [records, total] = await Promise.all([
@@ -276,7 +293,7 @@ router.get('/history', authenticateToken, async (req, res) => {
       data: {
         records: records.map(r => ({
           id: r.id,
-          checkin_date: r.checkin_date,
+          checkin_date: formatDate(new Date(r.checkin_date)),
           reward_points: parseFloat(r.reward_points),
           streak_days: r.streak_days,
           created_at: r.created_at
