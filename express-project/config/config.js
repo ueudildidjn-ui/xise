@@ -55,8 +55,8 @@ const config = {
 
   // Swagger/调试工具路径配置（使用复杂路径防止被扫描发现）
   swagger: {
-    docsPath: process.env.SWAGGER_DOCS_PATH || '/swagger-MYQD6LuH0heYgcK5DT10Al00dj6OW8Wc',
-    testTokenPath: process.env.TEST_TOKEN_PATH || '/jwt-generator-Xk9mP2vL7nR4wQ8sT1yB5hF3jD6cA0eG'
+    docsPath: process.env.SWAGGER_DOCS_PATH || '/api/swagger-MYQD6LuH0heYgcK5DT10Al00dj6OW8Wc',
+    testTokenPath: process.env.TEST_TOKEN_PATH || '/api/jwt-generator-Xk9mP2vL7nR4wQ8sT1yB5hF3jD6cA0eG'
   },
 
   // JWT配置
