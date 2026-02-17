@@ -94,7 +94,7 @@ function detectRouteMounts(appJsPath) {
   while ((inlineMatch = inlineRegex.exec(source)) !== null) {
     const method = inlineMatch[1].toUpperCase();
     const routePath = inlineMatch[2];
-    // 只检测 /api/ 开头的业务路由，跳过 /api-docs 等文档元数据路由
+    // 只检测 /api/ 开头的业务路由，跳过 swagger 等文档元数据路由
     if (routePath.startsWith('/api/')) {
       appRoutes.push({ method, path: routePath });
     }
