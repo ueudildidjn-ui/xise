@@ -87,6 +87,42 @@ const videoUpload = multer({
 });
 
 // 单图片上传到图床
+/**
+ * @swagger
+ * /api/upload/single:
+ *   post:
+ *     summary: 单图片上传
+ *     tags: [上传]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: 图片文件
+ *               watermark:
+ *                 type: boolean
+ *                 description: 是否添加水印
+ *               watermarkOpacity:
+ *                 type: integer
+ *                 description: 水印透明度(10-100)
+ *               isAvatar:
+ *                 type: boolean
+ *                 description: 是否为头像上传
+ *     responses:
+ *       200:
+ *         description: 上传成功
+ *       400:
+ *         description: 请求错误
+ *       500:
+ *         description: 服务器错误
+ */
 router.post('/single', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -155,6 +191,41 @@ router.post('/single', authenticateToken, upload.single('file'), async (req, res
 });
 
 // 多图片上传到图床
+/**
+ * @swagger
+ * /api/upload/multiple:
+ *   post:
+ *     summary: 多图片上传
+ *     tags: [上传]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: 图片文件数组(最多9张)
+ *               watermark:
+ *                 type: boolean
+ *                 description: 是否添加水印
+ *               watermarkOpacity:
+ *                 type: integer
+ *                 description: 水印透明度(10-100)
+ *     responses:
+ *       200:
+ *         description: 上传成功
+ *       400:
+ *         description: 请求错误
+ *       500:
+ *         description: 服务器错误
+ */
 router.post('/multiple', authenticateToken, upload.array('files', 9), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
@@ -245,6 +316,37 @@ router.post('/multiple', authenticateToken, upload.array('files', 9), async (req
 });
 
 // 单视频上传到图床
+/**
+ * @swagger
+ * /api/upload/video:
+ *   post:
+ *     summary: 单视频上传
+ *     tags: [上传]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: 视频文件
+ *               thumbnail:
+ *                 type: string
+ *                 format: binary
+ *                 description: 缩略图(可选)
+ *     responses:
+ *       200:
+ *         description: 上传成功
+ *       400:
+ *         description: 请求错误
+ *       500:
+ *         description: 服务器错误
+ */
 router.post('/video', authenticateToken, videoUpload.fields([
   { name: 'file', maxCount: 1 },
   { name: 'thumbnail', maxCount: 1 }
@@ -392,6 +494,18 @@ const chunkUpload = multer({
 });
 
 // 获取分片上传配置
+/**
+ * @swagger
+ * /api/upload/chunk/config:
+ *   get:
+ *     summary: 获取分片上传配置
+ *     tags: [上传]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 获取成功
+ */
 router.get('/chunk/config', authenticateToken, (req, res) => {
   res.json({
     code: RESPONSE_CODES.SUCCESS,
@@ -406,6 +520,40 @@ router.get('/chunk/config', authenticateToken, (req, res) => {
 });
 
 // 验证分片是否已存在（用于秒传/断点续传）
+/**
+ * @swagger
+ * /api/upload/chunk/verify:
+ *   get:
+ *     summary: 验证分片是否已存在
+ *     tags: [上传]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: identifier
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: 文件唯一标识
+ *       - in: query
+ *         name: chunkNumber
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 分片序号
+ *       - in: query
+ *         name: md5
+ *         schema:
+ *           type: string
+ *         description: 分片MD5校验值
+ *     responses:
+ *       200:
+ *         description: 验证完成
+ *       400:
+ *         description: 请求错误
+ *       500:
+ *         description: 服务器错误
+ */
 router.get('/chunk/verify', authenticateToken, async (req, res) => {
   try {
     const { identifier, chunkNumber, md5 } = req.query;
@@ -437,6 +585,50 @@ router.get('/chunk/verify', authenticateToken, async (req, res) => {
 });
 
 // 上传分片
+/**
+ * @swagger
+ * /api/upload/chunk:
+ *   post:
+ *     summary: 上传分片
+ *     tags: [上传]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - file
+ *               - identifier
+ *               - chunkNumber
+ *               - totalChunks
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: 分片文件
+ *               identifier:
+ *                 type: string
+ *                 description: 文件唯一标识
+ *               chunkNumber:
+ *                 type: integer
+ *                 description: 分片序号
+ *               totalChunks:
+ *                 type: integer
+ *                 description: 总分片数
+ *               filename:
+ *                 type: string
+ *                 description: 原始文件名
+ *     responses:
+ *       200:
+ *         description: 分片上传成功
+ *       400:
+ *         description: 请求错误
+ *       500:
+ *         description: 服务器错误
+ */
 router.post('/chunk', authenticateToken, chunkUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -492,6 +684,42 @@ router.post('/chunk', authenticateToken, chunkUpload.single('file'), async (req,
 });
 
 // 合并分片
+/**
+ * @swagger
+ * /api/upload/chunk/merge:
+ *   post:
+ *     summary: 合并视频分片
+ *     tags: [上传]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - identifier
+ *               - totalChunks
+ *               - filename
+ *             properties:
+ *               identifier:
+ *                 type: string
+ *                 description: 文件唯一标识
+ *               totalChunks:
+ *                 type: integer
+ *                 description: 总分片数
+ *               filename:
+ *                 type: string
+ *                 description: 原始文件名
+ *     responses:
+ *       200:
+ *         description: 合并成功
+ *       400:
+ *         description: 请求错误
+ *       500:
+ *         description: 服务器错误
+ */
 router.post('/chunk/merge', authenticateToken, async (req, res) => {
   try {
     const { identifier, totalChunks, filename } = req.body;
@@ -592,6 +820,48 @@ router.post('/chunk/merge', authenticateToken, async (req, res) => {
 // 注意：使用云端图床后，文件删除由图床服务商管理
 
 // 合并图片分片
+/**
+ * @swagger
+ * /api/upload/chunk/merge/image:
+ *   post:
+ *     summary: 合并图片分片
+ *     tags: [上传]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - identifier
+ *               - totalChunks
+ *               - filename
+ *             properties:
+ *               identifier:
+ *                 type: string
+ *                 description: 文件唯一标识
+ *               totalChunks:
+ *                 type: integer
+ *                 description: 总分片数
+ *               filename:
+ *                 type: string
+ *                 description: 原始文件名
+ *               watermark:
+ *                 type: boolean
+ *                 description: 是否添加水印
+ *               watermarkOpacity:
+ *                 type: integer
+ *                 description: 水印透明度(10-100)
+ *     responses:
+ *       200:
+ *         description: 合并成功
+ *       400:
+ *         description: 请求错误
+ *       500:
+ *         description: 服务器错误
+ */
 router.post('/chunk/merge/image', authenticateToken, async (req, res) => {
   try {
     const { identifier, totalChunks, filename, watermark, watermarkOpacity } = req.body;
@@ -717,6 +987,33 @@ const attachmentUpload = multer({
 });
 
 // 附件上传
+/**
+ * @swagger
+ * /api/upload/attachment:
+ *   post:
+ *     summary: 附件上传
+ *     tags: [上传]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: 附件文件
+ *     responses:
+ *       200:
+ *         description: 上传成功
+ *       400:
+ *         description: 请求错误
+ *       500:
+ *         description: 服务器错误
+ */
 router.post('/attachment', authenticateToken, attachmentUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
