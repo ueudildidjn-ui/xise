@@ -1754,6 +1754,22 @@ router.get('/oauth2/callback', async (req, res) => {
  *               user_token:
  *                 type: string
  *                 description: user.yuelk.com登录返回的JWT令牌
+ *               user_profile:
+ *                 type: object
+ *                 description: |
+ *                   user.yuelk.com登录返回的用户信息（推荐提供）。
+ *                   提供此字段可跳过服务端到服务端的验证调用，提高可靠性。
+ *                   需包含id和username（或email）。
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                     description: 用户中心用户ID
+ *                   username:
+ *                     type: string
+ *                     description: 用户名
+ *                   email:
+ *                     type: string
+ *                     description: 邮箱
  *     responses:
  *       200:
  *         description: 令牌交换成功
@@ -1795,10 +1811,16 @@ router.get('/oauth2/callback', async (req, res) => {
 // 移动端OAuth2令牌交换
 // 移动App无法使用浏览器cookie进行标准OAuth2授权码流程，
 // 因此提供此端点：接受user.yuelk.com的JWT令牌，
-// 通过/api/auth/profile验证后，生成本站社区令牌。
+// 通过用户信息验证后，生成本站社区令牌。
+//
+// 支持两种模式：
+// 1. 客户端提供 user_token + user_profile（推荐）：
+//    App在登录时已获得用户信息，直接传递给社区后端，避免服务端到服务端的调用。
+// 2. 仅提供 user_token（回退模式）：
+//    社区后端调用 user.yuelk.com/api/auth/profile 验证令牌并获取用户信息。
 router.post('/oauth2/mobile-token', async (req, res) => {
   try {
-    const { user_token } = req.body;
+    const { user_token, user_profile } = req.body;
 
     if (!user_token) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -1815,45 +1837,52 @@ router.post('/oauth2/mobile-token', async (req, res) => {
       });
     }
 
-    // 使用login JWT调用user.yuelk.com的/api/auth/profile获取用户信息
-    // 注意：/oauth2/userinfo需要OAuth2 access token（通过/oauth2/token获取），
-    // 而移动端只有login JWT，所以改用/api/auth/profile端点。
-    const userInfoResponse = await fetch(`${oauth2Config.loginUrl}/api/auth/profile`, {
-      headers: {
-        'Authorization': `Bearer ${user_token}`
+    let profileData;
+
+    // 模式1：客户端已提供用户信息（推荐，避免服务端到服务端调用）
+    if (user_profile && user_profile.id && (user_profile.username || user_profile.email)) {
+      console.log('Mobile OAuth2: 使用客户端提供的用户信息, user_id:', user_profile.id);
+      profileData = user_profile;
+    } else {
+      // 模式2：回退到服务端调用user.yuelk.com验证令牌
+      console.log('Mobile OAuth2: 未提供user_profile，回退到服务端验证');
+      const userInfoResponse = await fetch(`${oauth2Config.loginUrl}/api/auth/profile`, {
+        headers: {
+          'Authorization': `Bearer ${user_token}`,
+          'User-Agent': 'XiSe-Community-Server/1.0',
+          'Accept': 'application/json'
+        }
+      });
+
+      console.log('Mobile OAuth2 Profile响应状态:', userInfoResponse.status);
+
+      if (!userInfoResponse.ok) {
+        console.error('Mobile OAuth2获取用户信息失败:', userInfoResponse.status);
+        let errorDetail = '';
+        try {
+          const errorBody = await userInfoResponse.text();
+          errorDetail = errorBody.substring(0, 500);
+          console.error('Mobile OAuth2错误响应:', errorDetail);
+        } catch (_) {}
+        return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          code: RESPONSE_CODES.UNAUTHORIZED,
+          message: '用户令牌无效或已过期（服务端验证失败）'
+        });
       }
-    });
 
-    console.log('Mobile OAuth2 Profile响应状态:', userInfoResponse.status);
+      const profileResponse = await userInfoResponse.json();
+      console.log('Mobile OAuth2用户Profile:', JSON.stringify(profileResponse));
 
-    if (!userInfoResponse.ok) {
-      console.error('Mobile OAuth2获取用户信息失败:', userInfoResponse.status);
-      // 读取错误详情用于日志
-      let errorDetail = '';
-      try {
-        const errorBody = await userInfoResponse.text();
-        errorDetail = errorBody.substring(0, 500);
-        console.error('Mobile OAuth2错误响应:', errorDetail);
-      } catch (_) {}
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-        code: RESPONSE_CODES.UNAUTHORIZED,
-        message: '用户令牌无效或已过期'
-      });
+      if (!profileResponse.success || !profileResponse.data) {
+        console.error('Mobile OAuth2 Profile响应格式异常:', JSON.stringify(profileResponse));
+        return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+          code: RESPONSE_CODES.UNAUTHORIZED,
+          message: profileResponse.message || '获取用户信息失败'
+        });
+      }
+
+      profileData = profileResponse.data;
     }
-
-    const profileResponse = await userInfoResponse.json();
-    console.log('Mobile OAuth2用户Profile:', JSON.stringify(profileResponse));
-
-    // /api/auth/profile 返回格式: { success: true, data: { id, username, email, ... } }
-    if (!profileResponse.success || !profileResponse.data) {
-      console.error('Mobile OAuth2 Profile响应格式异常:', JSON.stringify(profileResponse));
-      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-        code: RESPONSE_CODES.UNAUTHORIZED,
-        message: profileResponse.message || '获取用户信息失败'
-      });
-    }
-
-    const profileData = profileResponse.data;
 
     // 解析用户ID — /api/auth/profile返回的id字段对应oauth2_id
     const oauth2UserId = parseInt(profileData.id, 10);
