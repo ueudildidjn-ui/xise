@@ -1727,4 +1727,192 @@ router.get('/oauth2/callback', async (req, res) => {
   }
 });
 
+// 移动端OAuth2令牌交换
+// 移动App无法使用浏览器cookie进行标准OAuth2授权码流程，
+// 因此提供此端点：接受user.yuelk.com的JWT令牌，
+// 通过/oauth2/userinfo验证后，生成本站社区令牌。
+router.post('/oauth2/mobile-token', async (req, res) => {
+  try {
+    const { user_token } = req.body;
+
+    if (!user_token) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: '缺少user_token参数'
+      });
+    }
+
+    // 检查OAuth2是否启用
+    if (!oauth2Config.enabled) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: 'OAuth2登录未启用'
+      });
+    }
+
+    // 使用user_token调用user.yuelk.com的/oauth2/userinfo获取用户信息
+    const userInfoResponse = await fetch(`${oauth2Config.loginUrl}/oauth2/userinfo`, {
+      headers: {
+        'Authorization': `Bearer ${user_token}`
+      }
+    });
+
+    console.log('Mobile OAuth2 UserInfo响应状态:', userInfoResponse.status);
+
+    if (!userInfoResponse.ok) {
+      console.error('Mobile OAuth2获取用户信息失败:', userInfoResponse.status);
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        code: RESPONSE_CODES.UNAUTHORIZED,
+        message: '用户令牌无效或已过期'
+      });
+    }
+
+    const oauth2UserInfo = await userInfoResponse.json();
+    console.log('Mobile OAuth2用户信息:', JSON.stringify(oauth2UserInfo));
+
+    // 解析OAuth2用户ID
+    const oauth2UserId = parseInt(oauth2UserInfo.user_id || oauth2UserInfo.sub, 10);
+    const oauth2Username = oauth2UserInfo.username;
+    const oauth2Email = oauth2UserInfo.email || '';
+
+    if (isNaN(oauth2UserId)) {
+      console.error('Mobile OAuth2用户ID无效:', oauth2UserInfo.user_id || oauth2UserInfo.sub);
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
+        code: RESPONSE_CODES.VALIDATION_ERROR,
+        message: '用户中心返回的用户ID无效'
+      });
+    }
+
+    // 查找或创建本地用户（与OAuth2回调逻辑一致）
+    let existingUser = await prisma.user.findFirst({
+      where: { oauth2_id: BigInt(oauth2UserId) },
+      select: OAUTH2_USER_SELECT_FIELDS
+    });
+
+    let user;
+    let isNewUser = false;
+
+    if (existingUser) {
+      user = existingUser;
+      if (!user.is_active) {
+        return res.status(HTTP_STATUS.FORBIDDEN).json({
+          code: RESPONSE_CODES.FORBIDDEN,
+          message: '账号已被禁用'
+        });
+      }
+    } else {
+      // 创建新用户
+      isNewUser = true;
+
+      let newUserId = oauth2Username || `user_${oauth2UserId}`;
+      let suffix = 0;
+      let baseUserId = newUserId;
+      while (true) {
+        const checkUser = await prisma.user.findUnique({
+          where: { user_id: newUserId },
+          select: { id: true }
+        });
+        if (!checkUser) break;
+        suffix++;
+        newUserId = `${baseUserId}_${suffix}`;
+      }
+
+      const userIP = getRealIP(req);
+      let ipLocation = '未知';
+      if (!isQueueEnabled()) {
+        try {
+          ipLocation = await getIPLocation(userIP);
+        } catch (error) {
+          ipLocation = '未知';
+        }
+      }
+
+      const defaultNickname = oauth2Username || `用户${oauth2UserId}`;
+      const newUser = await prisma.user.create({
+        data: {
+          user_id: newUserId,
+          nickname: defaultNickname,
+          password: '',
+          email: oauth2Email,
+          avatar: '',
+          bio: '这个人很懒，还没有简介',
+          location: ipLocation,
+          oauth2_id: BigInt(oauth2UserId)
+        }
+      });
+
+      if (isQueueEnabled()) {
+        addIPLocationTask(Number(newUser.id), userIP);
+      }
+
+      if (isAuditEnabled() && isAiUsernameReviewEnabled() && isQueueEnabled()) {
+        addContentAuditTask(defaultNickname, Number(newUser.id), 'nickname', Number(newUser.id));
+      }
+
+      user = await prisma.user.findUnique({
+        where: { id: newUser.id },
+        select: OAUTH2_USER_SELECT_FIELDS
+      });
+
+      console.log(`Mobile OAuth2新用户创建成功 - 用户ID: ${newUser.id}, 汐社号: ${newUserId}, OAuth2_ID: ${oauth2UserId}`);
+    }
+
+    // 生成本站JWT令牌
+    const accessToken = generateAccessToken({ userId: Number(user.id), user_id: user.user_id });
+    const refreshToken = generateRefreshToken({ userId: Number(user.id), user_id: user.user_id });
+
+    // 获取User-Agent
+    const userAgent = req.headers['user-agent'] || '';
+
+    // 清除旧会话并保存新会话
+    await prisma.userSession.updateMany({
+      where: { user_id: user.id },
+      data: { is_active: false }
+    });
+    await prisma.userSession.create({
+      data: {
+        user_id: user.id,
+        token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        user_agent: userAgent,
+        is_active: true
+      }
+    });
+
+    // Format user response
+    const userResponse = { ...user, id: Number(user.id) };
+    if (userResponse.interests) {
+      try {
+        userResponse.interests = typeof userResponse.interests === 'string'
+          ? JSON.parse(userResponse.interests)
+          : userResponse.interests;
+      } catch (e) {
+        userResponse.interests = null;
+      }
+    }
+
+    console.log(`Mobile OAuth2用户登录成功 - 用户ID: ${user.id}, 汐社号: ${user.user_id}, 新用户: ${isNewUser}`);
+
+    // 返回JSON响应（移动端使用）
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      data: {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        is_new_user: isNewUser,
+        user: userResponse
+      },
+      message: 'success'
+    });
+  } catch (error) {
+    console.error('Mobile OAuth2令牌交换失败:', error.message);
+    console.error('Mobile OAuth2错误堆栈:', error.stack);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      code: RESPONSE_CODES.ERROR,
+      message: '令牌交换失败: ' + (error.message || '未知错误')
+    });
+  }
+});
+
 module.exports = router;
