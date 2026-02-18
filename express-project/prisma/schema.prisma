@@ -693,12 +693,31 @@ model User {
   systemNotificationConfirmations SystemNotificationConfirmation[]
   blockedByMe                     Blacklist[]                      @relation("BlockedByUser")
   blockedMe                       Blacklist[]                      @relation("BlockedUser")
+  apiKeys                         UserApiKey[]
 
   @@index([user_id], name: "idx_user_user_id")
   @@index([email], name: "idx_user_email")
   @@index([created_at], name: "idx_user_created_at")
   @@index([oauth2_id], name: "idx_user_oauth2_id")
   @@map("users")
+}
+
+// 用户API密钥表
+model UserApiKey {
+  id             BigInt    @id @default(autoincrement())
+  user_id        BigInt
+  name           String    @db.VarChar(100) // 密钥名称
+  api_key        String    @unique @db.VarChar(255) // 哈希后的密钥
+  api_key_prefix String    @db.VarChar(10) // 密钥前缀（用于展示）
+  is_active      Boolean   @default(true)
+  last_used_at   DateTime?
+  created_at     DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id], name: "idx_user_api_key_user_id")
+  @@index([api_key], name: "idx_user_api_key_api_key")
+  @@map("user_api_keys")
 }
 
 // 用户工具栏配置表

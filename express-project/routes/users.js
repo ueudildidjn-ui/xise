@@ -2323,4 +2323,160 @@ router.delete('/verification/revoke', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== API密钥管理 ====================
+
+/**
+ * @swagger
+ * /api/users/api-keys:
+ *   get:
+ *     summary: 获取当前用户的API密钥列表
+ *     tags: [用户-API密钥]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: 成功
+ */
+router.get('/api-keys', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const apiKeys = await prisma.userApiKey.findMany({
+      where: { user_id: userId },
+      select: {
+        id: true,
+        name: true,
+        api_key_prefix: true,
+        is_active: true,
+        last_used_at: true,
+        created_at: true
+      },
+      orderBy: { created_at: 'desc' }
+    });
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: '获取成功',
+      data: apiKeys.map(key => ({ ...key, id: Number(key.id) }))
+    });
+  } catch (error) {
+    console.error('获取API密钥列表失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+/**
+ * @swagger
+ * /api/users/api-keys:
+ *   post:
+ *     summary: 生成新的API密钥
+ *     tags: [用户-API密钥]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: 密钥名称
+ *     responses:
+ *       201:
+ *         description: 创建成功
+ */
+router.post('/api-keys', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '请输入密钥名称' });
+    }
+
+    if (name.trim().length > 50) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '密钥名称不能超过50个字符' });
+    }
+
+    // 限制每个用户最多5个API密钥
+    const keyCount = await prisma.userApiKey.count({ where: { user_id: userId } });
+    if (keyCount >= 5) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '最多只能创建5个API密钥' });
+    }
+
+    // 生成随机API密钥
+    const rawKey = 'xise_' + crypto.randomBytes(32).toString('hex');
+    const keyPrefix = rawKey.substring(0, 10);
+    const hashedKey = crypto.createHash('sha256').update(rawKey).digest('hex');
+
+    const apiKey = await prisma.userApiKey.create({
+      data: {
+        user_id: userId,
+        name: name.trim(),
+        api_key: hashedKey,
+        api_key_prefix: keyPrefix
+      }
+    });
+
+    // 仅在创建时返回一次完整密钥
+    res.status(HTTP_STATUS.CREATED).json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'API密钥创建成功，请妥善保存，密钥仅显示一次',
+      data: {
+        id: Number(apiKey.id),
+        name: apiKey.name,
+        api_key: rawKey,
+        api_key_prefix: keyPrefix,
+        created_at: apiKey.created_at
+      }
+    });
+  } catch (error) {
+    console.error('创建API密钥失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
+/**
+ * @swagger
+ * /api/users/api-keys/{id}:
+ *   delete:
+ *     summary: 删除（撤销）API密钥
+ *     tags: [用户-API密钥]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: 删除成功
+ */
+router.delete('/api-keys/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const keyId = BigInt(req.params.id);
+
+    // 确认该密钥属于当前用户
+    const apiKey = await prisma.userApiKey.findFirst({
+      where: { id: keyId, user_id: userId }
+    });
+
+    if (!apiKey) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ code: RESPONSE_CODES.NOT_FOUND, message: 'API密钥不存在' });
+    }
+
+    await prisma.userApiKey.delete({ where: { id: keyId } });
+
+    res.json({ code: RESPONSE_CODES.SUCCESS, message: 'API密钥已删除' });
+  } catch (error) {
+    console.error('删除API密钥失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
 module.exports = router;

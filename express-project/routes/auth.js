@@ -969,6 +969,76 @@ router.post('/refresh', async (req, res) => {
   }
 });
 
+// 通过API密钥置换JWT令牌
+router.post('/token', async (req, res) => {
+  try {
+    const { api_key } = req.body;
+
+    if (!api_key) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ code: RESPONSE_CODES.VALIDATION_ERROR, message: '缺少API密钥' });
+    }
+
+    // 哈希API密钥进行查询
+    const hashedKey = crypto.createHash('sha256').update(api_key).digest('hex');
+
+    const apiKeyRecord = await prisma.userApiKey.findUnique({
+      where: { api_key: hashedKey },
+      include: {
+        user: {
+          select: { id: true, user_id: true, is_active: true }
+        }
+      }
+    });
+
+    if (!apiKeyRecord || !apiKeyRecord.is_active) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({ code: RESPONSE_CODES.UNAUTHORIZED, message: 'API密钥无效或已被禁用' });
+    }
+
+    if (!apiKeyRecord.user || !apiKeyRecord.user.is_active) {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({ code: RESPONSE_CODES.FORBIDDEN, message: '用户账户已被禁用' });
+    }
+
+    const user = apiKeyRecord.user;
+
+    // 生成JWT令牌
+    const accessToken = generateAccessToken({ userId: Number(user.id), user_id: user.user_id });
+    const refreshToken = generateRefreshToken({ userId: Number(user.id), user_id: user.user_id });
+
+    const userAgent = req.headers['user-agent'] || '';
+
+    // 创建会话
+    await prisma.userSession.create({
+      data: {
+        user_id: user.id,
+        token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        user_agent: userAgent,
+        is_active: true
+      }
+    });
+
+    // 更新API密钥最后使用时间
+    await prisma.userApiKey.update({
+      where: { id: apiKeyRecord.id },
+      data: { last_used_at: new Date() }
+    });
+
+    res.json({
+      code: RESPONSE_CODES.SUCCESS,
+      message: 'API密钥验证成功',
+      data: {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_in: 3600
+      }
+    });
+  } catch (error) {
+    console.error('API密钥置换令牌失败:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ code: RESPONSE_CODES.ERROR, message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR });
+  }
+});
+
 // 退出登录
 router.post('/logout', authenticateToken, async (req, res) => {
   try {

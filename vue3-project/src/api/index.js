@@ -135,6 +135,21 @@ export const userApi = {
   // 保存引导页草稿
   saveOnboardingDraft(data) {
     return request.put('/users/onboarding-draft', data)
+  },
+
+  // 获取API密钥列表
+  getApiKeys() {
+    return request.get('/users/api-keys')
+  },
+
+  // 创建API密钥
+  createApiKey(data) {
+    return request.post('/users/api-keys', data)
+  },
+
+  // 删除API密钥
+  deleteApiKey(id) {
+    return request.delete(`/users/api-keys/${id}`)
   }
 }
 
@@ -350,6 +365,11 @@ export const authApi = {
   getOAuth2LoginUrl() {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
     return `${baseUrl}/auth/oauth2/login`
+  },
+
+  // 通过API密钥置换JWT令牌
+  exchangeApiKey(data) {
+    return request.post('/auth/token', data)
   }
 }
 
