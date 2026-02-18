@@ -15,6 +15,7 @@ const port = require('./config').server.port;
 
 // 复杂路径配置（与app.js保持一致）
 const JWT_TEST_TOKEN_PATH = process.env.JWT_TEST_TOKEN_PATH || 'jwt-MYQD6LuH0heYgcK5DT10Al00dj6OW8Wc';
+const SWAGGER_DOCS_PATH = process.env.SWAGGER_DOCS_PATH || 'swagger-MYQD6LuH0heYgcK5DT10Al00dj6OW8Wc';
 
 // OpenAPI 3.0 基础规范定义（无需手动维护路由文档）
 const baseSpec = {
@@ -217,6 +218,27 @@ baseSpec.paths['/api/health'] = {
                 timestamp: { type: 'string', format: 'date-time', description: '当前时间' },
                 uptime: { type: 'number', description: '服务运行时间（秒）' }
               }
+            }
+          }
+        }
+      }
+    }
+  }
+};
+
+baseSpec.paths[`/api/${SWAGGER_DOCS_PATH}.json`] = {
+  get: {
+    summary: 'Swagger JSON规范',
+    description: '获取OpenAPI 3.0 JSON格式的API文档规范，可导入Postman等工具',
+    tags: ['调试工具'],
+    responses: {
+      '200': {
+        description: 'OpenAPI 3.0 JSON规范',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              description: 'OpenAPI 3.0规范对象'
             }
           }
         }
